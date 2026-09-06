@@ -1,0 +1,35 @@
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+vendor/
+
+# Local chain / index data — never commit
+/data/
+*.db
+*.sqlite
+blindbit.toml
+bitcoin.conf
+
+# Secrets — never commit
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+nsec*
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Scratch
+/tmp/
+/scratch/

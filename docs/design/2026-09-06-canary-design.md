@@ -1,6 +1,6 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§3 settled; §4–§8 pending.
+**Status:** In progress. §1–§4 settled; §5–§8 pending.
 **Date:** 2026-09-06
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -404,28 +404,180 @@ The prune-freely property now states cleanly: **commit at index time, discard at
 The server holds the block and its prevouts exactly once, computes `T_base`, signs,
 publishes — and remains accountable for what it dropped, forever, at 36 bytes per block.
 
-## 4. Client verification ladder — PENDING
+### 3.8 Receipts
 
-§2.5 gave the per-block comparison; §3 gave the object it compares. This section gives
-the *ladder*: what runs continuously and cheaply, what escalates, what is expensive and
-on-demand, and how each rung's failure is surfaced to a wallet that must act on it.
+Added while working §4.3, which asked what we can *prove* rather than what we can
+detect. The commitment alone is not enough:
 
-Open: the escalation triggers between rungs; the k-of-N rule and what `k` should be; how
-per-transaction attribution reconstructs and names the accused; what the client does
-while a check is unresolved (block? warn? proceed?); alarm persistence and
-de-duplication; and the shape of the evidence artifact from §3.2.
+| Statement | Provable to a third party? |
+|---|---|
+| S signed root R containing leaf L | Yes — signed |
+| S's policy forbids pruning | Yes — signed |
+| S's root differs from S′'s for the same block | Yes — both signed |
+| **S served me a set omitting L** | **No. HTTP responses are not signed** |
+
+As designed through §3.7, equivocation between two servers is provable to anyone, but a
+single server's omission is provable only to its victim — materially weaker than §1.4's
+security claim implies.
+
+The server therefore signs a **receipt** over `(request_params, response_digest)`. A
+Schnorr signature costs microseconds, and server cooperation is already assumed for
+commitments.
+
+> **The commitment says what exists. The receipt says what you were given.** Omission is
+> `commitment ≠ receipt`, both signed by the same key.
+
+The receipt MUST cover the request parameters — block hash, and any client-supplied dust
+threshold — or a server can satisfy a request by replaying an older response.
+
+Receipts exist only in the protocol layer. Against unmodified blindbit, omission is still
+*detected* — the victim knows — but is not third-party provable. This is a concrete
+reason to push for the protocol layer rather than a nice-to-have.
+
+## 4. Client verification ladder — SETTLED 2026-09-07
+
+§2.5 gave the per-block comparison; §3 gave the object being compared. This section gives
+the ladder: what runs continuously, what escalates, what is expensive and on demand, and
+how each result is surfaced to a wallet that has to act on it.
+
+### 4.1 The ladder
+
+Ordered by cost. Each rung runs only when the one above it says something.
+
+| Rung | Trigger | Catches | Cost |
+|---|---|---|---|
+| **1. Commitment tracking** | Always on | Root divergence between servers | One relay subscription; ~144 events/day/server |
+| **2. Self-consistency** | Client fetches block *B* | Served ≠ committed; policy contradiction | Hashing `n` leaves. Microseconds |
+| **3. Gap resolution** | Rung 2 found gaps | Whether a permitted gap is real | One targeted request |
+| **4. Attribution** | Rung 1 found divergence | *Which* server lied, and about what | Requires prevouts — the expensive rung |
+
+Rung 1 runs for blocks the client has not scanned and while the client is idle.
+**Detection is decoupled from scanning**, so evidence accumulates continuously and an
+alarm can fire before the user opens the wallet.
+
+### 4.2 Detection needs no node; attribution does, and may be deferred
+
+Attribution requires prevouts, therefore a full node or a third-party API. This does not
+force a node onto the wallet, for two reasons.
+
+**The privacy cost is near zero.** The disputed transaction set is chosen by the servers,
+not the user — it is whatever two indexers publicly disagreed about. Querying those txids
+reveals interest in a public dispute, not in the user's payments.
+
+**Attribution is not time-critical.** Two signed roots are non-repudiable and do not
+decay. A client with no node records the evidence and hands the verdict to anyone who has
+one, later or never.
+
+> **A light client detects. An auditor attributes.**
+
+### 4.3 Union for tweaks; k-of-N belongs on filters
+
+The omission/commission tension of §1 appears here as a direct conflict: omission wants
+the **union** across servers, commission wants the **intersection**. They act at
+different stages, which resolves it.
+
+- Computing candidate outputs from tweaks is local and free — one EC multiplication, no
+  network. So take the **union (1-of-N)**: a tweak in *any* server's committed set is
+  scanned. This is what defeats omission, at no privacy cost.
+- The leak is in fetching block data, which happens on a *filter* match — and whoever
+  controls filter distribution can force a match. A k-of-N rule therefore belongs on
+  **filters**, not tweaks.
+
+v1 does not commit to filters, so that k-of-N rule is unverified best effort — a note,
+not a claim (§1.5). The construction generalizes directly to filters and to UTXO
+responses: same canonical set, same commitment. Tweaks were chosen because that is where
+omission is silent.
+
+### 4.4 The primary output is coverage, not alarms
+
+An alarm that never fires looks like a product that does nothing. The ladder produces
+something continuous and visible instead: **per-block-range scan coverage.**
+
+| Coverage state | Meaning |
+|---|---|
+| **Verified** | Root agreed; served set complete |
+| **Resolved** | Gap existed, filled from another server, root checked |
+| **Unresolvable** | Every queried server pruned it — an ecosystem gap (§2.5), not an attack |
+| **Unverified** | No commitment available |
+| **Compromised** | Alarm — named server, named block |
+
+Which determines what the wallet displays:
+
+> **A balance computed over blocks that could not be verified is a lower bound, not a
+> balance.**
+
+A wallet with unresolvable ranges says so rather than printing a confident number. This
+is the answer to §1.5's "a wallet that ignores the alarm": coverage is always on screen,
+so it cannot be ignored the way an alarm can.
+
+### 4.5 Acting on alarms
+
+Alarms are facts about `(server, block, txid)`. Persisted, deduplicated on that triple,
+never auto-cleared.
+
+**Automatic exclusion of a misbehaving server is itself an attack vector.** If a third
+party can induce the detection, they can knock out honest servers and leave the victim
+with the attacker's. So the two alarm types are treated differently:
+
+| Alarm | Attributable? | Automatic action |
+|---|---|---|
+| Self-consistency failure | Yes — S's own signature against S's own data | Safe to down-rank automatically |
+| Root divergence | No — it names two servers without saying which lied | **None** until rung 4 attributes it |
+
+This asymmetry is why attribution is a separate rung rather than an action taken directly
+on divergence.
+
+### 4.6 Dependency: an independent header chain
+
+Two servers committing to different block hashes at the same height are on different
+chain tips. That is a fork, not an omission, and reporting it as one would be the loudest
+possible false positive.
+
+Comparisons must therefore be keyed on a block hash the client independently believes in,
+which means **Canary maintains its own header chain** — 80 bytes per block, PoW-verified,
+standard SPV. Cheap, but a real component; it is owned in §6 rather than assumed.
+
+### 4.7 Evidence artifact
+
+One file, **offline-verifiable**: `canary verify <file>` requires no network.
+
+```
+claim              omission | equivocation | self-contradiction
+accused            npub
+block              hash, height
+signed_commitment  raw Nostr event
+signed_policy      raw Nostr event
+receipt            signed (request, response digest)   — protocol layer only (§3.8)
+missing_leaf       {txid, tweak}
+merkle_proof       ~350 bytes (§3.2)
+```
+
+This file is the demo. It is also what would be attached to a bug report or a public
+disclosure — an accusation nobody can independently check is worth little.
 
 ## 5. Canary tripwire — PENDING
 
-Self-payment scheduling that a selectively-malicious server cannot distinguish from
-real traffic.
+The last rung, and the only one that works when *every* queried indexer colludes (§1.3).
+The client sends itself a silent payment, so it has an independent path to know a payment
+exists, and then checks whether each indexer reports it.
+
+Open: how a self-payment is made indistinguishable from ordinary traffic — an obviously
+periodic, fixed-value, same-address probe is trivially whitelisted; scheduling and
+funding on signet; what a *negative* result proves and how long the client must wait
+before concluding omission rather than propagation delay; and the interaction with §4.4
+coverage, since a passed tripwire raises confidence only for the specific block it landed
+in.
 
 ## 6. Components, interfaces, ownership — PENDING
 
 Go package boundaries, the interfaces frozen at end of week 1, and the three-way split.
-Must also define the **auditor** role that fell out of §2.2: a full node computing
-`T_base` independently and comparing it against published roots. It is the only party
-that can verify a root is *correct* rather than merely *consistent*.
+Must also define two components that fell out of later sections:
+
+- The **auditor** (§2.2, §4.2) — a full node computing `T_base` independently and
+  comparing against published roots. The only party that can verify a root is *correct*
+  rather than merely *consistent*, and the party that performs attribution.
+- The **header chain** (§4.6) — PoW-verified SPV headers, without which comparisons
+  cannot be safely keyed on block hash.
 
 ## 7. Testing — differential edge-case suite — PENDING
 

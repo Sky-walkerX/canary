@@ -27,9 +27,10 @@ approved section by section.**
 | Architecture | Approved (sidecar + 4-step ladder + Nostr transport) |
 | §1 Threat model | Settled |
 | §2 Canonical sets + policy normalization | Settled — data model is fixed, team interface named |
-| §3 Commitment format + Nostr transport | Settled — commitment object, Merkle construction, event rules |
-| §4 Client verification ladder | **Next** |
-| §5–§8 | Stubbed in the design doc, each with what it must resolve |
+| §3 Commitment format + Nostr transport | Settled — commitment object, Merkle construction, event rules, receipts |
+| §4 Client verification ladder | Settled — four rungs, coverage output, evidence artifact |
+| §5 Canary tripwire | **Next** |
+| §6–§8 | Stubbed in the design doc, each with what it must resolve |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -63,6 +64,12 @@ replace it. OTS may return in v2 to anchor the event chain.
 ## Framing discipline — this is not optional
 
 **Canary does not make tweak sourcing trustless. It makes it accountable.**
+
+Second framing decision, from §4.4: **the primary output is coverage, not alarms.** An
+alarm that never fires looks like a product that does nothing. Coverage — verified /
+resolved / unresolvable / unverified / compromised, per block range — is continuous and
+visible. It also yields the line worth leading with: *a balance computed over blocks you
+could not verify is a lower bound, not a balance.*
 
 Say this first — in the README, in the docs, in the first 30 seconds of the pitch. A
 limitation volunteered reads as rigor; the same limitation extracted by a judge reads as
@@ -104,7 +111,11 @@ node.
    **regular kinds, append-only**. §3.3.
 7. **Claiming Nostr gives us timestamping.** It gives us *publication*. `created_at` is
    self-asserted and backdatable; ordering comes from the block hash. §3.5.
-8. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
+8. **Auto-excluding a server that trips an alarm.** If a third party can induce the
+   detection, auto-exclusion knocks out honest servers and leaves the victim with the
+   attacker's. Only self-consistency failures are safely automatic; root divergence names
+   two servers without saying which lied. §4.5.
+9. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
    `.env`, `blindbit.toml`, `bitcoin.conf`. We will handle Nostr signing keys and Core
    RPC config; keep them out.
 

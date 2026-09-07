@@ -17,7 +17,7 @@ Hard deadline. One winner per track, $1,000.
 Repo: `github.com/Sky-walkerX/canary` (**private** until submission — publishing the
 idea early hands it to competitors).
 
-## Current state — 2026-09-06
+## Current state — 2026-09-07
 
 **Design phase. Nothing is implemented, and nothing should be until the design is
 approved section by section.**
@@ -26,8 +26,9 @@ approved section by section.**
 |---|---|
 | Architecture | Approved (sidecar + 4-step ladder + Nostr transport) |
 | §1 Threat model | Settled |
-| §2 Canonical sets + policy normalization | **Next. Blocks everything else** — it defines the data model |
-| §3–§8 | Stubbed in the design doc, each with what it must resolve |
+| §2 Canonical sets + policy normalization | Settled — data model is fixed, team interface named |
+| §3 Commitment format + Nostr transport | **Next** |
+| §4–§8 | Stubbed in the design doc, each with what it must resolve |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -52,6 +53,7 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 | **Signet, not mainnet** | Mainnet needs an unpruned Core v30+ and days of IBD. Nothing in the design requires mainnet |
 | **Nostr for commitment transport** | Free public signed timestamped bulletin board, no infrastructure for servers to run; clients subscribe to a relay instead of opening N connections, which also avoids leaking which blocks they care about |
 | **Construct edge cases, don't scan for them** | Build signet transactions that deliberately hit ambiguous BIP-352 eligibility rules rather than hoping mainnet supplies one |
+| **Commit to the canonical set, not the served set** | All legitimate indexer policy is *subtractive*, so `Served ⊆ Canonical`. Committing to the policy-free set lets storage policy stay free while accountability does not. §2.1 — this is the load-bearing idea of the whole design |
 | **Run all indexers locally** | Never depend on a third-party public server being alive — that fragility is literally what the project is about |
 
 **Superseded:** the original dossier proposed OpenTimestamps anchoring. Nostr events
@@ -83,8 +85,9 @@ node.
 
 1. **Diffing raw tweak sets.** It produces nothing but false positives. Honest indexers
    legitimately serve different sets — blindbit-oracle does cut-through and dust
-   filtering, silentiumd indexes only transactions with unspent taproot outputs.
-   Normalization against a *declared policy* is the whole problem. This is §2.
+   filtering, silentiumd indexes only transactions with unspent taproot outputs, and
+   BIP-352 itself *blesses* cut-through. **Settled in §2:** compare committed canonical
+   sets, never served sets. Read §2 before touching any comparison code.
 2. **Claiming we solved commission attacks.** We did not. Injection-to-deanonymize is a
    different attack with the opposite structure; ephemeral Tor block fetching is the
    accepted answer. Our k-of-N rule raises the bar as a side effect — that is a note,

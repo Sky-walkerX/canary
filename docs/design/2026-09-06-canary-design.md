@@ -1,6 +1,6 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§6 settled; §7–§8 pending.
+**Status:** In progress. §1–§7 settled; §8 pending.
 **Date:** 2026-09-06
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -785,18 +785,122 @@ is the earliest possible signal that `canonical` is wrong.
 | Relay dependency | Run our own (`strfry` / `nostr-rs-relay`) alongside public ones, consistent with running everything locally |
 | Auditor scope creep | **Not on the critical path.** §5.3's tripwire attributes without a node, so the demo never requires the auditor. It is the stretch component |
 
-## 7. Testing — differential edge-case suite — PENDING
+## 7. Testing — differential edge-case suite — SETTLED 2026-09-07
 
-§6.4 sharpened what this section is for. Differential testing against blindbit-oracle
-exercises the wrapper only, since both sit on gobip352; and BIP-352's published vectors
-cover send/receive but nothing at the index level.
+### 7.1 Three layers
 
-Open: which implementation lineages are genuinely independent and worth testing against;
-the constructed signet transactions for each ambiguous corner named in §2.6 (NUMS point
-*H*, malleated P2PKH `scriptSig`, uncompressed and hybrid keys, `outpoint_L` endianness,
-SegWit v>1, coinbase, point at infinity); the format of the index-level test vectors we
-publish; how the suite runs in CI without a node; and which disagreements are worth
-reporting upstream versus absorbing.
+| Layer | Covered by | Independent? |
+|---|---|---|
+| **A. Primitives** — tweak from a given input set | BIP-352's `send_and_receive_test_vectors.json` | Yes — it is the specification |
+| **B. Canonical set** — which transactions, in what order | **Nothing. No vectors exist** | — |
+| **C. Real-chain agreement** — us against blindbit-oracle over N blocks | Week-1 harness (§6.6) | No — shared gobip352 |
+
+Layer A is someone else's test, but it is the only independent check we have on our
+dependency, so we run it. Layer C catches wrapper bugs but not primitive bugs, and it is
+the cheapest early signal.
+
+**Layer B is the work**, and it is the contribution: BIP-352 specifies index-level
+eligibility in prose and ships no vectors for it.
+
+Realistic independent lineages within four weeks: the BIP vectors (free), blindbit-oracle
+(wrapper level only), and **silentiumd if it runs easily**. Core PR #28241 is a genuinely
+independent C++ lineage but is a closed PR against an old tree — named, not budgeted.
+
+### 7.2 Regtest, not signet
+
+This amends the earlier decision to construct edge cases on signet. Several corners
+require arbitrary scripts and controlled block composition; on public signet we cannot
+mine, so construction waits on someone else's block template and depends on non-standard
+transactions relaying. Regtest gives instant blocks, arbitrary transactions, no faucet
+dependency, and reproducible CI.
+
+> **Regtest for the edge-case suite. Signet for the end-to-end demo.**
+
+To verify on day 1: blindbit-oracle's `network` configuration accepting regtest, and
+Core's REST endpoints behaving there.
+
+### 7.3 The corners
+
+| Case | Construction | Expected |
+|---|---|---|
+| **NUMS-H script path** | P2TR with internal key *H*, spent via script path | Input **excluded**. If it is the only eligible input, the transaction is not eligible |
+| **NUMS-adjacent** | *H* with the control block's parity bit flipped | Input **included** — verifies we compare bytes 1..33 only |
+| **Malleated P2PKH** | `<dummy> OP_DROP <sig> <pubkey>` | Public key **must** still be found — the BIP says MUST |
+| **Uncompressed P2PKH key** | 65-byte public key | **Excluded** — compressed and x-only only |
+| **SegWit v>1 input** | Spend a v2 witness program | **Whole transaction excluded** |
+| **Mixed input types** | P2TR + P2WPKH + P2PKH in one transaction | All three summed |
+| **Taproot output, no eligible input** | P2WSH inputs only | Not eligible |
+| **Eligible input, no taproot output** | P2TR in, P2WPKH out | Not eligible |
+| **Coinbase** | — | Not eligible — null prevout |
+| **`A_sum` = point at infinity** | See below | **Skip the transaction** |
+| **`outpoint_L` ties** | Two inputs from the same txid, adjacent vouts | Tests serialization and endianness |
+
+The infinity case looks unreachable and is not. Two taproot inputs cannot produce it —
+both lift to even Y. But take `a`, let `P = aG` with even Y; fund a **P2TR** output to
+x-only `P` and a **P2WPKH** output to the compressed encoding of `−P` (private key `n−a`,
+prefix `0x03`); spend both in one transaction. Then `A_sum = P + (−P) = ∞`. Both keys are
+ours and it is trivial on regtest.
+
+This is the case most likely to find a real bug: libraries commonly error or silently
+return a zero point on addition to infinity, and it is essentially unreachable by
+accident.
+
+### 7.4 Vector format
+
+```json
+{
+  "name": "nums-h-only-eligible-input",
+  "network": "regtest",
+  "block": "<full block hex>",
+  "prevouts": { "<txid>:<vout>": { "scriptPubKey": "...", "value": 12345 } },
+  "expected": {
+    "n": 0,
+    "leaves": [],
+    "root": "<32-byte hex>"
+  },
+  "rationale": "BIP-352: script-path spends with internal key H are skipped..."
+}
+```
+
+The **prevout map** is what makes a vector self-contained — it is exactly what a node
+would otherwise supply. Any implementation can consume this with no node and no network.
+
+Including `expected.root` means the vectors also exercise §3.2's tagged hashing and
+odd-node promotion, covering the whole `canonical` + `commit` stack rather than
+eligibility alone. That makes them worth more to an adopter.
+
+**CI is hermetic.** Generation requires regtest and Core and runs as a dev-time task; the
+committed JSON runs under plain `go test` with no node and no network.
+
+### 7.5 Property tests
+
+Structural, and not reachable by fixed vectors. Each row defends a specific §3.2
+decision.
+
+| Property | Defends |
+|---|---|
+| `VerifyProof(Root(L), i, Prove(L, i))` for all `i`, random `L` | Basic soundness |
+| Permuting transaction order changes the root | Accidental sorting — §2.2 chose transaction order deliberately |
+| A root over `n` leaves never validates as a root over `n′ ≠ n` | §3.2's `n` binding |
+| `n ∈ {1, 2, 3, 5, 2ᵏ, 2ᵏ+1}` | **Odd-node promotion**, where CVE-2012-2459-class bugs live |
+| An internal node hash never validates as a leaf | The distinct leaf and node tags |
+
+### 7.6 Upstream, and expectations
+
+Disagreements sort into three buckets:
+
+- **We are wrong** — fix, and keep the vector
+- **They are wrong** — report with the vector attached. A failing vector is a far better
+  bug report than prose
+- **The BIP is ambiguous** — the valuable case. BIP-352 v1.1.0 is recent and actively
+  maintained, so an index-level vector contribution is plausibly acceptable upstream
+
+**Expectations, so a quiet suite is not read as a failed one:** the likely outcome is
+zero to two real bugs. The suite is the contribution either way. *"We tested this against
+N implementations and they agree"* is a legitimate and reportable result, and it is the
+answer to a judge asking how we know the canonical set is right.
+
+This is week 3 and it is time-boxed. The vectors ship whether or not they find anything.
 
 ## 8. Demo — PENDING
 

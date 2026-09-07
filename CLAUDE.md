@@ -31,8 +31,8 @@ approved section by section.**
 | §4 Client verification ladder | Settled — four rungs, coverage output, evidence artifact |
 | §5 Canary tripwire | Settled — generalized to *expected payments*; §1.2 amended |
 | §6 Components, interfaces, ownership | Settled — 3 binaries, proxy model, packages, ownership, risks |
-| §7 Differential edge-case suite | **Next** |
-| §8 Demo | Stubbed in the design doc with what it must resolve |
+| §7 Differential edge-case suite | Settled — regtest vectors, corners, property tests |
+| §8 Demo | **Next — last section** |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -56,7 +56,7 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 | **Go** | blindbit-oracle, silentiumd and gobip352 are all Go; all three teammates are Go-capable |
 | **Signet, not mainnet** | Mainnet needs an unpruned Core v30+ and days of IBD. Nothing in the design requires mainnet |
 | **Nostr for commitment transport** | Free public signed timestamped bulletin board, no infrastructure for servers to run; clients subscribe to a relay instead of opening N connections, which also avoids leaking which blocks they care about |
-| **Construct edge cases, don't scan for them** | Build signet transactions that deliberately hit ambiguous BIP-352 eligibility rules rather than hoping mainnet supplies one |
+| **Construct edge cases, don't scan for them** | Deliberately hit ambiguous BIP-352 eligibility rules rather than hoping a chain supplies one. **On regtest, not signet** (§7.2) — several corners need arbitrary scripts and controlled block composition, and we cannot mine on public signet. Signet is for the end-to-end demo only |
 | **Commit to the canonical set, not the served set** | All legitimate indexer policy is *subtractive*, so `Served ⊆ Canonical`. Committing to the policy-free set lets storage policy stay free while accountability does not. §2.1 — this is the load-bearing idea of the whole design |
 | **Run all indexers locally** | Never depend on a third-party public server being alive — that fragility is literally what the project is about |
 

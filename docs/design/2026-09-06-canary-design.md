@@ -1,7 +1,9 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§7 settled; §8 pending.
-**Date:** 2026-09-06
+**Status:** In progress. §1–§7 settled; §8 pending. A spec review on 2026-09-07 found 15
+defects. The 8 editorial ones are corrected in place below; the 7 design-level ones are
+open and tracked in `CLAUDE.md`.
+**Date:** 2026-09-06, revised 2026-09-07
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
 
@@ -40,10 +42,10 @@ The project is layered deliberately:
 
 | Attack | Status today | With Canary |
 |---|---|---|
-| **Targeted omission** — drop tweaks for one victim | Silent, permanent, symptomless | Detected within one block interval |
+| **Targeted omission** — drop tweaks for one victim | Silent, permanent, symptomless | Detected when the client fetches the block (§1.4) |
 | **Blanket omission** — truncated, stale, or dead-but-200 index | Indistinguishable from "no payments" | Detected, and publicly visible |
 | **Equivocation** — serve victim set X, serve world set Y | Undetectable | Detected against the server's own signature |
-| **Retroactive revision** — rewrite history to cover tracks | Trivial | Defeated by published, signed, timestamped events |
+| **Retroactive revision** — rewrite history to cover tracks | Trivial | Defeated by published, signed, **append-only** events (§3.3) |
 
 Blanket omission is not theoretical. `bitcoin.silentium.dev`, the public indexer named
 in the light-client documentation, no longer serves the API: the domain redirects to an
@@ -96,9 +98,27 @@ claiming to have invented it.
 ### 1.4 Security claim
 
 > Given at least one honest indexer publishing commitments, and an uncensored path to
-> at least one relay carrying them, Canary converts targeted omission from a silent,
-> permanent failure into a detected event with a named, non-repudiable accused party,
-> within one block interval of the omission.
+> at least one relay carrying them, Canary converts omission from a silent, permanent
+> failure into a detected event naming a server and a block.
+
+Two qualifiers travel with the claim rather than waiting to be extracted from it. An
+earlier draft folded them in and overstated the claim in both directions.
+
+**Detection is not proof.** Two roots that disagree are signed by two different keys, so
+equivocation is provable to anyone. A *single* server's omission is `commitment ≠ what I
+was served`, and HTTP responses carry no signature — so it is provable to a third party
+only where the server signs receipts over its responses (§3.8), which exists in the
+protocol layer and not in the tool layer. Against an unmodified indexer, the victim knows
+and cannot prove it. Non-repudiation is a property of the protocol layer.
+
+**Timing depends on the attack.** Blanket omission and equivocation are `committed ≠
+canonical`, and surface from the always-on commitment feed — rung 1 (§4.1), about one
+block interval. Targeted omission is `served ≠ committed`, and surfaces at rung 2, whose
+trigger is the client fetching the block it was lied about. For a wallet following the
+tip that is also about a block interval. For a rescan it is whenever the rescan reaches
+that block, which may be much later. Even then it converts a permanent silent failure
+into a named one attached to a specific block, which is the claim that matters. (Not a
+*dated* one — the block orders it, not Nostr's self-asserted `created_at`. §3.5.)
 
 ### 1.5 Attacks explicitly out of scope
 
@@ -218,14 +238,19 @@ becomes concrete rather than aspirational.
 
 ### 2.4 Wire model
 
-Per-leaf Merkle inclusion proofs were considered and rejected: at `log n × 32` bytes each
-they cost roughly 528 KB of proof to accompany 50 KB of tweaks on a mainnet-sized block.
+Per-leaf Merkle inclusion proofs were considered and rejected: at `⌈log₂ n⌉ × 32` bytes
+each — 352 bytes at `n ≈ 2000` — they cost about 700 KB of proof to accompany 130 KB of
+leaves. `n ≈ 2000` is the order of magnitude for a mainnet block and is the figure used
+throughout, including §3.2.
 
 Instead the response is the canonical-order list in which each position is **either the
 full leaf or that leaf's 32-byte hash**. The client hashes the full leaves, splices in
 the supplied hashes, and recomputes the root in a single pass.
 
-- Serving everything: no overhead at all.
+- Serving everything: 65 bytes per position against 33 for a bare tweak — **roughly
+  double today's response.** That is the honest cost and it is not avoidable: the txid
+  has to be on the wire, because a light client does not know which transactions are in
+  the set and so cannot supply it. Bandwidth doubles; storage stays free (§3.7).
 - Serving a subset while retaining leaf hashes: 32 bytes per withheld position, with no
   logarithmic factor, and the response is verifiable from that one server alone.
 
@@ -279,17 +304,18 @@ cut-through gaps; a rescanning client escalates them.
 
 ### 2.6 What this fixes for the team
 
-The interface frozen at the end of week 1:
+The interface frozen on day 2 (§6.3):
 
 ```go
-CanonicalSet(block, prevouts) []Leaf
+func Set(net Network, blk *wire.MsgBlock, pv PrevoutSource) ([]Leaf, error)
 ```
 
 Dev B's indexer commits to it; Dev C's differ compares against it; the differential suite
 (§7) tests it.
 
 §2 also generates §7's target list. Each item below is a place where two correct
-implementations could disagree on `T_base`, and each is constructible on signet:
+implementations could disagree on `T_base`, and each is constructible **on regtest**
+(§7.2 — public signet cannot be mined on demand):
 
 - NUMS point *H* detection via control-block parsing
 - Malleated P2PKH `scriptSig` parsing — the BIP *requires* parsing non-template scriptSigs
@@ -347,16 +373,36 @@ promotion avoids it, and distinct leaf and node tags make second-preimage substi
 impossible regardless. Binding `network`, `block_hash` and `n` inside the root means a
 root cannot be replayed onto another block or reused with a different length.
 
-**Interop trap, pinned here deliberately:** `txid` is used in **internal byte order**, as
-it appears in the transaction serialization — not the display-reversed hex. Two
-implementations disagreeing on this produce entirely different roots for identical data,
-and the failure presents as an attack.
+**Preimage encodings, pinned here deliberately.** Every field is fixed-width, so the
+concatenations need no length prefixes. An unpinned field in a hash preimage is an interop
+break that presents as an attack.
+
+| Field | Encoding |
+|---|---|
+| `txid` (leaf) | 32 bytes, **internal byte order** — as it appears in the transaction serialization, not the display-reversed hex |
+| `tweak` (leaf) | 33 bytes, compressed SEC |
+| `network` | 4 bytes — the network's P2P message-start bytes in the order they appear in a message header, i.e. the little-endian encoding of btcd's `wire.BitcoinNet` |
+| `block_hash` | 32 bytes, **internal byte order** — the same rule as `txid` |
+| `n_le32` | 4 bytes, unsigned little-endian |
+| `merkle_root` | 32 bytes — the tree root, before the outer tagged hash |
+
+`txid` and `block_hash` are the trap. Two implementations disagreeing on byte order
+produce entirely different roots for identical data.
+
+`network` is the message-start magic rather than an enum of our own, for one reason:
+BIP-325 derives a custom signet's magic from its challenge, so two different signets get
+two different values. §2.7's first precondition is that both servers index the same
+network, and a private enum would erase exactly the distinction that precondition rests
+on. The implementation reads the value from `chaincfg.Params.Net` rather than a literal
+(informatively: main `f9beb4d9`, default signet `0a03cf40`, regtest `fabfb5da`), and
+§7.4's regtest vectors pin the real value in CI — so a wrong constant fails a test instead
+of becoming a silent fork.
 
 ### 3.3 The commitment object
 
 | Field | Notes |
 |---|---|
-| `network` | signet / main |
+| `network` | `main` / `signet` / `regtest`. The event tag carries the display name; the root binds the 4-byte magic (§3.2), which also separates custom signets |
 | `block_hash` | Authoritative key |
 | `block_height` | Convenience only |
 | `n` | Canonical set size |
@@ -421,13 +467,19 @@ honest scope for v1 and is stated as a limitation rather than papered over.
 
 | Party | Cost |
 |---|---|
-| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block — **~5 MB for all of mainnet history** |
+| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block, a 32-byte root plus `n` — **about 35 MB for all of mainnet history** (≈965k blocks × 36 B) |
 | Client | One relay subscription filtered by author; 32 bytes per block per server to compare |
 | Relay | ~144 events per day per indexer |
 
 The prune-freely property now states cleanly: **commit at index time, discard at will.**
 The server holds the block and its prevouts exactly once, computes `T_base`, signs,
 publishes — and remains accountable for what it dropped, forever, at 36 bytes per block.
+
+The arithmetic is spelled out because §2.1 designates this table as the pitch to
+indexers, and the first thing a skeptical indexer does is recompute it. An earlier draft
+said 5 MB, which was wrong by about 7×. 35 MB is still a rounding error next to an
+unpruned node, and the argument is unchanged — but a number that does not survive a
+check costs more credibility than the number it was trying to buy.
 
 ### 3.8 Receipts
 
@@ -524,16 +576,32 @@ something continuous and visible instead: **per-block-range scan coverage.**
 | **Resolved** | Gap existed, filled from another server, root checked |
 | **Unresolvable** | Every queried server pruned it — an ecosystem gap (§2.5), not an attack |
 | **Unverified** | No commitment available |
-| **Compromised** | Alarm — named server, named block |
+| **Disputed** | Roots diverge — two named servers, one of them lying, not yet attributed (§4.5) |
+| **Compromised** | Attributed — one named server, one named block |
+
+*Disputed* and *Compromised* are separate states because §4.5 keeps them separate. Root
+divergence names two servers without saying which lied, and collapsing that into a single
+alarm is exactly how an attacker gets an honest server excluded.
 
 Which determines what the wallet displays:
 
 > **A balance computed over blocks that could not be verified is a lower bound, not a
 > balance.**
 
-A wallet with unresolvable ranges says so rather than printing a confident number. This
-is the answer to §1.5's "a wallet that ignores the alarm": coverage is always on screen,
-so it cannot be ignored the way an alarm can.
+A wallet with unresolvable ranges says so rather than printing a confident number.
+
+**How coverage reaches the user.** Two paths, and only one of them works against a wallet
+that does not know Canary exists:
+
+| Consumer | Mechanism |
+|---|---|
+| A Canary-aware wallet, or `canary status` | Reads the coverage state and displays it |
+| **Unmodified wallet** | It cannot display what it cannot see. Enforcement is §6.2's proxy **refusing to serve unverified data** — the wallet never receives a balance to print |
+
+The refusal, not the display, is the answer to §1.5's "a wallet that ignores the alarm".
+An earlier draft of this section claimed coverage is "always on screen", which is not
+true of an unmodified `blindbitd`: there, coverage lives in `canary status`, which is the
+log-nobody-reads that §6.2 dismisses.
 
 ### 4.5 Acting on alarms
 
@@ -653,7 +721,12 @@ Probes are therefore rate-limited by a user budget rather than a fixed schedule,
 out-of-band assertions (§5.1) are free — a user receiving real payments accrues tripwire
 coverage at no cost. On signet all of it is free, which is what makes the live demo
 possible: send a payment, have a deliberately malicious indexer drop it, and watch Canary
-name it within about thirty seconds (§8).
+name it.
+
+The tripwire is the one path whose latency is not a block interval. The client already
+knows the txid and the block, so detection is bounded by its own query once the server
+has indexed that height — seconds, not §1.4's block interval. That is a property of the
+tripwire alone and does not generalize to the other rungs.
 
 ## 6. Components, interfaces, ownership — SETTLED 2026-09-07
 
@@ -684,30 +757,58 @@ The cost is that `canaryd` must speak blindbit's API — but only the endpoints
 
 ```go
 // canonical — the reference implementation. Pure function. §2.2
+type Network uint32 // the P2P message-start magic, per §3.2
+
 type Leaf struct {
-    TxID  [32]byte  // INTERNAL byte order (§3.2)
-    Tweak [33]byte  // compressed
+    TxID  [32]byte // INTERNAL byte order (§3.2)
+    Tweak [33]byte // compressed SEC
 }
+
+type PrevoutSource interface {
+    Prevout(op wire.OutPoint) (*wire.TxOut, error)
+}
+
 func Set(net Network, blk *wire.MsgBlock, pv PrevoutSource) ([]Leaf, error)
 
 // commit — Merkle, tagged hashes, promotion on odd nodes. §3.2
+type Proof struct {
+    Index    uint32     // position in canonical order
+    N        uint32     // set size — bound into the root, so a proof cannot be replayed
+    Siblings [][32]byte // bottom-up
+}
+
 func Root(net Network, blockHash [32]byte, leaves []Leaf) [32]byte
-func Prove(leaves []Leaf, i int) Proof
-func VerifyProof(root [32]byte, ..., leaf Leaf, p Proof) bool
+func Prove(leaves []Leaf, i uint32) (Proof, error)
+func VerifyProof(net Network, blockHash, root [32]byte, leaf Leaf, p Proof) bool
 
 // policy — §2.3, including the tool-first bridge
 type Policy struct {
-    Network Network; StartHeight uint32
-    PrunesSpent bool; DustThresholdSat uint64; DustConfigurable bool
+    Network          Network
+    StartHeight      uint32
+    PrunesSpent      bool
+    DustThresholdSat uint64
+    DustConfigurable bool
 }
+
 func FromBlindBitInfo(r io.Reader) (Policy, error)
 
 // feed — Nostr. §3.3, §3.4
-func (c Commitment) ToEvent(sk) nostr.Event
+type Commitment struct {
+    Network     Network
+    BlockHash   [32]byte
+    BlockHeight uint32
+    N           uint32
+    Root        [32]byte
+    PolicyRef   [32]byte // event id of the policy declaration in force
+    Author      [32]byte // Nostr pubkey — implicit signer
+}
+
+func (c Commitment) ToEvent(sk [32]byte) (nostr.Event, error)
 func FromEvent(e nostr.Event) (Commitment, error)
+
 type Feed interface {
-    Subscribe(ctx, authors [][32]byte) <-chan Commitment
-    Get(ctx, author [32]byte, blockHash [32]byte) (Commitment, error)
+    Subscribe(ctx context.Context, authors [][32]byte) (<-chan Commitment, error)
+    Get(ctx context.Context, author [32]byte, blockHash [32]byte) (Commitment, error)
 }
 
 // headers  — PoW-verified SPV chain. §4.6
@@ -715,6 +816,16 @@ type Feed interface {
 // evidence — artifact construction and offline verification. §4.7
 // tripwire — expected-payment assertions, Poisson scheduler. §5
 ```
+
+An earlier draft of this block carried literal `...` in `VerifyProof`, which is not a
+frozen interface. Everything above compiles as written.
+
+**Two of these are known-open and must not be built against until the sections behind
+them are resettled** (spec review, `CLAUDE.md`): `headers` assumes proof-of-work carries
+chain integrity, which is false on signet, where BIP-325 puts integrity in the
+challenge signature; and `Feed.Get` cannot be served by a relay as specified, because
+NIP-01 filters on single-letter tag names only and §3.3 puts the block hash in a
+multi-letter tag.
 
 **Interfaces freeze on day 2, not at the end of week 1.** On a 28-day clock, spending
 the first quarter before parallel work begins is not affordable. Days 1–2 are all three
@@ -752,7 +863,7 @@ would make the differential test vacuous.
 
 | Owner | Surface |
 |---|---|
-| **Naman** | `canonical`, `commit`, `feed` — the protocol core. Then the evidence artifact, demo and pitch |
+| **Naman** | `canonical`, `commit`, `feed` — the protocol core. Then `tripwire` and `evidence` together, since §5.3 makes the tripwire the thing that produces a node-free artifact. Then demo and pitch |
 | **Dev B** | Indexer fork: `T_base` at index time, commitment publishing, receipts, and the deliberately malicious mode |
 | **Dev C** | `canaryd` — proxy, `ladder`, `policy`, `headers`, coverage, CLI |
 
@@ -769,12 +880,25 @@ Coarse only. The detailed plan is `writing-plans`' output, not this document's.
 | **Day 1–2** | Signet, Core v30 and blindbit-oracle running for all three. **Interfaces frozen** |
 | **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. Nostr round-trip |
 | **Week 2** | Commitments published end to end. Rungs 1–2. Coverage. Proxy passing `blindbitd` traffic |
-| **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rung 3. §7 suite |
+| **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rungs 3–4. §7 suite |
 | **Week 4** | Demo, hardening, documentation, pitch. **Feature freeze 1 October**, four days before the deadline |
 
 The week-1 gate matters most: *do we and blindbit-oracle produce the same set across
 1000 signet blocks?* is a cheap harness, it is the differential suite in embryo, and it
 is the earliest possible signal that `canonical` is wrong.
+
+**Configure that comparison correctly or the gate tests nothing.** blindbit-oracle's
+default response is policy-filtered, and diffing a filtered response against `T_base` is
+the false-positive machine §2.1 exists to kill. Run it with its full-index option
+(`tweaks_full_basic=1` — confirm the flag name against the version pinned on day 1) and
+no dust threshold, which yields an index comparable to `T_base`. This is a configuration
+line, not a fork: the gate does not wait on Dev B's week-2 work.
+
+**Rung 4 has two forms and only one is on the critical path.** The tripwire's node-free
+attribution (§5.3) lands in week 3 alongside the tripwire, because there the client holds
+the prevouts for a transaction it made itself. The general auditor form, which needs
+prevouts for someone else's transaction, is §6.7's stretch component and deliberately has
+no week.
 
 ### 6.7 Risks
 
@@ -824,7 +948,8 @@ Core's REST endpoints behaving there.
 | Case | Construction | Expected |
 |---|---|---|
 | **NUMS-H script path** | P2TR with internal key *H*, spent via script path | Input **excluded**. If it is the only eligible input, the transaction is not eligible |
-| **NUMS-adjacent** | *H* with the control block's parity bit flipped | Input **included** — verifies we compare bytes 1..33 only |
+| **NUMS-H, parity flipped** | *H* as internal key, control block's parity bit flipped | Input **excluded**. Byte 0 is `leaf_version \| parity`; bytes 1..33 are still *H*. Catches an implementation that compares the control block from byte 0 and so stops recognising *H* whenever parity or leaf version differs |
+| **Ordinary script-path spend** | Random internal key *P* ≠ *H*, script path | Input **included** — only *H* is excluded, not script-path spends in general |
 | **Malleated P2PKH** | `<dummy> OP_DROP <sig> <pubkey>` | Public key **must** still be found — the BIP says MUST |
 | **Uncompressed P2PKH key** | 65-byte public key | **Excluded** — compressed and x-only only |
 | **SegWit v>1 input** | Spend a v2 witness program | **Whole transaction excluded** |
@@ -844,6 +969,15 @@ ours and it is trivial on regtest.
 This is the case most likely to find a real bug: libraries commonly error or silently
 return a zero point on addition to infinity, and it is essentially unreachable by
 accident.
+
+**The parity-flip row was inverted in the first draft of this table.** It said
+*included*, reasoning that a changed control block should read as a different key. It
+does not. Flipping parity changes byte 0 only, and an implementation reading bytes 1..33
+still sees *H* and still excludes the input. A correct implementation would have failed
+that vector, and "fixing" the implementation to pass it would have introduced the exact
+bug the vector exists to catch. §7.6 ships these upstream, so the expectation column is
+the part that has to be right, and every row's expectation is derived from the BIP text
+rather than from what our implementation does.
 
 ### 7.4 Vector format
 
@@ -905,7 +1039,8 @@ This is week 3 and it is time-boxed. The vectors ship whether or not they find a
 ## 8. Demo — PENDING
 
 Anchored on §5.4: a signet self-payment, an indexer configured to drop it, and Canary
-naming the accused within roughly one block interval. Open: the exact narrative order,
+naming the accused within seconds of the query — the tripwire path, whose latency is not
+a block interval (§5.4). Open: the exact narrative order,
 what is shown on screen (§4.4 coverage versus the §4.7 evidence artifact), how the
 malicious indexer is configured so the drop is visibly deliberate rather than a bug, and
 the fallback if signet block timing does not cooperate on the day.

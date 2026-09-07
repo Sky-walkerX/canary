@@ -34,19 +34,20 @@ approved section by section.**
 | §7 Differential edge-case suite | Settled — regtest vectors, corners, property tests |
 | §8 Demo | **Drafted in conversation, NOT approved, NOT written to the doc.** Key decisions captured below |
 
-**Spec review run 2026-09-07 (`/code-review`). 15 defects found. NOTHING IS FIXED YET.**
-Do not treat §1–§7 as final until the corrections round below is done. Seven of the
-fifteen change the design and need approval before editing; the rest are editorial.
+**Spec review run 2026-09-07 (`/code-review`). 15 defects found. 8 fixed, 7 open.**
+The 8 editorial ones are corrected in the doc (commit below). The 7 remaining change the
+design and need a decision before editing. Do not treat §1–§7 as final until they close.
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
 
-## Spec review — 2026-09-07 — OPEN DEFECTS
+## Spec review — 2026-09-07 — 8 FIXED, 7 OPEN
 
-Nothing here is fixed. A `/code-review` pass over the full spec plus a self-review found
-15 defects. Fix these before `writing-plans`, and before anyone codes against §6.3.
+A `/code-review` pass over the full spec plus a self-review found 15 defects. The seven
+below are still open and must close before `writing-plans`, and before anyone codes
+against §6.3.
 
-### Design-level — need a decision, not just an edit
+### Design-level — OPEN. Need a decision, not just an edit
 
 | # | Defect | Where |
 |---|---|---|
@@ -58,7 +59,32 @@ Nothing here is fixed. A `/code-review` pass over the full spec plus a self-revi
 | 6 | **Merkle root over an empty leaf set is undefined** — and it is the *most common* case on regtest, where most blocks hold no eligible transaction. §7.4's own example vector requires it; §7.5's property list starts at `n=1` | §3.2, §7.4 |
 | 7 | **Multi-letter Nostr tags are not relay-indexed.** NIP-01 filters only single-letter tag names, so `block_hash` as a tag is not queryable and §6.3's `Feed.Get(author, blockHash)` cannot be served by a relay. Fix: carry the block hash in a single-letter indexed tag | §3.3, §6.3 |
 
-### Factual / editorial — fix directly
+### Factual / editorial — FIXED 2026-09-07
+
+All eight are corrected in the doc. Listed with what the fix was, so nobody re-opens them
+or reverts a number back to the wrong one.
+
+| # | Defect | Fix applied |
+|---|---|---|
+| 8 | Root preimage encodings undefined for `network` / `block_hash` | §3.2 now has a full encodings table. `block_hash` is internal byte order, same rule as `txid`. **`network` is the 4-byte P2P message-start magic**, not a private enum — BIP-325 derives a custom signet's magic from its challenge, so the magic keeps two signets distinct where an enum would merge them, and §2.7's first precondition depends on that. Read from `chaincfg.Params.Net`, pinned in CI by §7.4's regtest vectors. §3.3's enum gained regtest |
+| 9 | §7.3's NUMS-adjacent vector inverted | Expectation flipped to **excluded** — parity lives in control-block byte 0, bytes 1..33 are still *H*. Added a second row (ordinary script-path spend, random *P* ≠ *H*, **included**) so the pair tests both over- and under-exclusion, plus a note in §7.3 explaining the inversion, since §7.6 ships these upstream |
+| 10 | §3.7 storage wrong by ~7× | **~35 MB**, arithmetic written inline (≈965k blocks × 36 B). Added a note that the table is the pitch to indexers, so a skeptic recomputes it |
+| 11 | §2.4's "no overhead at all"; n≈1500 vs n≈2000 | Overhead is honest now: 65 B per position vs 33 for a bare tweak, **roughly double**, unavoidable because a light client cannot supply the txid. **`n ≈ 2000` pinned everywhere**; §2.4's proof figures recomputed (352 B/proof, ~700 KB vs 130 KB of leaves) |
+| 12 | README ladder described the pre-§2 design | Rewritten to §4.1's four rungs plus the tripwire, led by `Served ⊆ Canonical`, with the coverage framing and the *lower bound, not a balance* line. Status now §1–§7 + open corrections. Headline dropped "provable" (see #13) |
+| 13 | §1.4 overclaimed non-repudiation and timing | Claim narrowed to "a detected event naming a server and a block", with two qualifiers travelling with it: **detection is not proof** (single-server omission needs §3.8 receipts, protocol layer only) and **timing depends on the attack** (rung 1 ≈ block interval; targeted omission surfaces at rung 2, on fetch). §1.2, §5.4, §8 and the README all aligned. §5.4 now states the tripwire's latency is bounded by its own query, not by a block interval |
+| 14 | §2.6 stale on all three statements | Day-2 freeze, real `Set(net, blk, pv) ([]Leaf, error)` signature, regtest not signet |
+| 15 | §4.4 "always on screen"; *Compromised* vs §4.5 | Split into **Disputed** (roots diverge, two named servers, unattributed) and **Compromised** (attributed, one named server) — six coverage states now. Added a table showing coverage reaches an unmodified wallet only through §6.2's refuse-in-path, not through a display |
+
+Also closed, below the cap: `tripwire` assigned to Naman in §6.5, paired with `evidence`
+per §5.3; rung 4 placed in week 3 in its tripwire form with the auditor form named as
+§6.7's stretch; §6.3's literal `...` replaced with signatures that compile, plus an
+explicit warning that `headers` and `Feed.Get` are known-open; `prior-art.md`'s
+"normalise before comparing" marked superseded by §2.1 with the reason; doc header dated
+`2026-09-06, revised 2026-09-07`. The rejected-as-half-right finding also landed: §6.6
+now says to run blindbit-oracle with `tweaks_full_basic=1` and no dust threshold for the
+week-1 gate.
+
+### Original defect list, editorial half (kept for reference)
 
 | # | Defect | Where |
 |---|---|---|
@@ -70,12 +96,6 @@ Nothing here is fixed. A `/code-review` pass over the full spec plus a self-revi
 | 13 | **§1.4 overclaims twice.** *Non-repudiation* needs receipts, which §3.8 confines to the protocol layer, and §1.4's precondition does not mention them. *Timing* — "within one block interval" — is wrong for targeted omission, which is served≠committed and so surfaces only at rung 2, whose trigger is the client fetching the block. Rung 1 catches only cross-server root divergence. §5.4 ("thirty seconds") and §8 ("one block interval") also disagree | §1.4, §1.2, README |
 | 14 | **§2.6 is stale on all three of its statements** — week-1 interface freeze (§6.3 says day 2), `CanonicalSet(block, prevouts) []Leaf` (§6.3 says `Set(net, blk, pv) ([]Leaf, error)`), and "constructible on signet" (§7.2 says regtest) | §2.6 |
 | 15 | **§4.4's "coverage is always on screen" is impossible** under §6.2's unmodified wallet — coverage lives in `canary status`, which is the log-nobody-reads §6.2 dismisses. The real answer to §1.5 is §6.2's refuse-in-path. Separately, §4.4's *Compromised — named server* contradicts §4.5, where root divergence names two servers without saying which lied | §4.4, §4.5, §6.2 |
-
-Also open, below the cap: `tripwire` has no owner in §6.5; rung 4 (attribution) has no week
-in §6.6 while §6.7 makes the auditor a stretch, so it has no implementation path; §6.3's
-"frozen" interfaces contain literal `...` placeholders; `prior-art.md` still says a
-workable design must "normalise before comparing", the position §2.1 overturned; the doc
-header is dated 2026-09-06 but §2–§7 are 09-07.
 
 **Reviewer finding rejected as half-right:** the week-1 gate (§6.6) was flagged as raw
 served-set diffing. Configuring blindbit-oracle with `tweaks_full_basic=1` and no dust
@@ -129,6 +149,8 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 | **Construct edge cases, don't scan for them** | Deliberately hit ambiguous BIP-352 eligibility rules rather than hoping a chain supplies one. **On regtest, not signet** (§7.2) — several corners need arbitrary scripts and controlled block composition, and we cannot mine on public signet. Signet is for the end-to-end demo only |
 | **Commit to the canonical set, not the served set** | All legitimate indexer policy is *subtractive*, so `Served ⊆ Canonical`. Committing to the policy-free set lets storage policy stay free while accountability does not. §2.1 — this is the load-bearing idea of the whole design |
 | **Run all indexers locally** | Never depend on a third-party public server being alive — that fragility is literally what the project is about |
+| **`network` in the root preimage is the 4-byte P2P magic, not an enum** | BIP-325 derives a custom signet's magic from its challenge, so the magic separates two signets that an enum would merge — and §2.7's first precondition is that both servers index the same network. Read from `chaincfg.Params.Net`; §7.4's vectors pin it in CI. Decided 2026-09-07 while closing spec-review defect #8 |
+| **Six coverage states, with *disputed* split from *compromised*** | §4.5 already ruled that root divergence names two servers without saying which lied. One combined alarm state is exactly how an attacker gets an honest server excluded. Decided 2026-09-07 while closing defect #15 |
 
 **Superseded:** the original dossier proposed OpenTimestamps anchoring. Nostr events
 replace it. OTS may return in v2 to anchor the event chain.
@@ -138,10 +160,13 @@ replace it. OTS may return in v2 to anchor the event chain.
 **Canary does not make tweak sourcing trustless. It makes it accountable.**
 
 Second framing decision, from §4.4: **the primary output is coverage, not alarms.** An
-alarm that never fires looks like a product that does nothing. Coverage — verified /
-resolved / unresolvable / unverified / compromised, per block range — is continuous and
-visible. It also yields the line worth leading with: *a balance computed over blocks you
-could not verify is a lower bound, not a balance.*
+alarm that never fires looks like a product that does nothing. Coverage, per block range,
+is continuous and
+visible. Six states as of the 2026-09-07 corrections — verified / resolved / unresolvable
+/ unverified / **disputed** / compromised, where *disputed* is unattributed root
+divergence and *compromised* is attributed, because §4.5 keeps those apart. It also yields
+the line worth leading with: *a balance computed over blocks you could not verify is a
+lower bound, not a balance.*
 
 Say this first — in the README, in the docs, in the first 30 seconds of the pitch. A
 limitation volunteered reads as rigor; the same limitation extracted by a judge reads as

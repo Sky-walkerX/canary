@@ -75,13 +75,18 @@ nothing but false positives:
 - **silentiumd** computes scalars only for transactions containing *unspent* taproot
   outputs — cut-through by default.
 
-Any workable design must define a canonical set, require servers to declare their
-serving policy, and normalise before comparing. This is real protocol design and is a
-plausible reason nobody has built it.
+Any workable design must define a canonical set. **Superseded 2026-09-07 by §2.1 of the
+design doc:** this section originally concluded that servers must declare their policy and
+that responses must be *normalised before comparing*. That is the wrong shape. Normalising
+two policy-filtered responses against each other cannot distinguish policy from
+dishonesty, because both are subtractive and both are permitted. §2 compares committed
+*canonical* sets instead and leaves the served sets alone — the policy declaration
+survives, but as an excuse that must be published in advance, not as an input to a diff.
+This is still real protocol design and still a plausible reason nobody has built it.
 
 **Useful consequence:** a server can commit at index time and prune afterwards. The
-commitment survives at 32 bytes per block, so an aggressively cut-through server remains
-accountable for exactly what it dropped.
+commitment survives at 36 bytes per block — a 32-byte root plus the set size — so an
+aggressively cut-through server remains accountable for exactly what it dropped.
 
 ## 4. The ecosystem is Go
 

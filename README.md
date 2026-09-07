@@ -1,16 +1,17 @@
 # Canary
 
 **A silent-payments wallet cannot tell the difference between "nobody paid you" and
-"the server hid the payment." Canary makes that difference loud, provable, and
-attributable to a named server.**
+"the server hid the payment." Canary makes that difference loud, and attributable to a
+named server.**
 
 ---
 
 ## Status
 
-**Design phase.** No implementation yet. §1–§5 of the design doc are settled — threat
-model, canonical sets, commitment format, verification ladder, tripwire. §6–§8 are in
-progress. See
+**Design phase.** No implementation yet. §1–§7 of the design doc are settled — threat
+model, canonical sets, commitment format, verification ladder, tripwire, components,
+testing. §8 (the demo) is pending, and a spec review on 7 September left open corrections
+against §1–§7. See
 [`docs/design/2026-09-06-canary-design.md`](docs/design/2026-09-06-canary-design.md).
 
 Built for [BOSS Battle](https://bitshala.org) (Bitshala), 7 Sep – 5 Oct 2026,
@@ -47,24 +48,57 @@ Nobody has shipped the thing that measures whether the assumption is being viola
 
 ## What Canary does
 
-A sidecar daemon between any light wallet and its indexers. It runs a four-step
-verification ladder — detection is cheap and continuous, attribution is expensive and
-on-demand:
+A sidecar daemon between any light wallet and its indexers.
 
-1. **Continuous** — pull 32-byte signed per-block commitments from N indexers.
-   Agreement costs almost nothing.
-2. **On divergence** — fetch the full tweak sets from the disagreeing servers,
-   normalize for each server's *declared* serving policy, and take the symmetric
-   difference. Honest servers legitimately serve different sets; this step is what
-   separates policy from dishonesty.
-3. **Attribution** — for each disputed tweak, fetch that transaction and its prevouts
-   from an independent source and recompute it. No full node required.
-4. **Active** — plant self-payments at random intervals so there is known-good ground
-   truth even when no real payments are arriving.
+The load-bearing idea is one line. Every legitimate indexer policy — cut-through, dust
+filtering, unspent-only indexing, a start height — only *removes* transactions. None
+invents one. So:
 
-Commitments are published as signed Nostr events. Servers get a public, timestamped
-bulletin board with no infrastructure to run; clients subscribe to a relay rather than
-opening N connections, which also avoids leaking which blocks they care about.
+> **Served ⊆ Canonical.** A tweak served but not committed is fabrication. A tweak
+> committed but not served requires a reason.
+
+Indexers commit to the policy-free canonical set for each block, and serve whatever
+subset their policy allows. Storage policy stays free; accountability does not. That is
+what makes comparison possible at all: honest indexers serve different sets, so diffing
+raw responses produces nothing but false positives, and BIP-352 itself blesses the
+divergence.
+
+Everything else is a ladder ordered by cost. Detection is cheap and continuous;
+attribution is expensive and on demand.
+
+1. **Commitment tracking** — always on. Each indexer publishes a ~200-byte signed Nostr
+   event per block carrying a 32-byte root over its canonical set. Two roots that
+   disagree for the same block hash mean somebody is lying.
+2. **Self-consistency** — when the wallet fetches a block, recompute the root from what
+   was actually served. *Served ≠ committed* is proven against that server's own
+   signature, from that one server alone. This is the rung that catches targeted
+   omission.
+3. **Gap resolution** — a server may legitimately decline a position it pruned. Fill it
+   from another server and check the root again. If nobody retains it, the range is
+   *unresolvable* — an ecosystem gap, and deliberately not an accusation.
+4. **Attribution** — recompute the canonical set from the transaction and its prevouts to
+   decide *which* server lied. This needs a full node or another block source. A client
+   without one records the signed evidence and hands the verdict to someone who has one,
+   later or never.
+
+Then the rung of last resort, the one that survives every queried indexer colluding:
+**the tripwire.** Assert that a payment exists in a block — because you sent it, or
+because the sender gave you the txid — and check whether each indexer reports it. It is
+also the one place a client attributes without a node, because it holds the prevouts for
+a transaction it made itself.
+
+**The primary output is coverage, not alarms.** Per block range: verified, resolved,
+unresolvable, unverified, disputed, compromised. An alarm that never fires looks like a
+product that does nothing. Coverage is continuous, and it yields the line worth leading
+with:
+
+> **A balance computed over blocks you could not verify is a lower bound, not a balance.**
+
+Commitments are published as signed Nostr events — a public, append-only bulletin board
+with no infrastructure for servers to run. Clients subscribe to a relay rather than
+opening N connections, which also avoids leaking which blocks they care about. Nostr
+gives us *publication*, not timestamping: `created_at` is self-asserted and backdatable,
+so ordering comes from the block hash.
 
 ## What Canary does *not* do
 
@@ -84,9 +118,19 @@ Stated first, deliberately.
 ## Security claim
 
 > Given at least one honest indexer publishing commitments, and an uncensored path to
-> at least one relay carrying them, Canary converts targeted omission from a silent,
-> permanent failure into a detected event with a named, non-repudiable accused party,
-> within one block interval of the omission.
+> at least one relay carrying them, Canary converts omission from a silent, permanent
+> failure into a detected event naming a server and a block.
+
+Two qualifiers, stated with the claim rather than waiting to be extracted from it:
+
+- **Detection is not proof.** Two roots that disagree are signed by different keys, so
+  equivocation is provable to anyone. A single server's omission is provable to a third
+  party only where that server signs receipts over its responses, which is the protocol
+  layer. Against an unmodified indexer today, the victim knows and cannot prove it.
+- **Timing depends on the attack.** Blanket omission and equivocation surface from the
+  always-on commitment feed, roughly one block interval. Targeted omission surfaces when
+  the client fetches the block it was lied about — about a block interval for a wallet at
+  the tip, and whenever the rescan reaches that block for a rescan.
 
 The security ladder degrades honestly:
 

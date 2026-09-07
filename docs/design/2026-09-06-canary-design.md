@@ -1,6 +1,6 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§2 settled; §3–§8 pending.
+**Status:** In progress. §1–§3 settled; §4–§8 pending.
 **Date:** 2026-09-06
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -201,14 +201,22 @@ full leaf or that leaf's 32-byte hash**. The client hashes the full leaves, spli
 the supplied hashes, and recomputes the root in a single pass.
 
 - Serving everything: no overhead at all.
-- Serving a subset: 32 bytes per withheld position, with no logarithmic factor.
-- The server must produce the hash of the leaf it dropped. It cannot pretend the position
-  does not exist, and it binds itself to a specific hidden value that another server's
-  set can later be checked against. Preimage resistance means this leaks nothing.
+- Serving a subset while retaining leaf hashes: 32 bytes per withheld position, with no
+  logarithmic factor, and the response is verifiable from that one server alone.
 
-Merkle proofs earn their place only for targeted queries ("positions 3, 7, 11 without the
-block"). That is an optimization; see §3. §2 fixes only *what* is committed: the ordered
-canonical leaf list and its length `n`.
+**Retaining leaf hashes is optional, not required.** An earlier draft of this section
+required the server to produce the hash of every leaf it dropped. It does not have to. A
+server that discarded a leaf entirely can simply declare the position withheld; the
+client reconstructs it from another source and checks the root regardless, falling back
+to the *unresolvable* state (§2.5) if nobody retains it. The requirement mattered because
+a retained hash costs 32 bytes against a 65-byte leaf — it would have consumed most of
+cut-through's saving, which is the entire reason a server would adopt this. Dropping the
+requirement restores it. Whether a server retains hashes is discovered from its response;
+it needs no policy field.
+
+Merkle proofs earn their place for the evidence artifact and for targeted queries
+("positions 3, 7, 11 without the block"), not for the main path. See §3.2. §2 fixes only
+*what* is committed: the ordered canonical leaf list and its length `n`.
 
 ### 2.5 Comparison procedure
 
@@ -274,21 +282,138 @@ rather than assumed:
 1. Both servers are indexing the **same network**.
 2. Comparison is keyed on **block hash**, not height.
 
-## 3. Commitment format and Nostr transport — PENDING
+## 3. Commitment format and Nostr transport — SETTLED 2026-09-07
 
-§2 settled *what* is committed: the ordered canonical leaf list and its length `n`.
-This section settles *how*.
+§2 settled *what* is committed: the ordered canonical leaf list and its length `n`,
+keyed on block hash. This section settles *how*.
 
-Open: leaf tagging and hashing; whether a Merkle tree is warranted at all, given §2.4
-removed the need for inclusion proofs on the main path — the tree earns its place only
-for targeted position queries and for the "commit at index time, prune freely afterward"
-property; how `n` is bound; the Nostr event kind, tags, and signing; how a policy
-declaration (§2.3) is published and bound to a commitment stream; and how a client
-discovers and pins a server's identity key.
+### 3.1 Two independent checks
+
+The format has to make both of these cheap, because neither subsumes the other.
+
+| Check | Catches | Requires |
+|---|---|---|
+| **Self-consistency** — served data recomputes to the published root | *served ≠ committed* | One server |
+| **Cross-check** — roots agree across servers for the same block hash | *committed ≠ canonical* | Two servers, at least one honest |
+
+A server that lies about `n` — excising a position and renumbering — passes
+self-consistency and fails cross-check. A server that commits honestly and then serves a
+subset fails self-consistency. Both checks are load-bearing.
+
+### 3.2 Merkle tree
+
+§2.4 removed inclusion proofs from the main path, and that stands. The tree earns its
+place elsewhere: **the evidence artifact.** When Canary fires, its output is a small
+self-contained object — *server S signed root R for block B; leaf L is in R, here is the
+proof; S served a set omitting L; S's declared policy forbids omission.* Proving leaf
+membership from a flat hash requires all `n` leaf hashes, roughly 64 KB at mainnet scale.
+With a tree it is about 350 bytes. That is the difference between an artifact someone
+reads and an attachment they do not.
+
+| Element | Construction |
+|---|---|
+| Leaf | `TaggedHash("canary/leaf/v1", txid ‖ tweak)` — 32 + 33 bytes |
+| Internal node | `TaggedHash("canary/node/v1", left ‖ right)` |
+| Odd node | **Promoted, never duplicated** |
+| Root | `TaggedHash("canary/root/v1", network ‖ block_hash ‖ n_le32 ‖ merkle_root)` |
+
+Duplicating an unpaired last node is CVE-2012-2459, Bitcoin's own Merkle vulnerability;
+promotion avoids it, and distinct leaf and node tags make second-preimage substitution
+impossible regardless. Binding `network`, `block_hash` and `n` inside the root means a
+root cannot be replayed onto another block or reused with a different length.
+
+**Interop trap, pinned here deliberately:** `txid` is used in **internal byte order**, as
+it appears in the transaction serialization — not the display-reversed hex. Two
+implementations disagreeing on this produce entirely different roots for identical data,
+and the failure presents as an attack.
+
+### 3.3 The commitment object
+
+| Field | Notes |
+|---|---|
+| `network` | signet / main |
+| `block_hash` | Authoritative key |
+| `block_height` | Convenience only |
+| `n` | Canonical set size |
+| `root` | Per §3.2 |
+| `policy_ref` | **Event id** of the policy declaration (§2.3) in force |
+| signer | Implicit — the Nostr pubkey |
+
+`policy_ref` binds by event id rather than inlining the policy. Policy changes rarely,
+and binding by id means *"when did you declare cut-through?"* has an answer the server
+cannot revise.
+
+**This forces a Nostr detail that would otherwise silently void the entire
+non-repudiation property: nothing in the trust path may use a replaceable event kind.**
+Replaceable kinds (10000–19999) and parameterized replaceable kinds (30000–39999) are
+overwritten in place, so a server could retroactively publish a cut-through declaration
+*after* using it as cover and the original would be gone from relays. Policy events and
+commitment events are both **regular kinds — append-only**.
+
+Proposed kind **1352** (mnemonic; the regular range is 1000–9999). This must be checked
+against the kind registry before shipping; it is not asserted to be unclaimed.
+
+Tags carry `block_hash`, `height`, `n`, `network` and `policy_ref`; content carries the
+root. A Nostr event id hashes the tags as well as the content, so the signature covers
+all of it and no separate signed blob is needed. The redundancy between tags and root is
+deliberate — any inconsistency between them is itself detectable.
+
+### 3.4 Two channels, two jobs
+
+§2.5's rule — *no commitment, no data* — would otherwise hand a veto to whoever controls
+the relay: censor the events and every honest server looks unaccountable. So the
+commitment travels two ways, and they do different jobs.
+
+| Channel | Job | On failure |
+|---|---|---|
+| **Pull from the indexer** — `GET /commitment/:blockhash`, returns the signed event | Gives the client a signed, non-repudiable statement from the party it is already talking to | A server that refuses to sign is refusing accountability, which is itself the alarm |
+| **Subscribe via relays** | Makes the statement *public*, which is what enables equivocation detection | Relay censorship removes the audit trail, not the client's evidence |
+
+A client isolated to a single malicious server therefore still extracts a signature it
+can present later, to anyone, whenever it reaches them. The relay subscription is what
+the privacy argument rests on: the client pulls *all* commitments from its configured
+indexers and never reveals which block it cares about.
+
+### 3.5 What we do not trust about Nostr
+
+- **`created_at`.** Self-asserted and backdatable. Ordering comes from the block hash.
+  Nostr gives us *publication*, not timestamping, and we should not claim otherwise.
+- **Relay honesty.** A relay may drop, delay, or serve split views. Servers publish to
+  several and clients subscribe to several. A client that sees a server's events on no
+  relay while others do has learned something.
+- **Relay independence.** An indexer can operate its own relay. Client-side relay choice
+  is its own configuration and is never inherited from the indexer.
+
+### 3.6 Identity
+
+Client configuration is a set of `(indexer_url, indexer_nostr_pubkey)` pairs, **pinned
+manually**. No discovery, no web of trust, and no trust-on-first-use by default: an
+indexer's `/info` may advertise its npub as a convenience, but trusting that on first
+contact hands the key to anyone able to intercept a single request. Manual pinning is the
+honest scope for v1 and is stated as a limitation rather than papered over.
+
+### 3.7 Cost
+
+| Party | Cost |
+|---|---|
+| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block — **~5 MB for all of mainnet history** |
+| Client | One relay subscription filtered by author; 32 bytes per block per server to compare |
+| Relay | ~144 events per day per indexer |
+
+The prune-freely property now states cleanly: **commit at index time, discard at will.**
+The server holds the block and its prevouts exactly once, computes `T_base`, signs,
+publishes — and remains accountable for what it dropped, forever, at 36 bytes per block.
 
 ## 4. Client verification ladder — PENDING
 
-The four steps in detail, including k-of-N policy and what happens on each failure mode.
+§2.5 gave the per-block comparison; §3 gave the object it compares. This section gives
+the *ladder*: what runs continuously and cheaply, what escalates, what is expensive and
+on-demand, and how each rung's failure is surfaced to a wallet that must act on it.
+
+Open: the escalation triggers between rungs; the k-of-N rule and what `k` should be; how
+per-transaction attribution reconstructs and names the accused; what the client does
+while a check is unresolved (block? warn? proceed?); alarm persistence and
+de-duplication; and the shape of the evidence artifact from §3.2.
 
 ## 5. Canary tripwire — PENDING
 

@@ -27,8 +27,9 @@ approved section by section.**
 | Architecture | Approved (sidecar + 4-step ladder + Nostr transport) |
 | §1 Threat model | Settled |
 | §2 Canonical sets + policy normalization | Settled — data model is fixed, team interface named |
-| §3 Commitment format + Nostr transport | **Next** |
-| §4–§8 | Stubbed in the design doc, each with what it must resolve |
+| §3 Commitment format + Nostr transport | Settled — commitment object, Merkle construction, event rules |
+| §4 Client verification ladder | **Next** |
+| §5–§8 | Stubbed in the design doc, each with what it must resolve |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -97,7 +98,13 @@ node.
 5. **Treating the research as durable.** `docs/research/prior-art.md` is dated and
    perishable — the entire project rests on the gap still being open. Re-verify before
    relying on it.
-6. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
+6. **Using a replaceable Nostr event kind.** Kinds 10000–19999 and 30000–39999 are
+   overwritten in place. A server could retroactively publish a policy declaration after
+   using it as cover and the original would vanish. Policy and commitment events are
+   **regular kinds, append-only**. §3.3.
+7. **Claiming Nostr gives us timestamping.** It gives us *publication*. `created_at` is
+   self-asserted and backdatable; ordering comes from the block hash. §3.5.
+8. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
    `.env`, `blindbit.toml`, `bitcoin.conf`. We will handle Nostr signing keys and Core
    RPC config; keep them out.
 

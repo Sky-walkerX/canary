@@ -30,8 +30,9 @@ approved section by section.**
 | §3 Commitment format + Nostr transport | Settled — commitment object, Merkle construction, event rules, receipts |
 | §4 Client verification ladder | Settled — four rungs, coverage output, evidence artifact |
 | §5 Canary tripwire | Settled — generalized to *expected payments*; §1.2 amended |
-| §6 Components, interfaces, ownership | **Next** |
-| §7–§8 | Stubbed in the design doc, each with what it must resolve |
+| §6 Components, interfaces, ownership | Settled — 3 binaries, proxy model, packages, ownership, risks |
+| §7 Differential edge-case suite | **Next** |
+| §8 Demo | Stubbed in the design doc with what it must resolve |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -83,12 +84,17 @@ insight. We are applying it, not inventing it.
 
 ## Team
 
-3 people, all Go-capable. Interfaces frozen end of week 1; everyone runs the same signet
-node.
+3 people, all Go-capable. **Interfaces freeze day 2** (§6.3 — end of week 1 is a quarter
+of a 28-day clock spent before parallel work starts). Everyone runs the same signet node.
 
-- **Naman** — protocol design, commitments, demo narrative
-- **Dev B** — indexer fork + signed roots (Go)
-- **Dev C** — client differ + normalizer (Go)
+- **Naman** — `canonical`, `commit`, `feed`: the protocol core both other tracks consume.
+  Then evidence artifact, demo, pitch
+- **Dev B** — indexer fork: `T_base` at index time, commitment publishing, receipts, and
+  the deliberately-malicious mode
+- **Dev C** — `canaryd`: proxy, ladder, policy, headers, coverage, CLI
+
+Dev B / Dev C are placeholders — replace with real names before the day-2 freeze, since
+it changes who gets `headers` versus `policy`.
 
 ## Mistakes that will be tempting
 
@@ -116,7 +122,9 @@ node.
    detection, auto-exclusion knocks out honest servers and leaves the victim with the
    attacker's. Only self-consistency failures are safely automatic; root divergence names
    two servers without saying which lied. §4.5.
-9. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
+9. **Making the indexer fork call our `canonical` package.** Convenient, and it makes
+   the differential test vacuous. Keep the two computation paths independent. §6.4.
+10. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
    `.env`, `blindbit.toml`, `bitcoin.conf`. We will handle Nostr signing keys and Core
    RPC config; keep them out.
 
@@ -135,6 +143,11 @@ node.
 - **blindbit-oracle v2** needs Bitcoin Core **v30+**, unpruned, REST enabled
   (`/rest/spenttxouts`, Core PR #32540). `/info` already advertises policy-ish feature
   flags — a natural place to hang a policy declaration.
+- **gobip352 already has the primitives** — `ExtractEligibleVins`, `ExtractPubKey`
+  (NUMS-H included), `ComputeInputHash`. `canonical` is those plus transaction-level
+  rules, ordering and leaf construction. But blindbit-oracle is the same author on the
+  same library, so differential testing against it exercises the wrapper, not the
+  primitives. §6.4.
 - **Signet SP faucet**: `https://silentpayments.dev/faucet/signet/` — removes the need
   for a counterparty when demonstrating receipt.
 - **`bitcoin.silentium.dev` is dead.** The public indexer named in the light-client docs

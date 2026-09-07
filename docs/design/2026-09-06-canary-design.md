@@ -1,6 +1,6 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§5 settled; §6–§8 pending.
+**Status:** In progress. §1–§6 settled; §7–§8 pending.
 **Date:** 2026-09-06
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -655,23 +655,148 @@ coverage at no cost. On signet all of it is free, which is what makes the live d
 possible: send a payment, have a deliberately malicious indexer drop it, and watch Canary
 name it within about thirty seconds (§8).
 
-## 6. Components, interfaces, ownership — PENDING
+## 6. Components, interfaces, ownership — SETTLED 2026-09-07
 
-Go package boundaries, the interfaces frozen at end of week 1, and the three-way split.
-Must also define two components that fell out of later sections:
+### 6.1 Binaries
 
-- The **auditor** (§2.2, §4.2) — a full node computing `T_base` independently and
-  comparing against published roots. The only party that can verify a root is *correct*
-  rather than merely *consistent*, and the party that performs attribution.
-- The **header chain** (§4.6) — PoW-verified SPV headers, without which comparisons
-  cannot be safely keyed on block hash.
+| Binary | Role |
+|---|---|
+| `canaryd` | The sidecar. Subscribes to commitments, verifies, serves the wallet, reports coverage |
+| `canary` | CLI — `canary status`, `canary verify <file>`, `canary probe` |
+| `blindbit-oracle` (fork) | Indexer with `--commit`: computes `T_base`, publishes commitments, signs receipts |
+
+### 6.2 Proxy, not observer
+
+A sidecar can sit **beside** the wallet (querying independently, wallet unchanged) or
+**in the data path** (the wallet points at it instead of the indexer). Canary is a proxy.
+
+1. The wallet is genuinely unmodified — `blindbitd` works by changing one configuration
+   line to point at `canaryd`.
+2. Observer behaviour falls out of proxy mode for free; the reverse does not.
+3. **It closes §1.5's "a wallet that ignores the alarm."** A component in the data path
+   can refuse to serve unverified data. An observer can only write to a log the wallet
+   never reads.
+
+The cost is that `canaryd` must speak blindbit's API — but only the endpoints
+`blindbitd` actually calls, which is a bounded list.
+
+### 6.3 Packages and frozen interfaces
+
+```go
+// canonical — the reference implementation. Pure function. §2.2
+type Leaf struct {
+    TxID  [32]byte  // INTERNAL byte order (§3.2)
+    Tweak [33]byte  // compressed
+}
+func Set(net Network, blk *wire.MsgBlock, pv PrevoutSource) ([]Leaf, error)
+
+// commit — Merkle, tagged hashes, promotion on odd nodes. §3.2
+func Root(net Network, blockHash [32]byte, leaves []Leaf) [32]byte
+func Prove(leaves []Leaf, i int) Proof
+func VerifyProof(root [32]byte, ..., leaf Leaf, p Proof) bool
+
+// policy — §2.3, including the tool-first bridge
+type Policy struct {
+    Network Network; StartHeight uint32
+    PrunesSpent bool; DustThresholdSat uint64; DustConfigurable bool
+}
+func FromBlindBitInfo(r io.Reader) (Policy, error)
+
+// feed — Nostr. §3.3, §3.4
+func (c Commitment) ToEvent(sk) nostr.Event
+func FromEvent(e nostr.Event) (Commitment, error)
+type Feed interface {
+    Subscribe(ctx, authors [][32]byte) <-chan Commitment
+    Get(ctx, author [32]byte, blockHash [32]byte) (Commitment, error)
+}
+
+// headers  — PoW-verified SPV chain. §4.6
+// ladder   — the four rungs and the coverage state machine. §4
+// evidence — artifact construction and offline verification. §4.7
+// tripwire — expected-payment assertions, Poisson scheduler. §5
+```
+
+**Interfaces freeze on day 2, not at the end of week 1.** On a 28-day clock, spending
+the first quarter before parallel work begins is not affordable. Days 1–2 are all three
+people co-writing type definitions with no logic behind them; everything after runs in
+parallel against stubs.
+
+### 6.4 gobip352 supplies the primitives — and what that costs
+
+The library already exposes what `canonical` needs:
+
+- `ExtractEligibleVins([]*Vin)` — input eligibility
+- `ExtractPubKey(vin)` — per-type public key extraction, **including NUMS-H detection**
+- `ComputeInputHash(vins, pubKeySum)`
+
+So `canonical` is not "implement BIP-352." It is those primitives plus the
+transaction-level rules (at least one taproot output, no SegWit v>1 input), plus ordering
+and leaf construction. A large de-risk on the highest-risk component.
+
+**It also invalidates a claim that would otherwise have been made carelessly.**
+blindbit-oracle is by the same author and sits on the same library, so differential
+testing `canonical` against blindbit-oracle exercises **the wrapper, not the
+primitives** — both would be wrong together. Genuine independence requires a different
+lineage: silentiumd, or the BIP's own vectors.
+
+This surfaces a real gap: **BIP-352 ships send/receive test vectors but nothing for the
+index-level canonical set** — transaction-granularity eligibility, ordering, set
+membership. That is what §7 fills, it is needed regardless, and it is a legitimate
+upstream contribution rather than a hackathon artifact.
+
+One decision follows: **the indexer fork keeps blindbit-oracle's own computation path
+rather than calling our `canonical` package.** Sharing the code would be convenient and
+would make the differential test vacuous.
+
+### 6.5 Ownership
+
+| Owner | Surface |
+|---|---|
+| **Naman** | `canonical`, `commit`, `feed` — the protocol core. Then the evidence artifact, demo and pitch |
+| **Dev B** | Indexer fork: `T_base` at index time, commitment publishing, receipts, and the deliberately malicious mode |
+| **Dev C** | `canaryd` — proxy, `ladder`, `policy`, `headers`, coverage, CLI |
+
+The malicious indexer mode belongs to whoever owns the indexer; it is a configuration
+flag on code they already know, not a separate project. The protocol core is owned by
+whoever can unblock the other two fastest, because both tracks consume it.
+
+### 6.6 Dependency order
+
+Coarse only. The detailed plan is `writing-plans`' output, not this document's.
+
+| Phase | Gate |
+|---|---|
+| **Day 1–2** | Signet, Core v30 and blindbit-oracle running for all three. **Interfaces frozen** |
+| **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. Nostr round-trip |
+| **Week 2** | Commitments published end to end. Rungs 1–2. Coverage. Proxy passing `blindbitd` traffic |
+| **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rung 3. §7 suite |
+| **Week 4** | Demo, hardening, documentation, pitch. **Feature freeze 1 October**, four days before the deadline |
+
+The week-1 gate matters most: *do we and blindbit-oracle produce the same set across
+1000 signet blocks?* is a cheap harness, it is the differential suite in embryo, and it
+is the earliest possible signal that `canonical` is wrong.
+
+### 6.7 Risks
+
+| Risk | Mitigation |
+|---|---|
+| `canonical` subtly wrong | Week-1 agreement harness; BIP vectors; §7 |
+| Core v30 unpruned signet fails to come up | Verify on day 1, not week 2 — it gates everything the indexer track does |
+| Relay dependency | Run our own (`strfry` / `nostr-rs-relay`) alongside public ones, consistent with running everything locally |
+| Auditor scope creep | **Not on the critical path.** §5.3's tripwire attributes without a node, so the demo never requires the auditor. It is the stretch component |
 
 ## 7. Testing — differential edge-case suite — PENDING
 
-Constructed signet transactions that deliberately hit ambiguous BIP-352 eligibility
-corners (NUMS point H script-path spends, mixed input types, non-standard scripts), run
-against every implementation. Any disagreement is a real interop bug worth reporting
-upstream.
+§6.4 sharpened what this section is for. Differential testing against blindbit-oracle
+exercises the wrapper only, since both sit on gobip352; and BIP-352's published vectors
+cover send/receive but nothing at the index level.
+
+Open: which implementation lineages are genuinely independent and worth testing against;
+the constructed signet transactions for each ambiguous corner named in §2.6 (NUMS point
+*H*, malleated P2PKH `scriptSig`, uncompressed and hybrid keys, `outpoint_L` endianness,
+SegWit v>1, coinbase, point at infinity); the format of the index-level test vectors we
+publish; how the suite runs in CI without a node; and which disagreements are worth
+reporting upstream versus absorbing.
 
 ## 8. Demo — PENDING
 

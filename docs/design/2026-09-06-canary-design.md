@@ -19,8 +19,10 @@ served against those commitments, and cross-check commitments across indexers.
 
 The project is layered deliberately:
 
-- **Tool first.** The client-side differ works against indexers as they exist today
-  and requires nobody's cooperation.
+- **Tool first.** Against indexers as they exist today, with nobody's cooperation: take
+  the union of what they serve (§4.3), read each server's policy from its existing
+  `/info` (§2.3), and run the tripwire (§5), which detects *and* attributes without any
+  server committing to anything.
 - **Protocol second.** The signed-commitment extension makes detection cheap (32 bytes
   per block per server, instead of N full fetches) and makes an accusation transferable
   and non-repudiable.
@@ -36,7 +38,7 @@ The project is layered deliberately:
 | **Client** | Light wallet holding a scan key, no full node | Honest (it is the victim) |
 | **Indexers I₁…I_N** | Serve BIP-352 tweak data per block | Any may be malicious |
 | **Relays** | Nostr relays distributing commitments | May censor or withhold |
-| **Block source** | Independent source of a transaction and its prevouts | Used only during attribution; may be sampled/rotated |
+| **Block source** | Independent source of a transaction and its prevouts, and of chain facts | Used during attribution, and as §4.6's chain anchor where one is needed; may be sampled/rotated |
 
 ### 1.2 Attacks in scope
 
@@ -229,6 +231,10 @@ The declaration does three things:
 3. **It bounds escalation.** The client knows in advance whose gaps require a second
    source.
 
+Retention is deliberately **not** a field here. §2.4 makes a 144-block hash-retention
+window a protocol constant, because a server allowed to declare its own window declares
+zero.
+
 **Tool-first bridge.** For the layer that works against indexers as they exist today, the
 policy struct is derived from blindbit's existing `GET /info` feature flags. That is
 unsigned and not per-block — a server can revise it retroactively — so it is strictly
@@ -243,9 +249,15 @@ each — 352 bytes at `n ≈ 2000` — they cost about 700 KB of proof to accomp
 leaves. `n ≈ 2000` is the order of magnitude for a mainnet block and is the figure used
 throughout, including §3.2.
 
-Instead the response is the canonical-order list in which each position is **either the
-full leaf or that leaf's 32-byte hash**. The client hashes the full leaves, splices in
-the supplied hashes, and recomputes the root in a single pass.
+Instead the response is the canonical-order list in which each position is **the full
+leaf, that leaf's 32-byte hash, or nothing**. The client hashes the full leaves, splices
+in the supplied hashes, and recomputes the root in a single pass.
+
+**The response is self-describing at length `n`.** The client must be able to tell which
+of the three it is looking at for every position, without inference, and the list must be
+exactly `n` long, matching the commitment. A response that is merely *shorter* is
+indistinguishable from a smaller block, and under a single server there is no cross-check
+to catch the difference.
 
 - Serving everything: 65 bytes per position against 33 for a bare tweak — **roughly
   double today's response.** That is the honest cost and it is not avoidable: the txid
@@ -253,16 +265,34 @@ the supplied hashes, and recomputes the root in a single pass.
   the set and so cannot supply it. Bandwidth doubles; storage stays free (§3.7).
 - Serving a subset while retaining leaf hashes: 32 bytes per withheld position, with no
   logarithmic factor, and the response is verifiable from that one server alone.
+- Serving a subset with the hash discarded: nothing on the wire for that position, and
+  the block is verifiable only once the leaf is recovered elsewhere. Permitted only
+  outside the retention window below.
 
-**Retaining leaf hashes is optional, not required.** An earlier draft of this section
-required the server to produce the hash of every leaf it dropped. It does not have to. A
-server that discarded a leaf entirely can simply declare the position withheld; the
-client reconstructs it from another source and checks the root regardless, falling back
-to the *unresolvable* state (§2.5) if nobody retains it. The requirement mattered because
-a retained hash costs 32 bytes against a 65-byte leaf — it would have consumed most of
-cut-through's saving, which is the entire reason a server would adopt this. Dropping the
-requirement restores it. Whether a server retains hashes is discovered from its response;
-it needs no policy field.
+**Retention is required inside a 144-block window and optional beyond it.** This
+corrects an amendment made earlier on 2026-09-07, which dropped the retention requirement
+outright and opened a hole in §2.5.
+
+The amendment's reasoning was that retention is only an optimization, and that part was
+right. If the client can obtain a missing leaf from *any* source, it hashes the candidate,
+recomputes the root, and a match proves the leaf is what the server committed to. The
+second server is never trusted — the first server's own signature does the work. A
+retained hash is therefore a convenience, needed only when nobody can supply the leaf.
+
+What the amendment missed is that *"nobody can supply the leaf"* is a state the server
+gets to choose, and it was free. Marking the victim's position as a hole made the whole
+block unverifiable, and §2.5's ordering then let it pass as clean.
+
+The window is the smallest fix that closes it, and it is nearly free for the same reason
+§2.5 gives about tip tolerance: a transaction can only be cut through once **all** its
+taproot outputs are spent, which at the chain tip is close to empty. Servers retain hashes
+exactly where there is almost nothing to retain, and prune freely in the deep history,
+where a rescanning client can reach another server. The worst case is `W × n × 32` =
+9.2 MB at `W` = 144 and `n ≈ 2000`, and reaching it would require dropping every leaf for
+a day; the realistic figure is a rounding error.
+
+`W` is a **protocol constant, not a declared policy field.** A per-server field lets a
+server declare zero and walk straight back into the hole.
 
 Merkle proofs earn their place for the evidence artifact and for targeted queries
 ("positions 3, 7, 11 without the block"), not for the main path. See §3.2. §2 fixes only
@@ -273,34 +303,65 @@ Merkle proofs earn their place for the evidence artifact and for targeted querie
 Keyed on block **hash**, not height — this makes the procedure reorg-safe at no cost and
 removes "it was a reorg" as an available excuse.
 
-Given block hash `B`, server `S`, declared policy `P`, published root `R`, response `D`:
+Given block hash `B`, server `S`, declared policy `P`, published root `R`, response `D`.
 
-1. **No commitment for `B` → refuse the data.** Serving data for a block you have not
-   committed to is a refusal of accountability.
-2. **Recompute the root** from `D`. A mismatch means `S` served data contradicting its
-   own signature. Proven and non-repudiable.
-3. **Gap set `G`** = the positions returned as bare hashes.
+**Step 0 — does `S` commit at all?** Three cases, and only the middle one is a refusal:
+
+| `S` | Rule |
+|---|---|
+| Has never published a commitment, and claims none | Data is **Unverified** (§4.4). Accepted, and it feeds §4.3's union — but it is never *clean*, and only the tripwire (§5) can catch this server lying |
+| Has published commitments for neighbouring blocks, but none for `B` | **Refuse the data.** Selective non-publication *is* the attack: commit to every block except the one you lied about |
+| Published a commitment for `B` | Continue |
+
+The middle row is what the original rule was reaching for. An earlier draft refused any
+block without a commitment, which would have refused 100% of unmodified blindbit and
+contradicted §0's "requires nobody's cooperation", §4.4's *Unverified* state, and
+`start_height`. A server is expected to have a commitment for `B` because it published one
+for a neighbouring block, not because it advertises that it might. **Evidence, not
+advertisement.**
+
+Then, for a server that did commit:
+
+1. **Gap set `G`** = the positions `S` did not return in full. Each is a hash or a hole.
+2. **Resolve `G`.** Recover the missing leaves — from `S`'s retained hashes where it kept
+   them (§2.4), otherwise from another server. If any position is still unfilled, the
+   block is *unresolvable* and there is no verdict. **This runs before the root is
+   recomputed, not after.**
+3. **Recompute the root** over all `n` positions. A mismatch means `S` served data
+   contradicting its own signature. Proven and non-repudiable, from `S` alone.
 4. If `P` declares no subtraction and `G ≠ ∅` → alarm. Local and immediate.
 5. **Cross-check** `R` against other servers' roots for the same `B`. Equal → all
-   committed to the same set, so fetch `G`'s positions from a server that retains them.
-   Unequal → at least one is lying; escalate to attribution (§4).
+   committed to the same set. Unequal → at least one is lying; escalate to attribution
+   (§4).
 
-Steps 1–4 require a single server. Step 5 costs 32 bytes per block per server as a
+Steps 0–4 require a single server. Step 5 costs 32 bytes per block per server as a
 continuous background check.
+
+**Resolution before recomputation, and that ordering is load-bearing.** An earlier draft
+recomputed the root first and resolved gaps last. A position returned as a hole then made
+the root uncomputable, so the block was silently never verified. Step 3 is the only rung
+that catches targeted omission (§1.4), so a server that could reach it first and decline
+had a free, permanent way never to be verified — which is exactly the attack this section
+exists to catch. **A block whose root has not been recomputed is not clean. It has no
+verdict yet.**
 
 **Three terminal states, not two:**
 
 | State | Meaning |
 |---|---|
-| **Clean** | Roots agree; gaps resolved or expected under declared policy |
+| **Clean** | The root recomputed over all `n` positions and matched |
 | **Omission detected** | Named server, block, transaction, signature |
-| **Unresolvable** | Every queried server has pruned it. An ecosystem gap, not an attack, and it must not be reported as one |
+| **Unresolvable** | A gap nobody can fill, so the root cannot be recomputed. Not an accusation, and it must not be reported as one — but not a pass either |
 
-**Mode-dependent tolerance.** A transaction can only be cut through once all its taproot
-outputs are spent, which at the chain tip is nearly empty; and a spent output is one the
-client either spent itself or never owned. Rescan-from-seed is where the light-client
-specification already admits payments go missing. So a tip-following client accepts
-cut-through gaps; a rescanning client escalates them.
+**Mode-dependent tolerance governs effort and reporting, never verification.** A
+transaction can only be cut through once all its taproot outputs are spent, which at the
+chain tip is nearly empty; and a spent output is one the client either spent itself or
+never owned. Rescan-from-seed is where the light-client specification already admits
+payments go missing. So a tip-following client spends less effort chasing a gap and
+reports it more quietly; a rescanning client escalates. **Neither may skip step 3.** An
+earlier draft had the tip-following client simply *accept* cut-through gaps, which
+combined with a hashless gap to wave through the attack. The correct outcome for an
+unfilled gap is *unresolvable*, which §6.2's refuse-in-path already knows how to handle.
 
 ### 2.6 What this fixes for the team
 
@@ -431,9 +492,10 @@ deliberate — any inconsistency between them is itself detectable.
 
 ### 3.4 Two channels, two jobs
 
-§2.5's rule — *no commitment, no data* — would otherwise hand a veto to whoever controls
-the relay: censor the events and every honest server looks unaccountable. So the
-commitment travels two ways, and they do different jobs.
+§2.5 step 0's rule — *a server that commits elsewhere but not here is refused* — would
+otherwise hand a veto to whoever controls the relay: censor a committing server's events
+and it looks like a server that skipped this block. So the commitment travels two ways,
+and they do different jobs.
 
 | Channel | Job | On failure |
 |---|---|---|
@@ -467,11 +529,12 @@ honest scope for v1 and is stated as a limitation rather than papered over.
 
 | Party | Cost |
 |---|---|
-| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block, a 32-byte root plus `n` — **about 35 MB for all of mainnet history** (≈965k blocks × 36 B) |
+| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block, a 32-byte root plus `n` — **about 35 MB for all of mainnet history** (≈965k blocks × 36 B), plus §2.4's 144-block hash window, bounded by 9.2 MB and near zero in practice |
 | Client | One relay subscription filtered by author; 32 bytes per block per server to compare |
 | Relay | ~144 events per day per indexer |
 
-The prune-freely property now states cleanly: **commit at index time, discard at will.**
+The prune-freely property now states cleanly: **commit at index time, discard at will
+once a leaf is 144 blocks old** (§2.4).
 The server holds the block and its prevouts exactly once, computes `T_base`, signs,
 publishes — and remains accountable for what it dropped, forever, at 36 bytes per block.
 
@@ -523,7 +586,7 @@ Ordered by cost. Each rung runs only when the one above it says something.
 
 | Rung | Trigger | Catches | Cost |
 |---|---|---|---|
-| **1. Commitment tracking** | Always on | Root divergence between servers | One relay subscription; ~144 events/day/server |
+| **1. Commitment tracking** | Always on | Root divergence between servers, and chain contradiction — a height still contested six blocks later (§4.6) | One relay subscription; ~144 events/day/server |
 | **2. Self-consistency** | Client fetches block *B* | Served ≠ committed; policy contradiction | Hashing `n` leaves. Microseconds |
 | **3. Gap resolution** | Rung 2 found gaps | Whether a permitted gap is real | One targeted request |
 | **4. Attribution** | Rung 1 found divergence | *Which* server lied, and about what | Requires prevouts — the expensive rung |
@@ -574,8 +637,8 @@ something continuous and visible instead: **per-block-range scan coverage.**
 |---|---|
 | **Verified** | Root agreed; served set complete |
 | **Resolved** | Gap existed, filled from another server, root checked |
-| **Unresolvable** | Every queried server pruned it — an ecosystem gap (§2.5), not an attack |
-| **Unverified** | No commitment available |
+| **Unresolvable** | A gap nobody can fill, so the root was never recomputed (§2.5) — an ecosystem gap, not an attack, and not a pass |
+| **Unverified** | No commitment available. The data is still used — it feeds §4.3's union — but nothing about it is checked (§2.5 step 0) |
 | **Disputed** | Roots diverge — two named servers, one of them lying, not yet attributed (§4.5) |
 | **Compromised** | Attributed — one named server, one named block |
 
@@ -620,15 +683,83 @@ with the attacker's. So the two alarm types are treated differently:
 This asymmetry is why attribution is a separate rung rather than an action taken directly
 on divergence.
 
-### 4.6 Dependency: an independent header chain
+### 4.6 Chain agreement
 
 Two servers committing to different block hashes at the same height are on different
 chain tips. That is a fork, not an omission, and reporting it as one would be the loudest
 possible false positive.
 
-Comparisons must therefore be keyed on a block hash the client independently believes in,
-which means **Canary maintains its own header chain** — 80 bytes per block, PoW-verified,
-standard SPV. Cheap, but a real component; it is owned in §6 rather than assumed.
+An earlier draft answered this with *"Canary maintains its own header chain — 80 bytes
+per block, PoW-verified, standard SPV."* **That is false where we run.** §1.6 fixes signet
+as the v1 network, and a BIP-325 signet gets its integrity from a challenge signature in
+the coinbase, not from accumulated work: difficulty is trivial and a laptop can outrun the
+real chain. A client trusting most-work on signet can be handed a chain in which the
+disputed block does not exist, which converts a real omission into "reorg" and defeats
+§5.3 step 2. Asserting a security property that does not hold is worse than asserting
+none, because a reader builds on it.
+
+| Network | Chain integrity from |
+|---|---|
+| mainnet | Accumulated proof-of-work. Standard SPV, and it works |
+| **signet** | The BIP-325 challenge signature in the coinbase. **Not** work |
+| regtest | Nothing. Single-operator and local, so it is trusted by construction (§7.2) |
+
+**How much of this is load-bearing, precisely.** Less than it first looks. §2.5 keys
+comparison on block *hash*, so two servers arguing about the contents of hash `B` cannot
+reach for the reorg excuse — they are talking about the same block by construction. What
+is exposed is *chain membership*: whether `B` is in the chain at all. That matters in two
+places, §5.3 step 2 and §4.4's coverage ranges, and nowhere else.
+
+#### Chain agreement is an output, not an input
+
+The reframe that fixes this: the chain is not a dependency Canary needs before it can
+compare. It is the same problem Canary already solves. Several parties assert something,
+they can disagree, and the disagreement is either transient or permanent. **Reorgs
+resolve. Lies persist.**
+
+A server following a fabricated chain has to publish commitments for it — §2.5 step 0
+forces it to commit or be refused, and §3.3's append-only kinds mean it cannot withdraw
+the commitment later. So the fabrication lands in the public feed, keyed by height and
+hash, signed. A height where two servers name different hashes is **contested**. Contested
+and transient is a reorg, and is ignored. Contested past six confirmations is a signed
+statement about the chain contradicted by another signed statement — a heavier accusation
+than omission, and it costs nothing new to detect, because the commitment already carries
+both the height and the hash.
+
+It also puts chain-contradiction detection at roughly six block intervals rather than one.
+That is consistent with §1.4: timing depends on the attack.
+
+#### The anchor, for when convergence is unavailable
+
+Convergence needs two servers. With one server, or under total collusion, chain membership
+cannot be derived from the indexer set at all — the attacker controls every input and can
+simulate any world. That is information-theoretic rather than a design flaw, and the
+honest response is to name the outside fact Canary requires instead of pretending it needs
+none:
+
+> **Canary needs one chain fact it did not learn from an indexer.**
+
+Three ways to supply it. v1 takes the first two:
+
+| Source | Cost | Trust required |
+|---|---|---|
+| **The user's own Core node**, where one is configured | Free — blindbit-oracle already requires Core v30+, so anyone running the full stack has one | None. It is their node |
+| **A manually pinned recent `(height, hash)`** | Free | The pin, obtained out of band. The model §3.6 already chose for indexer identity, and stated as a limitation rather than papered over |
+| **BIP-325 signet solution validation** | Two to three days, and it needs every txid in the block | **None at all**, which is the point |
+
+The third is the correct answer, and it is specified here so it can be built. It is not a
+v1 commitment. Validation means stripping the signet solution from the coinbase,
+recomputing the merkle root and therefore the block hash, constructing BIP-325's
+BIP-322-style `to_spend` / `to_sign` pair, and running a script engine against the signet
+challenge. Because the result is self-verifying, the data may be fetched from an untrusted
+indexer — a malicious server cannot forge the signet signer's signature — so it preserves
+§4.2's *detection needs no node*. Signet blocks are small enough that fetching them whole
+is cheap. It lands if week 3 has room (§6.6); until then the single-server case rests on
+the pin, and §5.3 says so out loud.
+
+**Consequence for §6.3:** the `headers` package is not an SPV chain. It is a store of
+`(height, hash)` observations drawn from the commitment feed and the anchor, with the
+contested-past-six-confirmations rule on top.
 
 ### 4.7 Evidence artifact
 
@@ -694,7 +825,10 @@ single-transaction omission it helps only if the attacker cannot distinguish the
 Innocent explanations must be excluded first:
 
 1. **Not yet indexed** — wait until the server's declared height exceeds B's, plus margin
-2. **Reorg** — check against the header chain (§4.6)
+2. **Reorg** — `B` must be in the chain Canary believes in (§4.6). With two or more
+   servers that is convergence: a height still contested six blocks later is not a reorg.
+   With one server it rests on §4.6's anchor, and a client with neither a node nor a pin
+   cannot complete this step — the tripwire then returns *unresolvable*, not an accusation
 3. **Never confirmed** — same check
 
 After those, it is omission. And:
@@ -707,6 +841,14 @@ canonical leaf itself. It produces the exact missing leaf, a Merkle proof of its
 from the signed commitment, and a named accused party — with no auditor and no full node.
 That makes it the most self-contained evidence artifact in the system, which is what the
 rung of last resort should be.
+
+**One qualifier, added 2026-09-07.** The leaf and the proof genuinely need no node. Step 2
+above does need a chain fact from outside the indexer set, which under total collusion
+cannot come from the indexers by definition (§4.6). So the tripwire attributes without a
+node and without an auditor *given an anchor*: a Core node, a pin, or eventually §4.6's
+signet solution check. Lacking all three, a negative result is still recorded and still
+signed, and it becomes an accusation the moment an anchor is available. Evidence does not
+decay (§4.2).
 
 ### 5.4 Coverage integration and cost
 
@@ -811,7 +953,7 @@ type Feed interface {
     Get(ctx context.Context, author [32]byte, blockHash [32]byte) (Commitment, error)
 }
 
-// headers  — PoW-verified SPV chain. §4.6
+// headers  — (height, hash) observations + the contested-past-6 rule. NOT SPV. §4.6
 // ladder   — the four rungs and the coverage state machine. §4
 // evidence — artifact construction and offline verification. §4.7
 // tripwire — expected-payment assertions, Poisson scheduler. §5
@@ -820,12 +962,10 @@ type Feed interface {
 An earlier draft of this block carried literal `...` in `VerifyProof`, which is not a
 frozen interface. Everything above compiles as written.
 
-**Two of these are known-open and must not be built against until the sections behind
-them are resettled** (spec review, `CLAUDE.md`): `headers` assumes proof-of-work carries
-chain integrity, which is false on signet, where BIP-325 puts integrity in the
-challenge signature; and `Feed.Get` cannot be served by a relay as specified, because
-NIP-01 filters on single-letter tag names only and §3.3 puts the block hash in a
-multi-letter tag.
+**One of these is still known-open** (spec review, `CLAUDE.md`): `Feed.Get` cannot be
+served by a relay as specified, because NIP-01 filters on single-letter tag names only and
+§3.3 puts the block hash in a multi-letter tag. `headers` was the other; §4.6 now resolves
+it, and the package is deliberately **not** an SPV chain.
 
 **Interfaces freeze on day 2, not at the end of week 1.** On a 28-day clock, spending
 the first quarter before parallel work begins is not affordable. Days 1–2 are all three
@@ -880,7 +1020,7 @@ Coarse only. The detailed plan is `writing-plans`' output, not this document's.
 | **Day 1–2** | Signet, Core v30 and blindbit-oracle running for all three. **Interfaces frozen** |
 | **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. Nostr round-trip |
 | **Week 2** | Commitments published end to end. Rungs 1–2. Coverage. Proxy passing `blindbitd` traffic |
-| **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rungs 3–4. §7 suite |
+| **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rungs 3–4. §7 suite. If there is room: §4.6's BIP-325 signet solution check |
 | **Week 4** | Demo, hardening, documentation, pitch. **Feature freeze 1 October**, four days before the deadline |
 
 The week-1 gate matters most: *do we and blindbit-oracle produce the same set across

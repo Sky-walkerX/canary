@@ -73,9 +73,11 @@ attribution is expensive and on demand.
    was actually served. *Served ≠ committed* is proven against that server's own
    signature, from that one server alone. This is the rung that catches targeted
    omission.
-3. **Gap resolution** — a server may legitimately decline a position it pruned. Fill it
-   from another server and check the root again. If nobody retains it, the range is
-   *unresolvable* — an ecosystem gap, and deliberately not an accusation.
+3. **Gap resolution** — a server may legitimately decline a position it pruned, so fill
+   the gap from another server *before* recomputing the root. A block whose root was never
+   recomputed is not clean; it has no verdict. If nobody can fill the gap, the range is
+   *unresolvable* — an ecosystem gap, deliberately not an accusation, and equally
+   deliberately not a pass.
 4. **Attribution** — recompute the canonical set from the transaction and its prevouts to
    decide *which* server lied. This needs a full node or another block source. A client
    without one records the signed evidence and hands the verdict to someone who has one,

@@ -34,16 +34,16 @@ approved section by section.**
 | §7 Differential edge-case suite | Settled — regtest vectors, corners, property tests |
 | §8 Demo | **Drafted in conversation, NOT approved, NOT written to the doc.** Key decisions captured below |
 
-**Spec review run 2026-09-07 (`/code-review`). 15 defects found. 8 fixed, 7 open.**
-The 8 editorial ones are corrected in the doc (commit below). The 7 remaining change the
-design and need a decision before editing. Do not treat §1–§7 as final until they close.
+**Spec review run 2026-09-07 (`/code-review`). 15 defects found. 11 fixed, 4 open.**
+The 8 editorial ones plus design defects 1, 2 and 3 are corrected in the doc. Four remain
+and need a decision. Do not treat §1–§7 as final until they close.
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
 
-## Spec review — 2026-09-07 — 8 FIXED, 7 OPEN
+## Spec review — 2026-09-07 — 11 FIXED, 4 OPEN
 
-A `/code-review` pass over the full spec plus a self-review found 15 defects. The seven
+A `/code-review` pass over the full spec plus a self-review found 15 defects. The four
 below are still open and must close before `writing-plans`, and before anyone codes
 against §6.3.
 
@@ -51,13 +51,18 @@ against §6.3.
 
 | # | Defect | Where |
 |---|---|---|
-| 1 | **`headers` gives no security on signet.** Signet's integrity is the BIP-325 challenge signature in the coinbase, not accumulated work — difficulty is trivial. A PoW-only chain can be outpaced by a laptop, so a malicious indexer feeds a chain where the disputed block does not exist and converts a real omission into "reorg", defeating §5.3 step 2. §1.6 fixes signet as the v1 network, so the mechanism does not work where we run it | §4.6, §6.3 |
-| 2 | **§2.4's hashless-gap amendment opened a hole.** With no hash for a withheld position, the client cannot recompute the root **for the whole block**. §2.5 recomputes at step 2, before reaching other servers at step 5, so a server can decline to be verified rather than be caught lying — and tip-tolerance waves it through. Likely fix: windowed hash retention (recent blocks only) plus reordering §2.5 so a hashless gap is never "clean" | §2.4, §2.5, §3.1 |
-| 3 | **§2.5 step 1 breaks the tool-first layer.** "No commitment → refuse the data" refuses 100% of unmodified blindbit, contradicting §0's "requires nobody's cooperation", §4.4's *Unverified* coverage state, and §2.3's `start_height`. Fix: refusal applies only to a server that *claims* to commit | §2.5, §0, §4.4 |
 | 4 | **§5.1's free out-of-band probe was overclaimed.** §5.3's node-free attribution needs *prevouts*, which the client has only because it made the transaction. Given a bare txid it cannot compute the tweak, build `missing_leaf`, or prove anything. And the §1.2 sender-attacker knows exactly which txid they disclosed and serves it honestly. "Strictly more useful" is wrong | §5.1, §5.3, §6.7 |
 | 5 | **`dust_threshold_sat` is unverifiable in principle.** The leaf is `(txid, tweak)` and carries no output value, so a client can never check that a dust-justified gap was legitimate. Decide whether the field survives | §2.3, §2.2 |
 | 6 | **Merkle root over an empty leaf set is undefined** — and it is the *most common* case on regtest, where most blocks hold no eligible transaction. §7.4's own example vector requires it; §7.5's property list starts at `n=1` | §3.2, §7.4 |
 | 7 | **Multi-letter Nostr tags are not relay-indexed.** NIP-01 filters only single-letter tag names, so `block_hash` as a tag is not queryable and §6.3's `Feed.Get(author, blockHash)` cannot be served by a relay. Fix: carry the block hash in a single-letter indexed tag | §3.3, §6.3 |
+
+### Design-level — FIXED 2026-09-07
+
+| # | Defect | Fix applied |
+|---|---|---|
+| 1 | `headers` gave no security on signet | §4.6 rewritten. **The PoW claim is deleted** — a per-network table now says where integrity actually comes from (work on mainnet, the BIP-325 challenge signature on signet, nothing on regtest). The hole is narrower than it looked: §2.5 keys on block *hash*, so the reorg excuse is already unavailable for the comparison itself; only *chain membership* was exposed, in §5.3 step 2 and §4.4's ranges. Replaced by **chain agreement as an output, not an input** — a server on a fake chain must publish commitments for it (§2.5 step 0) and cannot withdraw them (§3.3), so a height still contested six blocks later is a signed chain contradiction, heavier than omission and free to detect. For the single-server case, §4.6 names the outside fact Canary requires: the user's own Core node, or a manually pinned `(height, hash)` per §3.6's precedent. **BIP-325 solution validation is specified but is NOT a v1 commitment** — week 3 if there is room. `headers` is no longer an SPV chain |
+| 2 | §2.4's hashless-gap amendment opened a hole | The amendment's reasoning was right and the ordering was the bug. Retention *is* only an optimization: given a candidate leaf from anywhere, hashing it and recomputing the root proves it against the first server's own signature, so the second server is never trusted. What the amendment missed is that "nobody can supply the leaf" was a state the server chose, for free. Fixed in three places: §2.5 now **resolves gaps before recomputing the root**, and a block whose root was never recomputed is *unresolvable*, never clean; **tip tolerance governs effort and reporting, never verification**; and §2.4 makes hash retention **required inside a 144-block window**, near free because cut-through barely applies at the tip. Also: the response is now self-describing at length `n`, so truncation cannot read as a smaller block |
+| 3 | §2.5 step 1 broke the tool-first layer | Step 0 now has three cases. A server that never commits → *Unverified*, accepted, feeds §4.3's union, caught only by the tripwire. A server that commits for neighbouring blocks but not this one → **refused**, because selective non-publication is the attack. **Evidence, not advertisement.** §0's tool-layer bullet now says what that layer actually is: union, `/info` policy, and the tripwire |
 
 ### Factual / editorial — FIXED 2026-09-07
 
@@ -151,6 +156,9 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 | **Run all indexers locally** | Never depend on a third-party public server being alive — that fragility is literally what the project is about |
 | **`network` in the root preimage is the 4-byte P2P magic, not an enum** | BIP-325 derives a custom signet's magic from its challenge, so the magic separates two signets that an enum would merge — and §2.7's first precondition is that both servers index the same network. Read from `chaincfg.Params.Net`; §7.4's vectors pin it in CI. Decided 2026-09-07 while closing spec-review defect #8 |
 | **Six coverage states, with *disputed* split from *compromised*** | §4.5 already ruled that root divergence names two servers without saying which lied. One combined alarm state is exactly how an attacker gets an honest server excluded. Decided 2026-09-07 while closing defect #15 |
+| **Chain agreement is a Canary output, not a Canary input** | The chain is the same problem Canary already solves: parties assert, they disagree, and the disagreement is transient or permanent. Reorgs resolve; lies persist. Reusing the commitment feed costs nothing, where an SPV chain cost a component and bought nothing on signet. Decided 2026-09-07 closing defect #1 |
+| **The 144-block hash-retention window is a protocol constant, not a policy field** | A server allowed to declare its own window declares zero, which is the hole verbatim. Decided 2026-09-07 closing defect #2 |
+| **BIP-325 solution validation is specified but not committed for v1** | It is the only anchor needing no trust, and it is 2–3 days plus every txid in the block. Week 3 if there is room; until then the single-server case rests on a node or a pin, and §5.3 says so. Decided 2026-09-07 closing defect #1 |
 
 **Superseded:** the original dossier proposed OpenTimestamps anchoring. Nostr events
 replace it. OTS may return in v2 to anchor the event chain.
@@ -219,7 +227,16 @@ it changes who gets `headers` versus `policy`.
    two servers without saying which lied. §4.5.
 9. **Making the indexer fork call our `canonical` package.** Convenient, and it makes
    the differential test vacuous. Keep the two computation paths independent. §6.4.
-10. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
+10. **Recomputing the root before resolving gaps.** It looks like the cheap ordering and
+   it is the hole that made §2.4's hashless gap exploitable: a position returned as a
+   hole makes the root uncomputable, so the block is silently never verified. Resolve
+   first, recompute second, and never call a block clean whose root was not recomputed.
+   §2.5.
+11. **Treating `headers` as SPV.** Proof-of-work carries no integrity on signet; BIP-325
+   puts it in the challenge signature. `headers` is a store of `(height, hash)`
+   observations with a contested-past-six-confirmations rule, not a most-work chain.
+   §4.6.
+12. **Committing secrets.** `.gitignore` already covers `nsec*`, `*.key`, `*.pem`,
    `.env`, `blindbit.toml`, `bitcoin.conf`. We will handle Nostr signing keys and Core
    RPC config; keep them out.
 

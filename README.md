@@ -8,8 +8,9 @@ attributable to a named server.**
 
 ## Status
 
-**Design phase.** No implementation yet. The threat model (§1 of the design doc) is
-settled; the remaining sections are in progress. See
+**Design phase.** No implementation yet. §1–§5 of the design doc are settled — threat
+model, canonical sets, commitment format, verification ladder, tripwire. §6–§8 are in
+progress. See
 [`docs/design/2026-09-06-canary-design.md`](docs/design/2026-09-06-canary-design.md).
 
 Built for [BOSS Battle](https://bitshala.org) (Bitshala), 7 Sep – 5 Oct 2026,
@@ -21,6 +22,16 @@ BIP-352 receiving requires a server to feed the client 33-byte tweaks, one per
 eligible transaction. If that server omits a transaction, the payment is simply
 invisible to the receiver. There is no error, no retry, no symptom — the wallet shows
 the same empty balance it would show if nobody had paid.
+
+The attacker with the clearest motive is not a stranger. An indexer cannot identify
+which transactions pay a given silent-payment address — that requires the private scan
+key — so targeted omission needs out-of-band knowledge of the payment. The party who
+always has it is the sender:
+
+> **The exchange that pays you is also the indexer that tells you whether you were paid.**
+
+That is the default deployment for a light wallet: the vendor runs the backend. The
+counterparty holds a signed record showing it paid. You see nothing. There is no error.
 
 This is not a hypothetical. **BIP-352 v1.1.0 (March 2026) states the trust assumption
 directly**: light-client approaches allow the indexer to withhold data, preventing the

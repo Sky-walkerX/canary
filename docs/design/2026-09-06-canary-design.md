@@ -1,6 +1,6 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§4 settled; §5–§8 pending.
+**Status:** In progress. §1–§5 settled; §6–§8 pending.
 **Date:** 2026-09-06
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -50,6 +50,31 @@ in the light-client documentation, no longer serves the API: the domain redirect
 unrelated parked page that returns **HTTP 200 with an identical 533-byte body for every
 path**, including `/v1/block/850000/scalars`. A client pointed at it does not receive an
 error. It receives a success response and no payments. (Verified 2026-09-06.)
+
+**How an attacker targets a victim at all** (added 2026-09-07, from §5.1). An indexer
+holding a victim's *published* silent-payment address cannot determine which transactions
+pay them: scanning requires `input_hash · b_scan · A_sum`, and the indexer has only the
+tweak and `B_scan = b_scan·G`. It needs the private scan key. This is BIP-352's own
+guarantee and it applies to the indexer like anyone else.
+
+Targeted omission therefore requires out-of-band knowledge, which narrows the attacker
+to three cases:
+
+| Route | How the attacker knows | Assessment |
+|---|---|---|
+| **The attacker is the sender** | They paid the victim; they know the txid exactly | The realistic case |
+| **Blanket degradation targeted by identity** | They do not know which tweaks are the victim's — they drop a fraction at random for that connection | Cheap; requires no identification at all |
+| **Out-of-band leak** | Invoice, stated amount, timing correlation | Situational |
+
+The first case is the motivating scenario and belongs in the README and the pitch:
+
+> **The exchange that pays you is also the indexer that tells you whether you were paid.**
+
+This is the default deployment for a light wallet — the vendor runs the backend. The
+counterparty holds a signed record showing it paid; the victim sees nothing; there is no
+error and no symptom. The analysis makes the threat more concrete rather than less: the
+attacker who can identify a victim's payment is precisely the one who sent it, and
+blanket degradation needs no identification whatsoever.
 
 ### 1.3 The equivocation insight
 
@@ -555,18 +580,80 @@ merkle_proof       ~350 bytes (§3.2)
 This file is the demo. It is also what would be attached to a bug report or a public
 disclosure — an accusation nobody can independently check is worth little.
 
-## 5. Canary tripwire — PENDING
+## 5. Canary tripwire — SETTLED 2026-09-07
 
-The last rung, and the only one that works when *every* queried indexer colludes (§1.3).
-The client sends itself a silent payment, so it has an independent path to know a payment
-exists, and then checks whether each indexer reports it.
+The rung of last resort, and the only one that survives *all* queried indexers colluding
+(§1.3), because the client's knowledge originates outside the indexer system entirely.
 
-Open: how a self-payment is made indistinguishable from ordinary traffic — an obviously
-periodic, fixed-value, same-address probe is trivially whitelisted; scheduling and
-funding on signet; what a *negative* result proves and how long the client must wait
-before concluding omission rather than propagation delay; and the interaction with §4.4
-coverage, since a passed tripwire raises confidence only for the specific block it landed
-in.
+### 5.1 Generalized statement
+
+The tripwire is not "send yourself money." It is:
+
+> **Assert that a payment exists in block B, then check whether each indexer reports it.**
+
+The assertion has two sources:
+
+| Source | Cost |
+|---|---|
+| **Self-payment** | Real on-chain fees |
+| **Out-of-band knowledge of a real incoming payment** — the sender supplied the txid | **Free** |
+
+BIP-352 already contemplates out-of-band notifications. Accepting them turns every such
+payment into a free probe. Building around *expected payments* rather than
+*self-payments* costs the same code and is strictly more useful, which matters because
+the self-payment path is the only part of Canary with a marginal monetary cost.
+
+### 5.2 Indistinguishability
+
+Per §1.2, an attacker cannot identify a victim's self-payment from chain data. That is
+the tripwire's foundation. What remains is metadata:
+
+| Leak | Mitigation | In v1? |
+|---|---|---|
+| **Periodic timing** — a probe every 6 blocks is trivially whitelisted | Poisson scheduling (exponential inter-arrivals) — memoryless, so the last probe reveals nothing about the next | Yes |
+| **Distinctive value** — a repeated or round amount | Randomized, non-round values | Yes |
+| **Broadcast/query correlation** — broadcasting and then immediately querying that block | Broadcast over a different path from the one used to query indexers | Documented |
+| **Funding linkage** — spending a UTXO the adversary sent, so they observe the victim transacting | Fund probes from UTXOs the adversary does not know about, where possible. **Not fully solvable** | Stated limitation |
+
+**The honest ceiling.** A passed tripwire proves the server served *that one tweak*. It
+is not proof of global honesty. Against blanket degradation it is quantifiable: an
+attacker dropping a fraction `p` is caught by `k` probes with probability `1-(1-p)^k`, so
+ten probes catch a 20% degradation 89% of the time. Against a targeted
+single-transaction omission it helps only if the attacker cannot distinguish the probe.
+
+### 5.3 What a negative result proves
+
+Innocent explanations must be excluded first:
+
+1. **Not yet indexed** — wait until the server's declared height exceeds B's, plus margin
+2. **Reorg** — check against the header chain (§4.6)
+3. **Never confirmed** — same check
+
+After those, it is omission. And:
+
+> **The tripwire is the one rung where a light client attributes without a node.**
+
+§4.2 holds that detection needs no node but attribution does. The tripwire is the
+exception: the client *made the transaction*, so it holds the prevouts and computes the
+canonical leaf itself. It produces the exact missing leaf, a Merkle proof of its absence
+from the signed commitment, and a named accused party — with no auditor and no full node.
+That makes it the most self-contained evidence artifact in the system, which is what the
+rung of last resort should be.
+
+### 5.4 Coverage integration and cost
+
+A passed tripwire verifies one block for one server, so §4.4 coverage distinguishes
+**verified-by-cross-check** from **verified-by-tripwire**. Under total collusion the
+latter is the only verified state available.
+
+> The tripwire is the only part of Canary with a marginal monetary cost. **The strongest
+> guarantee is bought, literally, one transaction fee at a time.**
+
+Probes are therefore rate-limited by a user budget rather than a fixed schedule, and
+out-of-band assertions (§5.1) are free — a user receiving real payments accrues tripwire
+coverage at no cost. On signet all of it is free, which is what makes the live demo
+possible: send a payment, have a deliberately malicious indexer drop it, and watch Canary
+name it within about thirty seconds (§8).
 
 ## 6. Components, interfaces, ownership — PENDING
 
@@ -587,6 +674,12 @@ against every implementation. Any disagreement is a real interop bug worth repor
 upstream.
 
 ## 8. Demo — PENDING
+
+Anchored on §5.4: a signet self-payment, an indexer configured to drop it, and Canary
+naming the accused within roughly one block interval. Open: the exact narrative order,
+what is shown on screen (§4.4 coverage versus the §4.7 evidence artifact), how the
+malicious indexer is configured so the drop is visibly deliberate rather than a bug, and
+the fallback if signet block timing does not cooperate on the day.
 
 ---
 

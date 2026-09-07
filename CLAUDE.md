@@ -29,8 +29,9 @@ approved section by section.**
 | §2 Canonical sets + policy normalization | Settled — data model is fixed, team interface named |
 | §3 Commitment format + Nostr transport | Settled — commitment object, Merkle construction, event rules, receipts |
 | §4 Client verification ladder | Settled — four rungs, coverage output, evidence artifact |
-| §5 Canary tripwire | **Next** |
-| §6–§8 | Stubbed in the design doc, each with what it must resolve |
+| §5 Canary tripwire | Settled — generalized to *expected payments*; §1.2 amended |
+| §6 Components, interfaces, ownership | **Next** |
+| §7–§8 | Stubbed in the design doc, each with what it must resolve |
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
@@ -121,6 +122,10 @@ node.
 
 ## External facts worth not re-deriving
 
+- **An indexer cannot identify which transactions pay a published SP address** — that
+  needs the private scan key. So targeted omission requires out-of-band knowledge, and
+  the party who always has it is the sender. Hence the motivating scenario: *the exchange
+  that pays you is also the indexer that tells you whether you were paid.* §1.2 / §5.
 - **BIP-352 v1.1.0 (Mar 2026)** states the withholding trust assumption itself.
 - **Bitshala's BIP-352 guide (3 Aug 2026)** calls trustless tweak sourcing "the big one."
 - **Core PR #28241** (SP index) closed unmerged Feb 2025. Its "consistency check" means

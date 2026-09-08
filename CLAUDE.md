@@ -108,6 +108,25 @@ served-set diffing. Configuring blindbit-oracle with `tweaks_full_basic=1` and n
 filter gives a full index comparable to `T_base`. The doc simply never says to do that —
 a one-line fix, not a redesign, and it does not depend on Dev B's week-2 fork.
 
+## Spec self-review — 2026-09-08 — 7 findings, all fixed
+
+Run after §8 landed, per `superpowers:brainstorming`. Placeholder scan came back clean.
+Seven findings, all corrected in place.
+
+| Finding | Fix |
+|---|---|
+| **§4.1's ladder table quietly rebuilt defect #2's ordering.** *"Each rung runs only when the one above it says something"* put gap resolution **after** self-consistency completed. §2.5 fixes the opposite order and calls it load-bearing. Someone implementing from the table alone rebuilds the hole | Rung 3's trigger now reads *before rung 2 can finish*, followed by a paragraph stating that rung 3 runs **inside** rung 2 and that sequential stages restore the closed hole |
+| **§5.4 asserted a split §4.4 did not make** — verified-by-cross-check versus verified-by-tripwire | §4.4's *Verified* row carries the qualifier now, and says only the tripwire form is reachable under total collusion |
+| **§5.4 still said "live demo"**, contradicting §8.1, where the format is recorded and async and live-failure risk is explicitly zero | Now "§8's demo" |
+| **§0 understated the wire cost ~6×.** "32 bytes per block per server" is the root — what is *compared*. The event is ~200 bytes, and §3.7 says so two sections later | §0 names both numbers. Same class as defects #10 and #11: a figure a skeptic recomputes |
+| **§2.5's three terminal states and §4.4's six coverage states had no stated mapping** | §4.4 maps them: *Clean* → **Verified** or **Resolved**, *Omission detected* → **Compromised**, *Unresolvable* unchanged, and Unverified / Disputed have no per-block equivalent |
+| **§8's long-lead items had no week.** §8.6 wants signet funding "weeks early" and repeated takes; §6.6 put the whole demo in week 4 | Signet funding moved into the week-1 gate, plus a note that week 4 is editing and pitch, not first takes |
+| **§8's act 1 / act 2 sequencing was ambiguous** — is the flag applied on camera or revealed? | Pinned: already running in act 1, revealed in act 2. The alternative is recorded along with the reason it loses |
+
+**Scope check:** one spec, three binaries, three owners. It does not need decomposing,
+but `writing-plans` will likely produce more than one plan — the protocol core, the
+indexer fork and the sidecar separate cleanly along §6.5's ownership lines.
+
 ## §8 Demo — written 2026-09-08
 
 In the doc now, at §8. The decisions worth not relitigating:

@@ -1,7 +1,8 @@
 # Canary — Design Document
 
-**Status:** Complete. §1–§8 settled. A spec review on 2026-09-07 found 15 defects; all
-fifteen are closed in place below. Next: spec self-review, user review, `writing-plans`.
+**Status:** Complete. §1–§8 settled. A spec review on 2026-09-07 found 15 defects and a
+self-review on 2026-09-08 found 7 more; all are closed in place below. Next: user review,
+then `writing-plans`.
 **Date:** 2026-09-06, revised 2026-09-08
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
@@ -22,9 +23,10 @@ The project is layered deliberately:
   the union of what they serve (§4.3), read each server's policy from its existing
   `/info` (§2.3), and run the tripwire (§5), which detects *and* attributes without any
   server committing to anything.
-- **Protocol second.** The signed-commitment extension makes detection cheap (32 bytes
-  per block per server, instead of N full fetches) and makes an accusation transferable
-  and non-repudiable.
+- **Protocol second.** The signed-commitment extension makes detection cheap — a
+  ~200-byte signed event per block per server, carrying the 32-byte root that is actually
+  compared, against N full fetches — and makes an accusation transferable and
+  non-repudiable.
 
 ---
 
@@ -636,8 +638,15 @@ Ordered by cost. Each rung runs only when the one above it says something.
 |---|---|---|---|
 | **1. Commitment tracking** | Always on | Root divergence between servers, and chain contradiction — a height still contested six blocks later (§4.6) | One relay subscription; ~144 events/day/server |
 | **2. Self-consistency** | Client fetches block *B* | Served ≠ committed; policy contradiction | Hashing `n` leaves. Microseconds |
-| **3. Gap resolution** | Rung 2 found gaps | Whether a permitted gap is real | One targeted request |
+| **3. Gap resolution** | Rung 2 found gaps, **before rung 2 can finish** | Whether a permitted gap is real | One targeted request |
 | **4. Attribution** | Rung 1 found divergence | *Which* server lied, and about what | Requires prevouts — the expensive rung |
+
+**Rung 3 runs inside rung 2, not after it**, and this is the one place the table's
+top-to-bottom reading misleads. §2.5 resolves gaps *before* the root is recomputed, and
+the recomputation is what rung 2 actually catches. A gap nobody can fill leaves the root
+uncomputed and the block *unresolvable* — never clean. Implementing the two as strictly
+sequential stages rebuilds the hole §2.5 closed, which is why the ordering is called
+load-bearing there.
 
 Rung 1 runs for blocks the client has not scanned and while the client is idle.
 **Detection is decoupled from scanning**, so evidence accumulates continuously and an
@@ -683,7 +692,7 @@ something continuous and visible instead: **per-block-range scan coverage.**
 
 | Coverage state | Meaning |
 |---|---|
-| **Verified** | Root agreed; served set complete |
+| **Verified** | Root agreed; served set complete. Qualified by *how*: **by cross-check**, where another server's root agreed, or **by tripwire**, where a planted assertion came back (§5.4). Under total collusion only the second is reachable |
 | **Resolved** | Gap existed, filled from another server, root checked |
 | **Unresolvable** | A gap nobody can fill, so the root was never recomputed (§2.5) — an ecosystem gap, not an attack, and not a pass |
 | **Unverified** | No commitment available. The data is still used — it feeds §4.3's union — but nothing about it is checked (§2.5 step 0) |
@@ -693,6 +702,13 @@ something continuous and visible instead: **per-block-range scan coverage.**
 *Disputed* and *Compromised* are separate states because §4.5 keeps them separate. Root
 divergence names two servers without saying which lied, and collapsing that into a single
 alarm is exactly how an attacker gets an honest server excluded.
+
+**Mapping from §2.5.** The comparison procedure returns three terminal states for one
+`(server, block)`; coverage aggregates them across ranges and adds two that comparison
+never produces. *Clean* becomes **Verified** where no gap existed and **Resolved** where
+one was filled. *Unresolvable* carries across unchanged. *Omission detected* becomes
+**Compromised**. **Unverified** comes from step 0 and **Disputed** from step 5, and
+neither is a terminal state of the per-block procedure.
 
 Which determines what the wallet displays:
 
@@ -922,7 +938,7 @@ latter is the only verified state available.
 Probes are therefore rate-limited by a user budget rather than a fixed schedule, and
 out-of-band assertions (§5.1) are free — a user receiving real payments accrues tripwire
 coverage at no cost, though only against indexers other than the payer who disclosed the
-txid, and only as detection. On signet all of it is free, which is what makes the live demo
+txid, and only as detection. On signet all of it is free, which is what makes §8's demo
 possible: send a payment, have a deliberately malicious indexer drop it, and watch Canary
 name it.
 
@@ -1080,7 +1096,7 @@ Coarse only. The detailed plan is `writing-plans`' output, not this document's.
 | Phase | Gate |
 |---|---|
 | **Day 1–2** | Signet, Core v30 and blindbit-oracle running for all three. **Interfaces frozen** |
-| **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. Nostr round-trip |
+| **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. Nostr round-trip. **Fund the signet UTXOs §8.6 needs** |
 | **Week 2** | Commitments published end to end. Rungs 1–2. Coverage. Proxy passing `blindbitd` traffic |
 | **Week 3** | Tripwire, evidence and `canary verify`, malicious mode, rungs 3–4. §7 suite. If there is room: §4.6's BIP-325 signet solution check |
 | **Week 4** | Demo, hardening, documentation, pitch. **Feature freeze 1 October**, four days before the deadline |
@@ -1095,6 +1111,12 @@ the false-positive machine §2.1 exists to kill. Run it with its full-index opti
 (`tweaks_full_basic=1` — confirm the flag name against the version pinned on day 1) and
 no dust threshold, which yields an index comparable to `T_base`. This is a configuration
 line, not a fork: the gate does not wait on Dev B's week-2 work.
+
+**Two of §8's requirements have a lead time longer than week 4.** Signet funding has to
+exist before the faucet stops existing — prior art §5 is the standing evidence that public
+infrastructure decays without warning — so it lands in week 1. And §8.6's *record
+repeatedly and keep the best take* is only available if recording starts the moment the
+end-to-end path works, in week 3. Week 4 is editing, hardening and pitch, not first takes.
 
 **Rung 4 has two forms and only one is on the critical path.** The tripwire's node-free
 attribution (§5.3) lands in week 3 alongside the tripwire, because there the client holds
@@ -1266,7 +1288,7 @@ the hook and asks the judge to take the problem on faith.
 | Act | Time | On screen | What it establishes |
 |---|---|---|---|
 | **1. The loss** | 0:00–0:25 | Split screen. Wallet: `0 sats`. Block explorer: the payment, confirmed, in a block | The wallet is not broken and not lying. It is showing exactly what its indexer told it |
-| **2. The cause** | 0:25–0:45 | The indexer's config, one flag, restart. Then its log — no error, no warning, nothing | That is the whole attack. It generates no error because it needs none |
+| **2. The cause** | 0:25–0:45 | The flag that did it, in the indexer's config. Then that indexer's log — no error, no warning, nothing | That is the whole attack. It generates no error because it needs none |
 | **3. Detection** | 0:45–1:25 | `canaryd` in the path. Serve → recompute the root → mismatch against the server's *own* signature → a named accusation | Rung 2 (§4.1). One server, no honesty assumption, no full node |
 | **3b. The other branch** | 1:25–1:45 | Second indexer, honest. The attacker commits to the omitted set instead; roots diverge | The attacker is caught either way (§8.7). First cut if long |
 | **4. Independent check** | 1:45–2:15 | Second machine, **network interface visibly down**, `canary verify evidence.json` | The accusation survives without us and without the internet (§4.7) |
@@ -1277,6 +1299,13 @@ on the honest boundary is the register this track is judged in, and *unresolvabl
 state deliberately designed neither to accuse nor to pass — is the single clearest
 artifact of the design's discipline. It is also the cheapest possible inoculation against
 the objection in §8.7.
+
+**The attack is already running in act 1; act 2 reveals it rather than applies it.**
+Worth pinning, because the alternative is tempting and costs more than it returns.
+Opening on a correct balance, applying the flag on camera and watching the balance fall
+does show the transition — but it spends fifteen seconds before the hook and makes the
+opening shot a screen where nothing is wrong. The transition that earns its time is act
+3's: the same query, now producing an accusation.
 
 **Cast the adversary as the sender**, per §1.2. The exchange that pays you is the indexer
 that tells you whether you were paid. One adversary, one motive, one victim, and no third

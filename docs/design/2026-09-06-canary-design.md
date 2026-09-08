@@ -1,8 +1,8 @@
 # Canary — Design Document
 
 **Status:** In progress. §1–§7 settled; §8 pending. A spec review on 2026-09-07 found 15
-defects. The 8 editorial ones are corrected in place below; the 7 design-level ones are
-open and tracked in `CLAUDE.md`.
+defects. Eleven are corrected in place below — the 8 editorial ones plus design defects
+1, 2 and 3. The remaining 4 are open and tracked in `CLAUDE.md`.
 **Date:** 2026-09-06, revised 2026-09-07
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable

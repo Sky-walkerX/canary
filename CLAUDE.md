@@ -17,7 +17,7 @@ Hard deadline. One winner per track, $1,000.
 Repo: `github.com/Sky-walkerX/canary` (**private** until submission — publishing the
 idea early hands it to competitors).
 
-## Current state — 2026-09-07
+## Current state — 2026-09-08
 
 **Design phase. Nothing is implemented, and nothing should be until the design is
 approved section by section.**
@@ -32,29 +32,30 @@ approved section by section.**
 | §5 Canary tripwire | Settled — generalized to *expected payments*; §1.2 amended |
 | §6 Components, interfaces, ownership | Settled — 3 binaries, proxy model, packages, ownership, risks |
 | §7 Differential edge-case suite | Settled — regtest vectors, corners, property tests |
-| §8 Demo | **Drafted in conversation, NOT approved, NOT written to the doc.** Key decisions captured below |
+| §8 Demo | Settled 2026-09-08 — five acts, adversary staging, the repo verify path, fallbacks, judge Q&A |
 
-**Spec review run 2026-09-07 (`/code-review`). 15 defects found. 11 fixed, 4 open.**
-The 8 editorial ones plus design defects 1, 2 and 3 are corrected in the doc. Four remain
-and need a decision. Do not treat §1–§7 as final until they close.
+**Spec review run 2026-09-07 (`/code-review`). 15 defects found. All 15 fixed.**
+
+**Next: spec self-review, then the user review gate, then `writing-plans`. No
+implementation until that gate passes.**
 
 Design doc: `docs/design/2026-09-06-canary-design.md`
 Research + citations: `docs/research/prior-art.md`
 
-## Spec review — 2026-09-07 — 11 FIXED, 4 OPEN
+## Spec review — 2026-09-07 — ALL 15 FIXED
 
-A `/code-review` pass over the full spec plus a self-review found 15 defects. The four
-below are still open and must close before `writing-plans`, and before anyone codes
-against §6.3.
+A `/code-review` pass over the full spec plus a self-review found 15 defects. All fifteen
+are now closed in the doc. Kept in full because the *reasoning* is the expensive part and
+someone will want to reopen one of these.
 
-### Design-level — OPEN. Need a decision, not just an edit
+### Design-level — FIXED 2026-09-08
 
-| # | Defect | Where |
+| # | Defect | Fix applied |
 |---|---|---|
-| 4 | **§5.1's free out-of-band probe was overclaimed.** §5.3's node-free attribution needs *prevouts*, which the client has only because it made the transaction. Given a bare txid it cannot compute the tweak, build `missing_leaf`, or prove anything. And the §1.2 sender-attacker knows exactly which txid they disclosed and serves it honestly. "Strictly more useful" is wrong | §5.1, §5.3, §6.7 |
-| 5 | **`dust_threshold_sat` is unverifiable in principle.** The leaf is `(txid, tweak)` and carries no output value, so a client can never check that a dust-justified gap was legitimate. Decide whether the field survives | §2.3, §2.2 |
-| 6 | **Merkle root over an empty leaf set is undefined** — and it is the *most common* case on regtest, where most blocks hold no eligible transaction. §7.4's own example vector requires it; §7.5's property list starts at `n=1` | §3.2, §7.4 |
-| 7 | **Multi-letter Nostr tags are not relay-indexed.** NIP-01 filters only single-letter tag names, so `block_hash` as a tag is not queryable and §6.3's `Feed.Get(author, blockHash)` cannot be served by a relay. Fix: carry the block hash in a single-letter indexed tag | §3.3, §6.3 |
+| 4 | §5.1's free out-of-band probe was overclaimed | "Strictly more useful" deleted. §5.1's table now has a third column separating what each source *gives*: a self-payment attributes with no node because the client holds the prevouts; an out-of-band txid is **detection only**, since without prevouts there is no tweak, no `missing_leaf`, no §4.7 artifact. And it is unavailable against §1.2's attacker **by construction** — a sender hiding a payment does not disclose its txid, and one who does must serve it honestly or be caught by an assertion they created. Free coverage against indexers *other than* the discloser, which is common because payer and indexer are usually unrelated. §5.4 and §6.7 aligned |
+| 5 | `dust_threshold_sat` is unverifiable in principle | **Field kept, demoted.** The leaf carries no value, so a client can never check a dust-justified gap — and does not need to, because **no verdict in §2.5 takes the threshold as an input**. A resolved gap needs no reason; an unresolved gap is *unresolvable* whatever was declared. It survives for two non-verification jobs: routing §2.5's effort budget, and creating a contradiction a rung-4 attributor (who holds the block, hence the values) can check. §2.3 also records **putting the value in the leaf as considered and rejected** — 8 bytes on every leaf to buy nothing |
+| 6 | Merkle root over an empty leaf set undefined | `merkle_root(∅)` = **32 zero bytes**, outer root computed over it unchanged. No fourth tag, and safe because `n` is already bound into the preimage, so `n = 0` cannot collide with any `n ≥ 1` root for the same block. §3.2 also pins `n = 1` (the leaf hash itself). **An empty set is committed, not skipped** — skipping restores defect #2's hole wearing the phrase *"no commitment, because there was nothing to commit."* §7.5's property row now starts at `n = 0` |
+| 7 | Multi-letter Nostr tags are not relay-indexed | Block hash moved to the single-letter **`b`** tag, the query key; `height`, `n`, `network`, `policy_ref` stay multi-letter, carried for readers not filters. §3.3 also records the consequence nobody had noticed: **NIP-01 has no range query at all** — tag filters have no range operators and `since`/`until` act on the untrusted `created_at` (§3.5). So `Feed.Get` became a **batch call** over block hashes the client already knows, chunked to the relay's limit. §6.3 has no known-open interfaces left |
 
 ### Design-level — FIXED 2026-09-07
 
@@ -107,30 +108,29 @@ served-set diffing. Configuring blindbit-oracle with `tweaks_full_basic=1` and n
 filter gives a full index comparable to `T_base`. The doc simply never says to do that —
 a one-line fix, not a redesign, and it does not depend on Dev B's week-2 fork.
 
-## §8 Demo — drafted, not approved, not in the doc
+## §8 Demo — written 2026-09-08
 
-Presented in conversation and never approved; the design doc still says PENDING. Captured
-here so it is not lost. Re-present for approval before writing it in.
+In the doc now, at §8. The decisions worth not relitigating:
 
-- **Format drives it.** BOSS Battle is async, so the deliverable is a recorded video plus
-  a repo read alone. Live-failure risk is nil (re-record), so nothing should be faked;
-  the first 20 seconds carry everything.
-- **Show the loss before the tool.** Five acts, ~2:30 — invisible loss (wallet reads
-  0 sats while the explorer shows the payment) → one config line → detection → offline
-  `canary verify` on a second machine, network off → **the honest limit**, closing on
-  "accountable, not trustless" and showing an *unresolvable* range, the state that is
-  deliberately not an accusation.
-- **Cast the adversary as the sender** — the exchange pays *and* runs the indexer, per
-  §1.2. One adversary, one motive, one victim.
-- **Production rules:** show the attack being configured on screen (`--omit-tx`) or the
-  missing payment reads as our bug; signet with visible timestamps and dead time cut;
-  regtest fallback recorded in advance; our own relay visible.
-- **Ship a real evidence artifact in the repo** so a judge runs `canary verify` in 30
-  seconds without building anything — the shortest path from README to personally
-  verifying an accusation.
-- **Rehearse the CT question.** A knowledgeable judge asks "isn't this just Certificate
-  Transparency?" — agree enthusiastically, then say what is new (the canonical-set and
-  policy-normalization problem, which CT logs do not have). Disputing it looks defensive.
+- **Async format decides the content.** Recorded video plus a repo that reads alone, so
+  live-failure risk is zero, so **nothing may be faked** — a fake has no upside and total
+  downside. Two judges with disjoint behaviour: one watches and never opens the repo, one
+  opens the repo and never finishes the video. §8.5 serves the second.
+- **Show the loss before the tool.** Five acts, 2:45. Wallet at 0 while the explorer
+  shows the payment → the one config flag → detection → offline `canary verify` with the
+  network interface down → **the honest limit**, closing on an *unresolvable* range.
+- **Act 5 is not optional.** Ending on the boundary is the register this track is judged
+  in, and *unresolvable* is the clearest artifact of the design's discipline.
+- **The attack targets a txid, not an address**, because an indexer cannot select by
+  address without the scan key (§1.2). An address filter would quietly concede the
+  premise the threat model rests on.
+- **Act 3b shows the other branch** — the attacker who commits to the omitted set is
+  caught by rung 1 instead of rung 2. It is the answer to the only strong objection, and
+  it is the first cut if the video runs long.
+- **Repo path: README to a personally verified accusation in under 60 seconds**, from a
+  real artifact of a real run whose Nostr event ids resolve on a public relay.
+- **Regtest is the fallback, not the plan** — "this ran on a public network" is worth
+  real points and a judge cannot check it themselves.
 
 ## Process we are following
 
@@ -159,6 +159,11 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 | **Chain agreement is a Canary output, not a Canary input** | The chain is the same problem Canary already solves: parties assert, they disagree, and the disagreement is transient or permanent. Reorgs resolve; lies persist. Reusing the commitment feed costs nothing, where an SPV chain cost a component and bought nothing on signet. Decided 2026-09-07 closing defect #1 |
 | **The 144-block hash-retention window is a protocol constant, not a policy field** | A server allowed to declare its own window declares zero, which is the hole verbatim. Decided 2026-09-07 closing defect #2 |
 | **BIP-325 solution validation is specified but not committed for v1** | It is the only anchor needing no trust, and it is 2–3 days plus every txid in the block. Week 3 if there is room; until then the single-server case rests on a node or a pin, and §5.3 says so. Decided 2026-09-07 closing defect #1 |
+
+| **`dust_threshold_sat` stays, as a declaration and never as a proof input** | It cannot be verified — the leaf has no value — but nothing needs it to be: a resolved gap needs no reason and an unresolved one is *unresolvable* regardless. It earns its place routing effort and creating a contradiction rung 4 can check. Value-in-the-leaf rejected: 8 bytes per leaf to buy nothing. Decided 2026-09-08 closing defect #5 |
+| **The empty set is committed, not skipped; `merkle_root(∅)` is 32 zero bytes** | `n = 0` is the *common* case on regtest, not a corner. Skipping would restore defect #2's hole under a new name. Zeros are safe because `n` is bound into the outer preimage. Decided 2026-09-08 closing defect #6 |
+| **Block hash lives in the single-letter `b` tag, and `Feed.Get` is batched** | NIP-01 indexes single-letter tag names only, and offers **no range query at all** — no range operators on tags, and `since`/`until` act on the `created_at` we already refuse to trust. Batching hashes the client already knows is the only shape a relay can serve. Decided 2026-09-08 closing defect #7 |
+| **Out-of-band txids are detection, never attribution** | Attribution needs prevouts, which only the payer and the transaction's author hold. And the §1.2 attacker never discloses a txid it is hiding, so the free probe is worth most against indexers unrelated to the payer — real, common, and not what §1.2 warns about. Decided 2026-09-08 closing defect #4 |
 
 **Superseded:** the original dossier proposed OpenTimestamps anchoring. Nostr events
 replace it. OTS may return in v2 to anchor the event chain.

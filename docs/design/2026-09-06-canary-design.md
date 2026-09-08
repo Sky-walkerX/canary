@@ -1,9 +1,8 @@
 # Canary — Design Document
 
-**Status:** In progress. §1–§7 settled; §8 pending. A spec review on 2026-09-07 found 15
-defects. Eleven are corrected in place below — the 8 editorial ones plus design defects
-1, 2 and 3. The remaining 4 are open and tracked in `CLAUDE.md`.
-**Date:** 2026-09-06, revised 2026-09-07
+**Status:** Complete. §1–§8 settled. A spec review on 2026-09-07 found 15 defects; all
+fifteen are closed in place below. Next: spec self-review, user review, `writing-plans`.
+**Date:** 2026-09-06, revised 2026-09-08
 **Target:** BOSS Battle (Bitshala), 7 Sep – 5 Oct 2026, Cypherpunk track
 **Team:** 3, all Go-capable
 
@@ -213,7 +212,7 @@ Every field is subtractive.
 | `network` | Comparison is only meaningful within one network |
 | `start_height` | Below this, absence is not evidence |
 | `prunes_spent` | Drops transactions with no unspent taproot outputs |
-| `dust_threshold_sat` | 0 = none. Drops transactions whose taproot outputs are all below it |
+| `dust_threshold_sat` | 0 = none. Drops transactions whose taproot outputs are all below it. **Declared, never verified** — see below |
 | `dust_configurable` | Threshold is per-request; the client's own request parameter defines its expectation |
 
 blindbit's cut-through and silentiumd's unspent-only indexing are collapsed into a single
@@ -230,6 +229,27 @@ The declaration does three things:
    cut-through was declared before the block, publicly and signed.
 3. **It bounds escalation.** The client knows in advance whose gaps require a second
    source.
+
+**`dust_threshold_sat` cannot be verified, and does not need to be.** The leaf is
+`(txid, tweak)` and carries no output value (§3.2), so a client holding a commitment can
+never confirm that a dust-justified gap was legitimate. That reads like a hole and is
+not, because the threshold is never load-bearing. If a gap resolves (§2.5), the root is
+recomputed and matches, and *why* the server dropped the position stops mattering. If it
+does not resolve, there is no leaf to carry a value either, and the range is
+*unresolvable* whatever the declaration says. **No verdict in §2.5 takes the threshold as
+an input.**
+
+It survives for two jobs that are not verification. It routes effort — §2.5's tolerance
+governs how hard a client works, and a declared threshold predicts which gaps are likely
+benign. And it creates a contradiction that a rung-4 attributor, who holds the block and
+therefore the output values, *can* check: a server that declared 1,000 sat and dropped a
+50,000-sat payment has contradicted its own signed policy. Declaring in advance is what
+makes that catchable at all.
+
+**Rejected: putting the output value in the leaf.** It would make the threshold checkable
+during gap resolution, at 8 bytes on every leaf plus a rule for which of several taproot
+outputs counts. It buys nothing. A resolved gap needs no reason, and an unresolved gap
+has no leaf to carry the value.
 
 Retention is deliberately **not** a field here. §2.4 makes a 144-block hash-retention
 window a protocol constant, because a server allowed to declare its own window declares
@@ -427,7 +447,19 @@ reads and an attachment they do not.
 | Leaf | `TaggedHash("canary/leaf/v1", txid ‖ tweak)` — 32 + 33 bytes |
 | Internal node | `TaggedHash("canary/node/v1", left ‖ right)` |
 | Odd node | **Promoted, never duplicated** |
+| Single leaf (`n = 1`) | `merkle_root` is that leaf's hash — promotion applied zero times |
+| Empty set (`n = 0`) | `merkle_root` is 32 zero bytes. The outer root is computed over it unchanged |
 | Root | `TaggedHash("canary/root/v1", network ‖ block_hash ‖ n_le32 ‖ merkle_root)` |
+
+**The empty set is committed, not skipped.** `n = 0` is the common case, not a corner —
+most regtest blocks and many signet blocks hold no eligible transaction at all, and
+§7.4's own example vector is one. Defining `merkle_root(∅)` as 32 zero bytes avoids
+inventing a fourth tag, and it is safe because `n` is already bound into the outer
+preimage: an `n = 0` root cannot collide with any `n ≥ 1` root for the same block. A
+server with nothing to commit still publishes, because skipping would hand back exactly
+the excuse §2.5 step 0 exists to remove, wearing the phrase *"no commitment, because
+there was nothing to commit."* An `n = 0` commitment is a real assertion and a checkable
+one: the client recomputes the canonical set from the block and confirms it is empty.
 
 Duplicating an unpaired last node is CVE-2012-2459, Bitcoin's own Merkle vulnerability;
 promotion avoids it, and distinct leaf and node tags make second-preimage substitution
@@ -485,10 +517,26 @@ commitment events are both **regular kinds — append-only**.
 Proposed kind **1352** (mnemonic; the regular range is 1000–9999). This must be checked
 against the kind registry before shipping; it is not asserted to be unclaimed.
 
-Tags carry `block_hash`, `height`, `n`, `network` and `policy_ref`; content carries the
-root. A Nostr event id hashes the tags as well as the content, so the signature covers
-all of it and no separate signed blob is needed. The redundancy between tags and root is
-deliberate — any inconsistency between them is itself detectable.
+**Tag names are forced by NIP-01, not chosen.** A relay indexes only **single-letter**
+tag names, and a filter can query only those. A `block_hash` tag would be stored, signed,
+and entirely unqueryable, which leaves §6.3's `Feed.Get` unimplementable against any real
+relay. So the block hash goes in a single-letter tag and everything else is carried for
+readers rather than for filters:
+
+| Tag | Contents | Indexed |
+|---|---|---|
+| `b` | Block hash, display hex | **Yes** — this is the query key |
+| `height`, `n`, `network`, `policy_ref` | As named | No |
+
+A fetch is `{"kinds":[1352], "authors":[<pk>], "#b":[<hash>, ...]}`. **There is no range
+query.** Tag filters have no range or ordering operators, and `since`/`until` act on
+`created_at`, which §3.5 says we do not trust. A client covering a range of blocks
+therefore batches the block hashes it already knows into one filter, chunked to the
+relay's limit — which is why §6.3's `Feed.Get` takes a slice rather than a single hash.
+
+Content carries the root. A Nostr event id hashes the tags as well as the content, so the
+signature covers all of it and no separate signed blob is needed. The redundancy between
+tags and root is deliberate — any inconsistency between them is itself detectable.
 
 ### 3.4 Two channels, two jobs
 
@@ -792,15 +840,27 @@ The tripwire is not "send yourself money." It is:
 
 The assertion has two sources:
 
-| Source | Cost |
-|---|---|
-| **Self-payment** | Real on-chain fees |
-| **Out-of-band knowledge of a real incoming payment** — the sender supplied the txid | **Free** |
+| Source | Cost | What it gives |
+|---|---|---|
+| **Self-payment** | A real fee | Everything. The client made the transaction, so it holds the prevouts, computes the canonical leaf, builds the missing-leaf proof, and attributes with no node and no auditor (§5.3) |
+| **Out-of-band txid, disclosed by the payer** | Free | **Detection only.** *Does server S report txid X in block B* needs no prevouts. Attribution does — with no prevouts there is no tweak, so no leaf and no §4.7 artifact until a block source turns up |
 
-BIP-352 already contemplates out-of-band notifications. Accepting them turns every such
-payment into a free probe. Building around *expected payments* rather than
-*self-payments* costs the same code and is strictly more useful, which matters because
-the self-payment path is the only part of Canary with a marginal monetary cost.
+BIP-352 already contemplates out-of-band notifications and accepting them is cheap. Two
+limits travel with the feature, because an earlier draft of this section called it
+*"strictly more useful"* and that is wrong twice over.
+
+**It does not inherit the self-payment's node-free attribution.** §5.3's exception rests
+entirely on the client having made the transaction. A bare txid supplies no prevouts, so
+the client cannot compute the tweak, cannot build `missing_leaf`, and cannot produce an
+artifact anyone else can check.
+
+**It is unavailable against §1.2's attacker by construction.** A sender hiding a payment
+from you does not hand you its txid — and a sender who does disclose one has to serve
+that txid honestly or be caught immediately by an assertion they created themselves. So
+out-of-band probes accrue free coverage against any indexer that is *not* the discloser,
+which is a real and common case because the payer and the indexer are usually unrelated,
+and they contribute nothing against the one adversary §1.2 names as most likely. They are
+an addition to the self-payment path, not a replacement for it.
 
 ### 5.2 Indistinguishability
 
@@ -861,7 +921,8 @@ latter is the only verified state available.
 
 Probes are therefore rate-limited by a user budget rather than a fixed schedule, and
 out-of-band assertions (§5.1) are free — a user receiving real payments accrues tripwire
-coverage at no cost. On signet all of it is free, which is what makes the live demo
+coverage at no cost, though only against indexers other than the payer who disclosed the
+txid, and only as detection. On signet all of it is free, which is what makes the live demo
 possible: send a payment, have a deliberately malicious indexer drop it, and watch Canary
 name it.
 
@@ -950,7 +1011,9 @@ func FromEvent(e nostr.Event) (Commitment, error)
 
 type Feed interface {
     Subscribe(ctx context.Context, authors [][32]byte) (<-chan Commitment, error)
-    Get(ctx context.Context, author [32]byte, blockHash [32]byte) (Commitment, error)
+    // Batched deliberately: NIP-01 offers no range query, so a range fetch is one
+    // filter over block hashes the client already knows. §3.3
+    Get(ctx context.Context, author [32]byte, blockHashes [][32]byte) ([]Commitment, error)
 }
 
 // headers  — (height, hash) observations + the contested-past-6 rule. NOT SPV. §4.6
@@ -962,10 +1025,9 @@ type Feed interface {
 An earlier draft of this block carried literal `...` in `VerifyProof`, which is not a
 frozen interface. Everything above compiles as written.
 
-**One of these is still known-open** (spec review, `CLAUDE.md`): `Feed.Get` cannot be
-served by a relay as specified, because NIP-01 filters on single-letter tag names only and
-§3.3 puts the block hash in a multi-letter tag. `headers` was the other; §4.6 now resolves
-it, and the package is deliberately **not** an SPV chain.
+**Nothing above is known-open as of 2026-09-08.** `Feed.Get` was, until §3.3 moved the
+block hash into the indexed `b` tag and made the call batched; `headers` was the other,
+and §4.6 resolves it — the package is deliberately **not** an SPV chain.
 
 **Interfaces freeze on day 2, not at the end of week 1.** On a 28-day clock, spending
 the first quarter before parallel work begins is not affordable. Days 1–2 are all three
@@ -1047,7 +1109,7 @@ no week.
 | `canonical` subtly wrong | Week-1 agreement harness; BIP vectors; §7 |
 | Core v30 unpruned signet fails to come up | Verify on day 1, not week 2 — it gates everything the indexer track does |
 | Relay dependency | Run our own (`strfry` / `nostr-rs-relay`) alongside public ones, consistent with running everything locally |
-| Auditor scope creep | **Not on the critical path.** §5.3's tripwire attributes without a node, so the demo never requires the auditor. It is the stretch component |
+| Auditor scope creep | **Not on the critical path.** §5.3's tripwire attributes without a node on the self-payment path, which is the path §8 demos, so the demo never requires the auditor. It is the stretch component |
 
 ## 7. Testing — differential edge-case suite — SETTLED 2026-09-07
 
@@ -1156,7 +1218,7 @@ decision.
 | `VerifyProof(Root(L), i, Prove(L, i))` for all `i`, random `L` | Basic soundness |
 | Permuting transaction order changes the root | Accidental sorting — §2.2 chose transaction order deliberately |
 | A root over `n` leaves never validates as a root over `n′ ≠ n` | §3.2's `n` binding |
-| `n ∈ {1, 2, 3, 5, 2ᵏ, 2ᵏ+1}` | **Odd-node promotion**, where CVE-2012-2459-class bugs live |
+| `n ∈ {0, 1, 2, 3, 5, 2ᵏ, 2ᵏ+1}` | **Odd-node promotion**, where CVE-2012-2459-class bugs live, plus §3.2's `n = 0` and `n = 1` base cases |
 | An internal node hash never validates as a leaf | The distinct leaf and node tags |
 
 ### 7.6 Upstream, and expectations
@@ -1176,14 +1238,128 @@ answer to a judge asking how we know the canonical set is right.
 
 This is week 3 and it is time-boxed. The vectors ship whether or not they find anything.
 
-## 8. Demo — PENDING
+## 8. Demo — SETTLED 2026-09-08
 
-Anchored on §5.4: a signet self-payment, an indexer configured to drop it, and Canary
-naming the accused within seconds of the query — the tripwire path, whose latency is not
-a block interval (§5.4). Open: the exact narrative order,
-what is shown on screen (§4.4 coverage versus the §4.7 evidence artifact), how the
-malicious indexer is configured so the drop is visibly deliberate rather than a bug, and
-the fallback if signet block timing does not cooperate on the day.
+### 8.1 What the format dictates
+
+BOSS Battle is asynchronous. The deliverable is a recorded video plus a repository that
+has to read on its own, and that fixes three things before any content decision:
+
+1. **Live-failure risk is zero.** A bad take is re-recorded. So there is no upside
+   whatsoever to faking a screen, and a faked screen is a total loss if noticed. Every
+   frame is a real run.
+2. **There are two judges, and they behave differently.** One watches two minutes and
+   never opens the repo. One opens the repo and never finishes the video. The video
+   serves the first; §8.5 serves the second. Neither may depend on the other.
+3. **The first twenty seconds carry everything**, because a judge deciding whether to
+   keep watching has no context yet and owes us nothing.
+
+Target 2:45, hard ceiling 3:00.
+
+### 8.2 Show the loss before the tool
+
+The narrative order is fixed, and it is not the architecture order. The problem is
+invisible by construction — that is the entire project — so the video's first job is to
+make the invisibility visible. Opening on a diagram or on Canary's own output concedes
+the hook and asks the judge to take the problem on faith.
+
+| Act | Time | On screen | What it establishes |
+|---|---|---|---|
+| **1. The loss** | 0:00–0:25 | Split screen. Wallet: `0 sats`. Block explorer: the payment, confirmed, in a block | The wallet is not broken and not lying. It is showing exactly what its indexer told it |
+| **2. The cause** | 0:25–0:45 | The indexer's config, one flag, restart. Then its log — no error, no warning, nothing | That is the whole attack. It generates no error because it needs none |
+| **3. Detection** | 0:45–1:25 | `canaryd` in the path. Serve → recompute the root → mismatch against the server's *own* signature → a named accusation | Rung 2 (§4.1). One server, no honesty assumption, no full node |
+| **3b. The other branch** | 1:25–1:45 | Second indexer, honest. The attacker commits to the omitted set instead; roots diverge | The attacker is caught either way (§8.7). First cut if long |
+| **4. Independent check** | 1:45–2:15 | Second machine, **network interface visibly down**, `canary verify evidence.json` | The accusation survives without us and without the internet (§4.7) |
+| **5. The limit** | 2:15–2:45 | `canary status` showing an *unresolvable* range. Closing line: accountable, not trustless | The boundary, stated by us before anyone asks |
+
+**Act 5 is not a disclaimer, and it is not optional.** Most demos end on the win. Ending
+on the honest boundary is the register this track is judged in, and *unresolvable* — a
+state deliberately designed neither to accuse nor to pass — is the single clearest
+artifact of the design's discipline. It is also the cheapest possible inoculation against
+the objection in §8.7.
+
+**Cast the adversary as the sender**, per §1.2. The exchange that pays you is the indexer
+that tells you whether you were paid. One adversary, one motive, one victim, and no third
+party introduced to make the plot work.
+
+### 8.3 What is on screen: coverage or the artifact
+
+Both, at different acts, and they are not interchangeable.
+
+| Output | Nature | Acts | Why there |
+|---|---|---|---|
+| **Coverage** (§4.4) | Continuous. The product | 5 | It is what Canary does when nothing is wrong, which is most of the time |
+| **Evidence artifact** (§4.7) | Discrete. The event | 3, 4 | It is the accusation, and the only thing a third party can check |
+
+Leading with coverage means opening on a dashboard reading *fine*, which is the worst
+available hook. Showing only the artifact misrepresents Canary as an alarm box, which
+§4.4 explicitly rejects. Coverage frames; the artifact punches.
+
+### 8.4 Staging the adversary so the attack is visibly deliberate
+
+The failure mode here is specific: a missing payment on screen reads as *our bug* unless
+the viewer watched us cause it. Four rules follow.
+
+1. **The flag is on screen, in our fork, with its help text visible.** `--omit-txid
+   <txid>` on the blindbit-oracle fork (§6.1). The judge sees the attack being armed.
+2. **It targets a txid, not an address.** An indexer cannot select by address — that
+   needs the scan key it does not have (§1.2). Targeting by txid is precisely the
+   capability the sender-attacker holds, and demonstrating an address filter would
+   quietly concede the premise the whole threat model rests on.
+3. **The malicious indexer keeps publishing commitments.** Act 3 works because the server
+   is caught against its own signature, so it must still commit to the canonical set
+   (§2.1). Act 3b is the branch where it does not.
+4. **Nothing is cut inside a take.** Dead time between takes is cut, timestamps stay
+   visible so the cut is legible, and no output is ever fabricated or re-typed.
+
+### 8.5 The repo path, for the judge who never watches
+
+`evidence/` holds a real artifact from a real recorded run — not a hand-built fixture —
+and the README's first code block verifies it:
+
+```
+go run ./cmd/canary verify evidence/omission-signet-<height>.json
+```
+
+No node, no network, no indexer, no build step beyond Go itself. **Target: README to a
+personally verified accusation in under sixty seconds.** That is the shortest path from
+a stranger's skepticism to a stranger's own terminal confirming it, and it is worth more
+than any paragraph of the pitch.
+
+The artifact's Nostr event ids must resolve on a public relay, so a judge can fetch the
+same signed commitment independently and confirm we did not mint it.
+
+### 8.6 Fallbacks
+
+The stated risk is signet block timing. Confirmation takes a block; indexing takes
+longer; neither is under our control.
+
+Detection itself is not the slow part. §5.4 establishes that the tripwire's latency is
+*not* a block interval, because the client already knows the txid and the block, so act 3
+is genuinely seconds once the height is indexed. Only the wait for confirmation is long,
+and the video should say so on screen rather than let the cut imply speed we do not have.
+
+| Risk | Answer |
+|---|---|
+| Signet timing on the day | Nothing happens on the day. Record the signet run repeatedly, well in advance, and keep the best take |
+| Faucet or public infrastructure down | Fund a signet UTXO set weeks early. Every indexer runs locally already — that is a standing decision, and prior art §5 is why |
+| Signet unusable entirely | Regtest, recorded in advance, instant blocks. §7.2 already puts regtest in the design, so this is a documented environment and not a dodge. If used, the video says *regtest* on screen and says why |
+
+Regtest is a fallback and not the plan: "this ran on a public network" is a claim worth
+real points, and it is one of the few claims a judge cannot check for themselves.
+
+### 8.7 The questions a knowledgeable judge asks
+
+Rehearsed, because the strongest objections have good answers and an unrehearsed pause
+looks like the answer is no.
+
+| Question | Answer |
+|---|---|
+| **"Isn't this just Certificate Transparency?"** | Agree, enthusiastically and first — it *is* CT's split-view problem, and §1.3 says so in the design. Then name what CT does not have: a log entry is what the log says it is, while a tweak set is derived from a block by rules that legitimately differ between honest servers (§2.1). Solving that is the new part. Disputing the comparison looks defensive and is also wrong |
+| **"Why would the attacker commit honestly?"** | It does not have to, and both branches lose. Committing honestly and serving less is caught by rung 2 against its own signature, with no second server and no trust. Committing to the omitted set is caught by rung 1 against any honest peer. Commitments are per block, published at index time, and append-only, so the choice is made before the attacker knows which transaction will matter. Act 3b shows this |
+| **"Can't you just run two indexers and diff them?"** | No, and this is the load-bearing point. Honest indexers legitimately serve different sets — cut-through, dust, start height — and BIP-352 itself blesses it. A raw diff is all false positives, which is why §2 compares committed canonical sets and leaves the served sets alone |
+| **"What if every indexer colludes?"** | Then you learn nothing, unless you planted a tripwire. That is act 5, and it is in the README under what Canary does not do |
+| **"Does this need a full node?"** | Detection does not; attribution does, and can be deferred indefinitely because evidence does not decay (§4.2). The tripwire is the exception — it attributes without a node, because the client made the transaction and holds the prevouts (§5.3) |
 
 ---
 

@@ -8,10 +8,10 @@ named server.**
 
 ## Status
 
-**Design phase.** No implementation yet. §1–§7 of the design doc are settled — threat
-model, canonical sets, commitment format, verification ladder, tripwire, components,
-testing. §8 (the demo) is pending, and a spec review on 7 September left open corrections
-against §1–§7. See
+**Design phase.** No implementation yet. All eight sections of the design doc are
+settled — threat model, canonical sets, commitment format, verification ladder, tripwire,
+components, testing, demo — and the fifteen defects a spec review raised on 7 September
+are closed. Next is the implementation plan. See
 [`docs/design/2026-09-06-canary-design.md`](docs/design/2026-09-06-canary-design.md).
 
 Built for [BOSS Battle](https://bitshala.org) (Bitshala), 7 Sep – 5 Oct 2026,

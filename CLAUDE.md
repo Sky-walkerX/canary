@@ -167,7 +167,7 @@ asked to "design things one by one" — they want the step-by-step, not a jump t
 |---|---|
 | **Layered: tool first, protocol second** | The client-side differ works against indexers as they exist and needs nobody's cooperation. The signed-commitment extension is the upgrade, not the foundation |
 | **Sidecar daemon**, not library-first, not a public observatory | Works with unmodified `blindbitd` today; the library falls out of it for free. An observatory protects nobody, and the public-server substrate is dying (see below) |
-| **Go** | blindbit-oracle, silentiumd and gobip352 are all Go; all three teammates are Go-capable |
+| **Go** | blindbit-oracle, silentiumd and go-bip352 are all Go; all three teammates are Go-capable |
 | **Signet, not mainnet** | Mainnet needs an unpruned Core v30+ and days of IBD. Nothing in the design requires mainnet |
 | **Nostr for commitment transport** | Free public signed bulletin board (**publication, not timestamping** — see mistake #7), no infrastructure for servers to run; clients subscribe to a relay instead of opening N connections, which also avoids leaking which blocks they care about |
 | **Construct edge cases, don't scan for them** | Deliberately hit ambiguous BIP-352 eligibility rules rather than hoping a chain supplies one. **On regtest, not signet** (§7.2) — several corners need arbitrary scripts and controlled block composition, and we cannot mine on public signet. Signet is for the end-to-end demo only |
@@ -279,11 +279,18 @@ it changes who gets `headers` versus `policy`.
 - **blindbit-oracle v2** needs Bitcoin Core **v30+**, unpruned, REST enabled
   (`/rest/spenttxouts`, Core PR #32540). `/info` already advertises policy-ish feature
   flags — a natural place to hang a policy declaration.
-- **gobip352 already has the primitives** — `ExtractEligibleVins`, `ExtractPubKey`
-  (NUMS-H included), `ComputeInputHash`. `canonical` is those plus transaction-level
-  rules, ordering and leaf construction. But blindbit-oracle is the same author on the
-  same library, so differential testing against it exercises the wrapper, not the
-  primitives. §6.4.
+- **The BIP-352 library is `github.com/setavenger/go-bip352`, package `bip352`, v0.1.8** —
+  **not** `gobip352`. Verified 2026-09-08 against the published module. The old
+  `gobip352` path is v0.1.4 and does **not** export `ExtractEligibleVins` or
+  `ExtractPubKey`; its README says eligibility is out of scope. Pointing `go.mod` at the
+  old path silently deletes the eligibility layer. It has `ExtractEligibleVins`,
+  `ExtractPubKey` (NUMS-H included), `ComputeInputHash`, a real BIP-340 `TaggedHash`, and
+  an exported `NumsH`. `canonical` is those plus transaction-level rules, ordering and
+  leaf construction. But blindbit-oracle is the same author on the same library, so
+  differential testing against it exercises the wrapper, not the primitives. §6.4.
+- **`bip352.Vin.Txid` is display byte order**, and §3.2's leaf preimage is internal byte
+  order. Convert at the boundary, in one place. This is §3.2's stated trap with a real
+  instance behind it.
 - **Signet SP faucet**: `https://silentpayments.dev/faucet/signet/` — removes the need
   for a counterparty when demonstrating receipt.
 - **`bitcoin.silentium.dev` is dead.** The public indexer named in the light-client docs

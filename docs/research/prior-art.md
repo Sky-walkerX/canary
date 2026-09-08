@@ -94,7 +94,7 @@ aggressively cut-through server remains accountable for exactly what it dropped.
 |---|---|---|---|
 | [blindbit-oracle](https://github.com/setavenger/blindbit-oracle) | Go | Active, pushed 2026-07-23; v2 requires Core v30+ REST, unpruned | Primary indexer to fork |
 | [silentiumd](https://github.com/louisinger/silentiumd) | Go | Stale, pushed 2025-01-04 | Second implementation — staleness makes divergence *more* likely, which is useful |
-| [gobip352](https://github.com/setavenger/gobip352) | Go | Pushed 2025-10-04 | BIP-352 primitives |
+| [go-bip352](https://github.com/setavenger/go-bip352) | Go | v0.1.8, verified 2026-09-08 | BIP-352 primitives. **Renamed** — the old `gobip352` path is v0.1.4 and lacks the eligibility functions (§6.4) |
 | [BIP0352-light-client-specification](https://github.com/setavenger/BIP0352-light-client-specification) | — | WIP spec | The light-client protocol we extend |
 
 blindbit-oracle's `/info` endpoint already advertises feature flags

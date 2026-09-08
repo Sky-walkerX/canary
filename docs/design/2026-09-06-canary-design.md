@@ -1050,13 +1050,41 @@ the first quarter before parallel work begins is not affordable. Days 1–2 are 
 people co-writing type definitions with no logic behind them; everything after runs in
 parallel against stubs.
 
-### 6.4 gobip352 supplies the primitives — and what that costs
+### 6.4 The BIP-352 library supplies the primitives — and what that costs
 
-The library already exposes what `canonical` needs:
+**The import path is `github.com/setavenger/go-bip352`, package `bip352`, v0.1.8.**
+Verified 2026-09-08 against the published module. This matters more than a naming detail:
+the older `github.com/setavenger/gobip352` path is v0.1.4, and it does **not** export
+`ExtractEligibleVins` or `ExtractPubKey` — its own README says input eligibility is out of
+scope. Every de-risking claim in this section is a claim about `go-bip352`. Pointing
+`go.mod` at the old path silently removes the eligibility layer and leaves the team
+writing it by hand.
 
-- `ExtractEligibleVins([]*Vin)` — input eligibility
-- `ExtractPubKey(vin)` — per-type public key extraction, **including NUMS-H detection**
-- `ComputeInputHash(vins, pubKeySum)`
+Signatures, verbatim from `go doc`:
+
+```go
+func ExtractEligibleVins(vins []*Vin) ([]*Vin, error)  // deep-copies; sets the Taproot flag
+func ExtractPubKey(vin *Vin) ([]byte, TypeUTXO)        // no error — check TypeUTXO != Unknown
+func ComputeInputHash(vins []*Vin, publicKeySum [33]byte) ([32]byte, error)
+func TaggedHash(tag string, msg []byte) [32]byte       // confirmed BIP-340 construction
+var NumsH = []byte{...}                                // the 32-byte x-only NUMS point
+```
+
+`TaggedHash` being a real BIP-340 tagged hash is load-bearing for §3.2 and was checked
+against `SHA256(SHA256(tag) ‖ SHA256(tag) ‖ msg)` rather than assumed. `NumsH` being
+exported means §7.3's NUMS-H corners can assert against the library's own constant instead
+of a copied literal.
+
+**A byte-order trap, and it is exactly the one §3.2 warns about.** `bip352.Vin.Txid` is
+documented as *"the normal human-readable format"* — display order, byte-reversed.
+`ComputeInputHash` and `FindSmallestOutpoint` both require it that way. §3.2 pins the leaf
+preimage txid as **internal** byte order. So `canonical` converts at the boundary, in one
+place, and §7.4's vectors pin the result. Two representations of a txid in one package is
+how implementations silently fork.
+
+Two further behaviours worth pinning, both verified rather than inferred:
+`ExtractEligibleVins` on an empty slice returns `(empty, nil)` and not `ErrVinsEmpty`; and
+`ExtractPubKey` signals failure by returning `TypeUTXO == Unknown` rather than an error.
 
 So `canonical` is not "implement BIP-352." It is those primitives plus the
 transaction-level rules (at least one taproot output, no SegWit v>1 input), plus ordering
@@ -1141,7 +1169,7 @@ no week.
 |---|---|---|
 | **A. Primitives** — tweak from a given input set | BIP-352's `send_and_receive_test_vectors.json` | Yes — it is the specification |
 | **B. Canonical set** — which transactions, in what order | **Nothing. No vectors exist** | — |
-| **C. Real-chain agreement** — us against blindbit-oracle over N blocks | Week-1 harness (§6.6) | No — shared gobip352 |
+| **C. Real-chain agreement** — us against blindbit-oracle over N blocks | Week-1 harness (§6.6) | No — shared `go-bip352` (§6.4) |
 
 Layer A is someone else's test, but it is the only independent check we have on our
 dependency, so we run it. Layer C catches wrapper bugs but not primitive bugs, and it is

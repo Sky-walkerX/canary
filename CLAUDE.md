@@ -151,6 +151,50 @@ In the doc now, at §8. The decisions worth not relitigating:
 - **Regtest is the fallback, not the plan** — "this ran on a public network" is worth
   real points and a judge cannot check it themselves.
 
+## Implementation plans — written 2026-09-08
+
+Spec approved by the user on 2026-09-08. `superpowers:writing-plans` produced
+**three** plans, split along §6.5's ownership lines, in `docs/superpowers/plans/`:
+
+| Plan | Owner | Weeks | Tasks |
+|---|---|---|---|
+| `2026-09-08-canary-protocol-core.md` | Naman | 1–2 | 16 — `canonical`, `commit`, `policy`, `feed`, `wire`, vectors |
+| `2026-09-08-canary-indexer-fork.md` | Dev B | 1–3 | 8 — blindbit-oracle fork: commit, publish, receipts, `--omit-txid` |
+| `2026-09-08-canary-sidecar.md` | Dev C (+ Naman on `evidence`/`tripwire`) | 2–3 | 9 — `headers`, `ladder`, coverage, proxy, CLI |
+
+**The protocol core gates the other two.** Neither can start before its Task 1
+lands, which is exactly why §6.6 puts the interface freeze on day 2.
+
+### Verified against the real packages, not against documentation
+
+Before writing a line of the plans, the external APIs were fetched and run:
+
+- **`bip352.TaggedHash` is a genuine BIP-340 tagged hash**, checked against
+  `SHA256(SHA256(tag) ‖ SHA256(tag) ‖ msg)`. §3.2's entire construction rests on
+  this, so it was tested rather than assumed.
+- **`ExtractPubKey` returns 33 bytes for P2WPKH/P2PKH/P2SH and 32 x-only bytes
+  for P2TR**, and signals failure with `TypeUTXO == Unknown`, not an error. The
+  caller must lift x-only keys to 33 bytes with an `0x02` prefix before summing.
+- **The tweak chain is** `ExtractEligibleVins` → `ExtractPubKey` per vin → lift →
+  `SumPublicKeys` → `ComputeInputHash(eligible, sum)` → `TweakPubkey(sum, hash)`.
+  Argument order confirmed by running it.
+- `ExtractEligibleVins([])` returns `(empty, nil)`, **not** `ErrVinsEmpty`.
+- `Vin.Witness` is `[][]byte`, not `[][][]byte` (a docs summary got this wrong).
+- `NumsH` is exported, so §7.3's corners assert against the library's constant.
+- go-nostr: `Event{ID, PubKey string, CreatedAt, Kind int, Tags, Content, Sig}`,
+  `Sign(hexSecretKey)`, `Filter{Kinds, Authors, Tags TagMap, Since, Until}`.
+
+### Plan self-review — 2026-09-08 — 6 findings, all fixed
+
+| Finding | Fix |
+|---|---|
+| **`Position` was defined in the fork's `internal/server`, and the sidecar imported it.** Go forbids importing another module's `internal/` tree — this would have compiled in the fork and broken the moment Plan C built | Moved to the core as the **`wire` package** (Plan A Task 15). Both binaries import it; neither owns it |
+| **§2.5 step 5 and §4.3 had no task.** `Disputed` was a coverage state with no producer, and the union that defeats omission was unimplemented | Plan C **Task 9**: `CrossCheck` and `Union`, with tests that the union is never an intersection and is deterministic under Go's randomised map iteration |
+| **§7.3's corner vectors had no task**, and `genvectors` was a stub that exited 1 | Plan A **Task 16**: a real generator over Core's `/rest/spenttxouts`, plus the four corners. The NUMS-H pair is deliberately a pair — §7.3's expectation was inverted once already, and §7.6 ships these upstream |
+| **`RootFromLeafHashes` was bolted onto Plan A from inside Plan C** | Moved into Plan A Task 4, written beside `Root` with an agreement test so the two paths cannot drift |
+| **`canary.EventLookup` was referenced and never defined**, and the signed event was published but never stored | Plan B Task 4 Step 4 stores the event before the relay fan-out, so a total relay outage still leaves the client a signature |
+| **§3.6's manual pinning had no task** | Plan C Task 8 Step 4: `canaryd` refuses to start on an unpinned indexer pubkey. No trust-on-first-use |
+
 ## Process we are following
 
 `superpowers:brainstorming`, architectural path: context → questions → approaches →

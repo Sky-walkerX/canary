@@ -6,7 +6,7 @@
 
 **Architecture:** Four packages with no dependencies on each other except `commit` needing `canonical.Leaf`. `canonical` is a pure function of a block and its prevouts. `commit` is tagged hashing and a Merkle tree. `policy` is a struct plus a parser for blindbit's `/info`. `feed` maps a commitment onto a signed Nostr event and back. Nothing in this plan opens a socket except `feed`'s relay client, and that is behind an interface so every other test runs offline.
 
-**Tech Stack:** Go 1.24+, `github.com/setavenger/go-bip352` v0.1.8 (BIP-352 primitives), `github.com/btcsuite/btcd` (block and transaction parsing), `github.com/nbd-wtf/go-nostr` (events and relays).
+**Tech Stack:** Go 1.24.1+, `github.com/setavenger/go-bip352` v0.1.8 (BIP-352 primitives), `github.com/btcsuite/btcd` **v0.25.0** (block and transaction parsing), `github.com/nbd-wtf/go-nostr` v0.52.3 (events and relays).
 
 **Spec:** [`docs/design/2026-09-06-canary-design.md`](../../design/2026-09-06-canary-design.md) — read §2, §3, §6.3 and §7 before starting. This plan argues from that document and cites it by section throughout.
 
@@ -16,7 +16,9 @@
 
 Every task's requirements implicitly include this section. Values are copied verbatim from the spec; do not paraphrase them into code.
 
-- **Module path:** `github.com/Sky-walkerX/canary`. **Go directive:** `go 1.24` — blindbit-oracle requires 1.24.1+, and the indexer fork shares these packages.
+- **Module path:** `github.com/Sky-walkerX/canary`. **Go directive:** `go 1.24.1` — blindbit-oracle requires 1.24.1+, and the indexer fork shares these packages. The patch level is not decoration: `go-nostr` v0.52.3 declares `go 1.24.1`, so a bare `go 1.24` fails to build.
+- **btcd is pinned to v0.25.0, and the pin is load-bearing.** v0.26.0 moved `wire`, `chaincfg` and `txscript` out of the root module into separate `/v2` modules, so on v0.26.x every `github.com/btcsuite/btcd/wire` import in this plan fails to resolve. `go-bip352` also imports the root-module `chaincfg` and cannot resolve against v0.26.x at all. Never `go get github.com/btcsuite/btcd` without a version.
+- **btcec is pinned to v2.4.0** — the newest release that does not declare `go 1.25`, which would raise the floor above the line above. btcd v0.25.0 requires v2.3.5, so v2.4.0 satisfies the graph.
 - **BIP-352 library:** `github.com/setavenger/go-bip352` v0.1.8, imported as `bip352`. **NOT `github.com/setavenger/gobip352`** — that path is v0.1.4 and does not export `ExtractEligibleVins` or `ExtractPubKey` (§6.4). Task 1 installs a guard test against this.
 - **Tagged-hash tags, exact strings:** `canary/leaf/v1`, `canary/node/v1`, `canary/root/v1`. `bip352.TaggedHash` is a verified BIP-340 tagged hash and is the only hash constructor used.
 - **Leaf preimage:** `txid ‖ tweak` = 32 + 33 bytes. `txid` is **internal byte order**. `tweak` is 33-byte compressed SEC (§3.2).
@@ -75,15 +77,32 @@ Files that change together live together: the byte-order boundary lives beside t
 cd /Users/skywalker/Coding/Dev/Hackathons/BOSS/canary
 go mod init github.com/Sky-walkerX/canary
 go get github.com/setavenger/go-bip352@v0.1.8
-go get github.com/btcsuite/btcd
+go get github.com/btcsuite/btcd@v0.25.0
+go get github.com/btcsuite/btcd/btcec/v2@v2.4.0
 go get github.com/btcsuite/btcd/chaincfg/chainhash
 go get github.com/nbd-wtf/go-nostr
-go mod tidy
 ```
+
+Then set the directive by hand — `go mod init` writes whatever toolchain is
+installed locally, which on a 1.26 machine is not the floor this module promises:
+
+```bash
+# go.mod must read exactly: go 1.24.1
+# Delete any `toolchain` line go get adds. CI pins go-version 1.24; a toolchain
+# line makes that runner download a different Go anyway, defeating the pin.
+```
+
+**Do not run `go mod tidy` yet.** Tidy prunes requirements nothing imports, and at
+this point nothing imports anything — it would delete all four requires, including
+the `go-bip352` line Step 3's guard test is about to assert. Tidy once Step 4's
+stubs exist; Step 2's guard test is what keeps `go-bip352` in the graph until
+Task 2 imports it for the leaf hash.
 
 - [ ] **Step 2: Write the guard test that fails on the wrong BIP-352 library**
 
 This test exists because the spec originally named the wrong import path, and the wrong path compiles right up until you reach for eligibility. `go.mod` is read as data so the test cannot be satisfied by an unused import.
+
+It has a second half. The file also references `ExtractEligibleVins` and `ExtractPubKey` directly, the two symbols the old `gobip352` module does not export. That makes a swapped module a compile error rather than a quiet loss of the eligibility layer, and it gives the dependency a real edge in the module graph so `go mod tidy` cannot prune the requirement the text assertion checks for.
 
 ```go
 // deps_guard_test.go
@@ -93,6 +112,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	bip352 "github.com/setavenger/go-bip352"
 )
 
 func TestUsesRenamedBIP352Library(t *testing.T) {
@@ -113,6 +134,25 @@ func TestUsesRenamedBIP352Library(t *testing.T) {
 		if len(f) > 0 && f[0] == "github.com/setavenger/gobip352" {
 			t.Error("go.mod requires the OLD gobip352 path; it lacks ExtractEligibleVins (§6.4)")
 		}
+	}
+}
+
+// The check above reads go.mod as data, so an unused import cannot satisfy it.
+// These two references are the complementary half: the old gobip352 path exports
+// neither symbol, so aiming the module at it fails to compile here instead of
+// silently deleting the eligibility layer (§6.4). They also give the dependency a
+// real edge in the module graph before Task 2 imports it for the leaf hash, so
+// `go mod tidy` cannot prune the very requirement the test above asserts.
+var (
+	_ = bip352.ExtractEligibleVins
+	_ = bip352.ExtractPubKey
+)
+
+func TestNumsHIsThirtyTwoBytes(t *testing.T) {
+	// §2.2 excludes script-path spends whose internal key is H. The exclusion is
+	// only meaningful if the pinned library's H is the x-only 32-byte form.
+	if len(bip352.NumsH) != 32 {
+		t.Errorf("NumsH must be the 32-byte x-only NUMS point, got %d bytes", len(bip352.NumsH))
 	}
 }
 ```

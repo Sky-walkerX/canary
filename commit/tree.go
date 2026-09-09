@@ -45,3 +45,24 @@ func merkleRoot(leaves []canonical.Leaf) [32]byte {
 	top := ls[len(ls)-1]
 	return top[0]
 }
+
+// merkleRootFromHashes is merkleRoot starting from leaf hashes. Same promotion
+// rule, same empty-set convention.
+func merkleRootFromHashes(cur [][32]byte) [32]byte {
+	if len(cur) == 0 {
+		return [32]byte{}
+	}
+	level := make([][32]byte, len(cur))
+	copy(level, cur)
+	for len(level) > 1 {
+		next := make([][32]byte, 0, (len(level)+1)/2)
+		for i := 0; i+1 < len(level); i += 2 {
+			next = append(next, nodeHash(level[i], level[i+1]))
+		}
+		if len(level)%2 == 1 {
+			next = append(next, level[len(level)-1]) // promotion
+		}
+		level = next
+	}
+	return level[0]
+}

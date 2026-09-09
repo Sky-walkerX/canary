@@ -16,11 +16,6 @@ type Proof struct {
 
 var errNotImplemented = errors.New("commit: not implemented")
 
-// Root computes the commitment root over leaves for the given block. §3.2.
-func Root(net canonical.Network, blockHash [32]byte, leaves []canonical.Leaf) [32]byte {
-	return [32]byte{}
-}
-
 // Prove builds an inclusion proof for position i.
 func Prove(leaves []canonical.Leaf, i uint32) (Proof, error) {
 	return Proof{}, errNotImplemented

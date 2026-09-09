@@ -834,28 +834,42 @@ func merkleRootFromHashes(cur [][32]byte) [32]byte {
 }
 ```
 
-```go
-// commit/root.go — addition
-//
-// RootFromLeafHashes is Root for a caller holding leaf hashes rather than
-// leaves. §2.5's comparison needs it: a gap filled from a retained hash is
-// verifiable without ever recovering the leaf.
-func RootFromLeafHashes(net canonical.Network, blockHash [32]byte, leafHashes [][32]byte) [32]byte {
-	inner := merkleRootFromHashes(leafHashes)
+Do not write the 72-byte preimage out a second time. Factor it, so the two
+entry points differ only in how they reach `inner`:
 
+```go
+// commit/root.go — restructured
+//
+// rootFromInner builds §3.2's outer preimage. Root and RootFromLeafHashes both
+// go through it: the agreement test below would catch the two drifting apart,
+// but sharing the construction means they cannot drift in the first place.
+func rootFromInner(net canonical.Network, blockHash [32]byte, n int, inner [32]byte) [32]byte {
 	buf := make([]byte, 0, 72)
 	var netBuf [4]byte
 	binary.LittleEndian.PutUint32(netBuf[:], uint32(net))
 	buf = append(buf, netBuf[:]...)
-	buf = append(buf, blockHash[:]...)
+	buf = append(buf, blockHash[:]...) // INTERNAL byte order
 	var nBuf [4]byte
-	binary.LittleEndian.PutUint32(nBuf[:], uint32(len(leafHashes)))
+	binary.LittleEndian.PutUint32(nBuf[:], uint32(n))
 	buf = append(buf, nBuf[:]...)
 	buf = append(buf, inner[:]...)
-
 	return bip352.TaggedHash(tagRoot, buf)
 }
+
+// Root computes the commitment root over a block's canonical leaves. §3.2.
+func Root(net canonical.Network, blockHash [32]byte, leaves []canonical.Leaf) [32]byte {
+	return rootFromInner(net, blockHash, len(leaves), merkleRoot(leaves))
+}
+
+// RootFromLeafHashes is Root for a caller holding leaf hashes rather than
+// leaves. §2.5's comparison needs it: a gap filled from a retained hash is
+// verifiable without ever recovering the leaf.
+func RootFromLeafHashes(net canonical.Network, blockHash [32]byte, leafHashes [][32]byte) [32]byte {
+	return rootFromInner(net, blockHash, len(leafHashes), merkleRootFromHashes(leafHashes))
+}
 ```
+
+Both exported signatures are unchanged from §6.3; `rootFromInner` is private.
 
 Add the agreement test, which is the only thing stopping the two paths drifting:
 

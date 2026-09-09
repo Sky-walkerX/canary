@@ -1418,7 +1418,12 @@ git commit -m "feat(canonical): vin adapter and the single txid byte-order bound
 
 **The four rules, from §2.2.** A transaction is included iff it has at least one BIP-341 taproot output *without* the optional unspent clause; at least one input from *Inputs For Shared Secret Derivation*; no input spending a SegWit v>1 output; and `A_sum` not the point at infinity with `input_hash` a valid scalar.
 
-**Verified library behaviour, do not re-derive:** `ExtractEligibleVins` returns a deep copy and sets the `Taproot` flag; on an empty slice it returns `(empty, nil)`, not `ErrVinsEmpty`. `ExtractPubKey` returns **33 bytes for P2WPKH/P2PKH/P2SH** and **32 bytes (x-only) for P2TR**, and signals failure by returning `TypeUTXO == Unknown` rather than an error. So x-only keys must be lifted to 33 bytes with an `0x02` prefix before summing.
+**Verified library behaviour, do not re-derive.** Read against v0.1.8's source, not its docs:
+
+- `ExtractEligibleVins` **does not deep-copy.** It appends the caller's own `*Vin` pointers and sets `Taproot` on them in place. Build the vins fresh per transaction and this is harmless; reuse a slice across calls and it is not.
+- `ExtractEligibleVins` **never returns an error** in v0.1.8 — it always returns `(vins, nil)`, so `ErrNoEligibleVins` and `ErrVinsEmpty` exist but are unreachable from it. `len(eligibleVins) == 0` is the real "no eligible inputs" signal. Handle the error branch anyway, as a verdict rather than a failure, so a future version does not turn a verdict into a crash.
+- `ExtractPubKey` returns **33 bytes for P2WPKH/P2PKH/P2SH** and **32 bytes (x-only) for P2TR**, and signals failure by returning `TypeUTXO == Unknown` rather than an error. So x-only keys must be lifted to 33 bytes with an `0x02` prefix before summing.
+- **`ExtractPubKey` panics on an empty witness.** The P2WPKH and P2SH-P2WPKH paths read `vin.Witness[len(vin.Witness)-1]` with no length check, giving `index out of range [-1]`. The P2TR path guards (`len(witnessStack) >= 1`) and the P2PKH path reads only the scriptSig, so only those two shapes are affected. Confirmed by running it. A block and its prevouts come from a source §1.2 treats as hostile, so this is reachable input: filter such vins out before calling in. Dropping them is not a behaviour change, because a witness-spending prevout with no witness has no extractable key and would return `Unknown` from a library that checked.
 
 - [ ] **Step 1: Write the failing test**
 

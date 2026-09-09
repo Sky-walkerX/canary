@@ -8,11 +8,17 @@ named server.**
 
 ## Status
 
-**Design phase.** No implementation yet. All eight sections of the design doc are
-settled — threat model, canonical sets, commitment format, verification ladder, tripwire,
-components, testing, demo — and the fifteen defects a spec review raised on 7 September
-are closed. Next is the implementation plan. See
+**Design phase. No code yet.** All eight sections of the design doc are settled — threat
+model, canonical sets, commitment format, verification ladder, tripwire, components,
+testing, demo — and all 22 defects against it are closed: fifteen raised by a spec review
+on 7 September, seven more by a self-review on 8 September. See
 [`docs/design/2026-09-06-canary-design.md`](docs/design/2026-09-06-canary-design.md).
+
+Three implementation plans follow it, split along the design's ownership boundaries —
+[protocol core](docs/superpowers/plans/2026-09-08-canary-protocol-core.md) (16 tasks),
+[indexer fork](docs/superpowers/plans/2026-09-08-canary-indexer-fork.md) (8), and
+[sidecar](docs/superpowers/plans/2026-09-08-canary-sidecar.md) (9). Each is test-first
+down to the step. Execution is next.
 
 Built for [BOSS Battle](https://bitshala.org) (Bitshala), 7 Sep – 5 Oct 2026,
 Cypherpunk / Privacy track.
@@ -148,8 +154,9 @@ problem. CT answers it with gossip; Canary answers it with a public relay.
 ## Repository layout
 
 ```
-docs/design/      design documents, one per dated revision
-docs/research/    prior-art findings with citations
+docs/design/               design documents, one per dated revision
+docs/research/             prior-art findings with citations
+docs/superpowers/plans/    implementation plans, one per subsystem
 ```
 
 ## License

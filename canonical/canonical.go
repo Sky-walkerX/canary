@@ -3,7 +3,7 @@
 package canonical
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
 )
@@ -23,9 +23,28 @@ type PrevoutSource interface {
 	Prevout(op wire.OutPoint) (*wire.TxOut, error)
 }
 
-var errNotImplemented = errors.New("canonical: not implemented")
-
-// Set returns the canonical leaves of blk in transaction-index order. §2.2.
+// Set returns the canonical leaves of blk in transaction-index order.
+//
+// Pure: no chain state after the block, no thresholds, no configuration. That
+// is what makes it the thing servers commit to and clients recompute (§2.2).
+//
+// Ordering is block position, not lexicographic. Position i is a specific
+// transaction, which is what attribution needs (§2.2).
 func Set(net Network, blk *wire.MsgBlock, pv PrevoutSource) ([]Leaf, error) {
-	return nil, errNotImplemented
+	leaves := make([]Leaf, 0, len(blk.Transactions))
+
+	for i, tx := range blk.Transactions {
+		tweak, eligible, err := tweakForTx(tx, pv)
+		if err != nil {
+			return nil, fmt.Errorf("tx %d (%s): %w", i, tx.TxHash(), err)
+		}
+		if !eligible {
+			continue
+		}
+		leaves = append(leaves, Leaf{
+			TxID:  txidInternal(tx.TxHash()), // INTERNAL byte order (§3.2)
+			Tweak: tweak,
+		})
+	}
+	return leaves, nil
 }

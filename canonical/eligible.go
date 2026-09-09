@@ -1,6 +1,7 @@
 package canonical
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
@@ -141,15 +142,21 @@ func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool
 		return tweak, false, nil
 	}
 
-	// Rule 4a: A_sum must not be the point at infinity. SumPublicKeys errors
-	// when the sum does not lie on the curve, which is that condition.
-	sum, err := bip352.SumPublicKeys(keys)
+	// Rule 4a: A_sum must not be the point at infinity.
+	sum, err := sumPublicKeys(keys)
+	if errors.Is(err, errPointAtInfinity) {
+		return tweak, false, nil // a verdict, not a failure
+	}
 	if err != nil {
-		return tweak, false, nil
+		return tweak, false, fmt.Errorf("sum input public keys: %w", err)
 	}
 
-	// Rule 4b: input_hash must be a valid scalar.
-	inputHash, err := bip352.ComputeInputHash(eligibleVins, sum)
+	// Rule 4b: input_hash must be a valid scalar. outpoint_L is the smallest
+	// outpoint "used in the transaction" (BIP-352), so this takes EVERY input,
+	// not just the ones contributing a key. Passing only the eligible vins
+	// silently changes the tweak on any transaction with a mixed input set, and
+	// two upstream vectors catch exactly that.
+	inputHash, err := bip352.ComputeInputHash(vins, sum)
 	if err != nil {
 		return tweak, false, nil
 	}

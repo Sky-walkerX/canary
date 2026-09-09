@@ -1423,6 +1423,9 @@ git commit -m "feat(canonical): vin adapter and the single txid byte-order bound
 - `ExtractEligibleVins` **does not deep-copy.** It appends the caller's own `*Vin` pointers and sets `Taproot` on them in place. Build the vins fresh per transaction and this is harmless; reuse a slice across calls and it is not.
 - `ExtractEligibleVins` **never returns an error** in v0.1.8 — it always returns `(vins, nil)`, so `ErrNoEligibleVins` and `ErrVinsEmpty` exist but are unreachable from it. `len(eligibleVins) == 0` is the real "no eligible inputs" signal. Handle the error branch anyway, as a verdict rather than a failure, so a future version does not turn a verdict into a crash.
 - `ExtractPubKey` returns **33 bytes for P2WPKH/P2PKH/P2SH** and **32 bytes (x-only) for P2TR**, and signals failure by returning `TypeUTXO == Unknown` rather than an error. So x-only keys must be lifted to 33 bytes with an `0x02` prefix before summing.
+- **`SumPublicKeys` cannot represent a running sum that passes through infinity.** It folds left through 33-byte serialisations, so `P + (-P) + P` fails even though the final sum is `P` and the transaction is eligible. BIP-352 ships the vector "Input keys intermediate sum is zero but final sum is non-zero" for precisely this. Rule 4a is about the FINAL sum, so accumulate in Jacobian coordinates (`btcec.JacobianPoint` + `AddNonConst`, whose zero value is infinity) and check `Z.IsZero()` once at the end. Not just a conformance nicety: a sender can arrange it by spending `P` and `-P`, which would let anyone mint a transaction Canary scores differently from every honest indexer — a false accusation on demand.
+- **`ComputeInputHash` must be given EVERY input of the transaction, not just the eligible ones.** BIP-352 defines `outpoint_L` as the smallest outpoint *used in the transaction*, and `ComputeInputHash` derives it from the slice you pass. Passing `eligibleVins` silently changes the tweak on any transaction with a mixed input set — a legacy uncompressed key beside a modern one is enough. Two upstream vectors catch it and nothing else does: of 26 comparable vectors, 24 agree either way, 2 require all-inputs, and **none** require eligible-only.
+- **`ParseWitnessScript` reads `data[0]` with no length check**, so an empty witness panics. 43 of the 62 vins in the upstream vector file have one.
 - **`ExtractPubKey` panics on an empty witness.** The P2WPKH and P2SH-P2WPKH paths read `vin.Witness[len(vin.Witness)-1]` with no length check, giving `index out of range [-1]`. The P2TR path guards (`len(witnessStack) >= 1`) and the P2PKH path reads only the scriptSig, so only those two shapes are affected. Confirmed by running it. A block and its prevouts come from a source §1.2 treats as hostile, so this is reachable input: filter such vins out before calling in. Dropping them is not a behaviour change, because a witness-spending prevout with no witness has no extractable key and would return `Unknown` from a library that checked.
 
 - [ ] **Step 1: Write the failing test**
@@ -1682,15 +1685,20 @@ func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool
 		return tweak, false, nil
 	}
 
-	// Rule 4a: A_sum must not be the point at infinity. SumPublicKeys errors
-	// when the sum does not lie on the curve, which is that condition.
-	sum, err := bip352.SumPublicKeys(keys)
+	// Rule 4a: A_sum must not be the point at infinity. Uses our own
+	// sumPublicKeys, not the library's — see the note above.
+	sum, err := sumPublicKeys(keys)
+	if errors.Is(err, errPointAtInfinity) {
+		return tweak, false, nil // a verdict, not a failure
+	}
 	if err != nil {
-		return tweak, false, nil
+		return tweak, false, fmt.Errorf("sum input public keys: %w", err)
 	}
 
-	// Rule 4b: input_hash must be a valid scalar.
-	inputHash, err := bip352.ComputeInputHash(eligibleVins, sum)
+	// Rule 4b: input_hash must be a valid scalar. outpoint_L is the smallest
+	// outpoint "used in the transaction" (BIP-352), so this takes EVERY input,
+	// not just the ones contributing a key.
+	inputHash, err := bip352.ComputeInputHash(vins, sum)
 	if err != nil {
 		return tweak, false, nil
 	}
@@ -1935,7 +1943,15 @@ sha256sum testdata/bip352/send_and_receive_test_vectors.json > testdata/bip352/S
 
 - [ ] **Step 2: Write the conformance test**
 
-The vectors are input-level, so they exercise the primitives rather than `Set`. That is the point: layer C compares us against blindbit-oracle, which shares our library, so this is the only check on the library itself (§6.4, §7.1).
+Layer C compares us against blindbit-oracle, which shares our library, so this is the only check on the library itself (§6.4, §7.1). Make it earn that.
+
+Drive `tweakForTx` end-to-end rather than re-running the primitives: rebuild a `wire.MsgTx` and its prevouts from each vector's `vin` list and add one taproot output so rule 1 is satisfied. That exercises the byte-order boundary and the eligibility rules too, and the vector txid being display order while `wire.OutPoint` is internal makes Task 7's conversion a round trip under real data.
+
+Assert against the vectors' own published values, not merely that nothing errored:
+
+- `receiving[].expected.tweak` is `input_hash · A_sum` — exactly the 33 bytes §3.2 puts in a leaf. 27 cases carry one.
+- `receiving[].expected.input_pub_key_sum` pins `A_sum` on its own, which catches a wrong x-only lift that a tweak comparison could mask.
+- The 2 cases with a null tweak are the negatives, and they are worth as much as the positives: "No valid inputs" is rule 2 and "Input keys sum up to zero / point at infinity" is rule 4a, both from the BIP rather than from our own reasoning. Assert `eligible == false` for them, and fail the whole test if either the positive or the negative count is zero.
 
 ```go
 // canonical/bip352_vectors_test.go

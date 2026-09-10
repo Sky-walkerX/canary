@@ -1,0 +1,12 @@
+{
+  "name": "empty-block",
+  "network": "regtest",
+  "block": "010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000096e88ffff7f20020000000102000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0151000000000100f2052a01000000015100000000",
+  "prevouts": {},
+  "expected": {
+    "n": 0,
+    "leaves": [],
+    "root": "85ecde5cc19911b0c183f2c6f9b1bb575e13c0c2554638fe5125ae1a3be0aea4"
+  },
+  "rationale": "A block with only a coinbase. n=0 is the common case on regtest, not a corner (§3.2), and merkle_root(∅) is 32 zero bytes, so this vector pins the empty-set rule and the outer root preimage at the same time."
+}

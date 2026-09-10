@@ -27,6 +27,17 @@ func testCommitment() Commitment {
 	return c
 }
 
+func mustAuthor(t *testing.T, pubHex string) [32]byte {
+	t.Helper()
+	b, err := hex.DecodeString(pubHex)
+	if err != nil || len(b) != 32 {
+		t.Fatalf("bad pubkey %q", pubHex)
+	}
+	var out [32]byte
+	copy(out[:], b)
+	return out
+}
+
 func testKey(t *testing.T) ([32]byte, string) {
 	t.Helper()
 	skHex := nostr.GeneratePrivateKey()

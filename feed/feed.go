@@ -29,6 +29,16 @@ type querier interface {
 	QuerySync(ctx context.Context, filter nostr.Filter) ([]*nostr.Event, error)
 }
 
+// subscriber is the slice of a relay connection Subscribe depends on. It is
+// deliberately an interface (not the concrete *nostr.Relay type Subscribe
+// used to assert against) so tests can drive Subscribe's real fan-out/fan-in
+// logic with a fake, without a socket. The signature — opts included — must
+// match *nostr.Relay's Subscribe method exactly, or *nostr.Relay stops
+// satisfying it.
+type subscriber interface {
+	Subscribe(ctx context.Context, filters nostr.Filters, opts ...nostr.SubscriptionOption) (*nostr.Subscription, error)
+}
+
 type relayFeed struct {
 	queriers []querier
 }
@@ -54,15 +64,19 @@ func (f *relayFeed) Get(ctx context.Context, author [32]byte, blockHashes [][32]
 	authorHex := hex.EncodeToString(author[:])
 
 	var out []Commitment
+	var attempts, succeeded int
 	for start := 0; start < len(blockHashes); start += MaxHashesPerFilter {
 		end := start + MaxHashesPerFilter
 		if end > len(blockHashes) {
 			end = len(blockHashes)
 		}
 
-		values := make([]string, 0, end-start)
-		for _, bh := range blockHashes[start:end] {
+		chunk := blockHashes[start:end]
+		values := make([]string, 0, len(chunk))
+		wantHash := make(map[[32]byte]bool, len(chunk))
+		for _, bh := range chunk {
 			values = append(values, displayHex(bh))
+			wantHash[bh] = true
 		}
 
 		filter := nostr.Filter{
@@ -73,26 +87,48 @@ func (f *relayFeed) Get(ctx context.Context, author [32]byte, blockHashes [][32]
 		}
 
 		for _, q := range f.queriers {
+			attempts++
 			evs, err := q.QuerySync(ctx, filter)
 			if err != nil {
 				continue // one relay failing is not the query failing
 			}
+			succeeded++
 			for _, ev := range evs {
 				c, err := FromEvent(*ev)
 				if err != nil {
 					continue // unverifiable events are dropped, never returned
 				}
+				// NIP-01 filters are advisory: a relay is not obligated to
+				// honor Authors/Tags, and a malicious or buggy one can
+				// legally return a genuine, validly-signed event from an
+				// unrequested author or for an unrequested block. Since
+				// attribution to a specific named indexer is the whole
+				// point, an off-target event is dropped silently here —
+				// noise to filter, not an error.
+				if c.Author != author {
+					continue
+				}
+				if !wantHash[c.BlockHash] {
+					continue
+				}
 				out = append(out, c)
 			}
 		}
+	}
+
+	if attempts > 0 && succeeded == 0 {
+		return nil, fmt.Errorf("feed: no relay could be queried (%d relays, %d attempts, all failed)",
+			len(f.queriers), attempts)
 	}
 	return out, nil
 }
 
 func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan Commitment, error) {
 	hexAuthors := make([]string, 0, len(authors))
+	wantAuthor := make(map[[32]byte]bool, len(authors))
 	for _, a := range authors {
 		hexAuthors = append(hexAuthors, hex.EncodeToString(a[:]))
+		wantAuthor[a] = true
 	}
 
 	filter := nostr.Filter{
@@ -107,7 +143,7 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 	// which block it cares about — that is the privacy argument for using a
 	// relay rather than N direct connections (§3.4).
 	for _, q := range f.queriers {
-		r, ok := q.(*nostr.Relay)
+		r, ok := q.(subscriber)
 		if !ok {
 			continue
 		}
@@ -121,6 +157,12 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 			for ev := range sub.Events {
 				c, err := FromEvent(*ev)
 				if err != nil {
+					continue
+				}
+				// See Get's identical guard: NIP-01 filters are advisory
+				// only, so a relay can legally forward a genuine event
+				// from an unrequested author. Drop it silently.
+				if !wantAuthor[c.Author] {
 					continue
 				}
 				select {

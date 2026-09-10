@@ -127,6 +127,20 @@ func (v Vector) Run() error {
 		return fmt.Errorf("n = %d, want %d", len(leaves), v.Expected.N)
 	}
 
+	if len(leaves) != len(v.Expected.Leaves) {
+		return fmt.Errorf("leaves count = %d, want %d", len(leaves), len(v.Expected.Leaves))
+	}
+	for i, l := range leaves {
+		var disp [32]byte
+		for j := 0; j < 32; j++ {
+			disp[j] = l.TxID[31-j] // internal -> display order
+		}
+		got := hex.EncodeToString(disp[:]) + ":" + hex.EncodeToString(l.Tweak[:])
+		if got != v.Expected.Leaves[i] {
+			return fmt.Errorf("leaf %d = %s, want %s", i, got, v.Expected.Leaves[i])
+		}
+	}
+
 	blockHash := blk.BlockHash()
 	var bh [32]byte
 	copy(bh[:], blockHash[:]) // chainhash is already internal order

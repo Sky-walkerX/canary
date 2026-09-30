@@ -1,4 +1,4 @@
-// Package commit builds the Merkle commitment over a canonical set. Spec §3.2.
+// Package commit builds the Merkle commitment over a canonical set.
 package commit
 
 import (
@@ -10,7 +10,7 @@ import (
 // Proof is an inclusion proof for one position in the canonical order.
 type Proof struct {
 	Index    uint32     // position in canonical order
-	N        uint32     // set size — bound into the root, so a proof cannot be replayed
+	N        uint32     // set size, bound into the root so a proof cannot be replayed at another length
 	Siblings [][32]byte // bottom-up
 }
 
@@ -48,9 +48,46 @@ func Prove(leaves []canonical.Leaf, i uint32) (Proof, error) {
 	return p, nil
 }
 
+// ProveFromLeafHashes builds the same proof as Prove from leaf hashes in
+// canonical order. A client needs it when a server sent some positions as
+// hashes only. The client then holds hashes, not leaves, and must still prove
+// that a full entry it received is in the root.
+func ProveFromLeafHashes(hashes [][32]byte, i uint32) (Proof, error) {
+	if len(hashes) == 0 {
+		return Proof{}, ErrEmptySet
+	}
+	if int(i) >= len(hashes) {
+		return Proof{}, ErrIndexOutOfRange
+	}
+
+	n := len(hashes)
+	p := Proof{Index: i, N: uint32(n)}
+
+	// Each sibling is rebuilt from a slice of hashes, so no tree level is
+	// stored. At level L, where span = 2^L, node j covers the half-open leaf
+	// range [j*span, min((j+1)*span, n)). Pairing starts from the left at
+	// every level. A slice that starts at a multiple of span therefore pairs
+	// its nodes exactly as the full tree does, so merkleRootFromHashes of that
+	// slice is the node. The siblings cover disjoint ranges that exclude leaf
+	// i, so one proof costs fewer than n node hashes.
+	idx, width := int(i), n
+	for span := 1; width > 1; span *= 2 {
+		sib := idx ^ 1
+		if sib < width {
+			lo := sib * span
+			hi := min(lo+span, n)
+			p.Siblings = append(p.Siblings, merkleRootFromHashes(hashes[lo:hi]))
+		}
+		// sib >= width means this node is the unpaired last one. It moves up
+		// a level with no sibling, the same promotion rule Prove follows.
+		idx /= 2
+		width = (width + 1) / 2
+	}
+	return p, nil
+}
+
 // VerifyProof recomputes the root from leaf and p and compares. It needs no
-// leaf set, which is what makes the evidence artifact small enough to read
-// (§3.2, §4.7).
+// leaf set, which keeps an evidence file small enough to read.
 func VerifyProof(net canonical.Network, blockHash, root [32]byte, leaf canonical.Leaf, p Proof) bool {
 	if p.N == 0 || p.Index >= p.N {
 		return false

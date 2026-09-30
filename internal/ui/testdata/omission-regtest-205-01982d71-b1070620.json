@@ -1,0 +1,47 @@
+{
+  "format": "canary-evidence/1",
+  "claim": "omission",
+  "accused": "b1070620799e7da6bbc296ec7ea6aacf7f027317af796abf35f0c9c83710270d",
+  "network": { "name": "regtest", "magic": 3669344250 },
+  "block": {
+    "hash": "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8",
+    "height": 205
+  },
+  "commitment_event": {
+    "kind": 1352,
+    "id": "90d82e3fd8c4f1ea18c97c9a446672fcb3b81803c5a21675b2fdaa70a49086cc",
+    "pubkey": "b1070620799e7da6bbc296ec7ea6aacf7f027317af796abf35f0c9c83710270d",
+    "created_at": 1791016200,
+    "tags": [
+      ["b", "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8"],
+      ["height", "205"],
+      ["n", "3"],
+      ["network", "3669344250"],
+      ["policy_ref", "0000000000000000000000000000000000000000000000000000000000000000"],
+      ["root", "46f2d74791bf0922bed8b430d36e6a36020eb00513470bbdad6ef4f0988b4130"]
+    ],
+    "content": "46f2d74791bf0922bed8b430d36e6a36020eb00513470bbdad6ef4f0988b4130",
+    "sig": "eb2d283de022dcc647d6fcf8e1526a661c7afc903d937caac1df78c857bb64c8044968919b7e5f2f33c96daaa7df36cb07b7d183028ef7fa3878c2e8c06fc3c6"
+  },
+  "receipt": "01fabfb5da01b809dc22838a13852fcf3deead2c3427ba0781d87fab1789c3d9a7cfb364fbca0000000000000000d4000000d2311c5f151c5222bd9bcc59dbcc55fb7375ce61792dc71d6dd8691687c45b8fa1b3b064b0286290f4b87ac6915a523301f0b4977ea3b04d3663df60bcc707c9b3f5f6f98dddbd7080322b8e42a6384d00841fba8e69dc37687cd492830379bfedd2111778f28cb1ea58c0b1ec183ce7e4c8aeb1e1d34eb03f090df07139ed0b",
+  "served_base64": "AwAAAAF11Z42oeHMu9WkfxKbkjBHJoxYDWoJqdY8MIS9OXFmrgP5pb79DqHbuhXmzLo4P728dQoPY3aYoG+kfGgjBE4J6wMBP2kvgSMykXobx8r9AdXQKnvytMJbtPXXIRtnBhDA4LgDYlc6s+tuzMcwcWI8IR9Bs5K/Ke3Ln6vnqprd60u9ark=",
+  "missing": {
+    "txid": "01982d712503c4e22cd00be57b905bacf4d8bff0533c23c276c8b738da217c16",
+    "tweak": "02b84222b639a797cbacb1a5c7c3dd9fe766f59f51e823bb85cd446cb454ee3cb0"
+  },
+  "proof": {
+    "index": 1,
+    "n": 3,
+    "siblings": [
+      "93625b68eed841902dd2a682a9babbaa5f9fc073efb7214a28ca1ff3d4ef15d5",
+      "de81aca98a9968e424b988f581c6e1680bfbdde3533496786a1b3b008f87c2a9"
+    ]
+  },
+  "context": {
+    "server_label": "withholder",
+    "server_url": "http://127.0.0.1:8082",
+    "found_by": "other_server",
+    "written_by": "canary 0.1.0+abc1234",
+    "written_at": "2026-10-03T08:32:11Z"
+  }
+}

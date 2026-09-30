@@ -1,0 +1,74 @@
+{{define "content"}}{{with .Main}}
+<section class="verdict" aria-labelledby="verdict">
+  <h1 id="verdict" class="verdict-head">{{.Verdict.Headline}}</h1>
+  {{/* The badge shows glyph, word and colour together, and only when the
+       headline names one state. A mixed result gets no badge. */}}
+  {{with .VerdictState}}<p class="state-line">{{template "stateBadge" .}}</p>{{end}}
+  <p class="lede">{{.Verdict.Lede}}</p>
+  {{with .LowerBound}}<p class="lower-bound">{{.}}</p>{{end}}
+</section>
+
+<section class="section" aria-labelledby="coverage">
+  <div class="section-head">
+    <h2 id="coverage">Coverage</h2>
+    <a href="/blocks">Range table</a>
+  </div>
+  <figure class="strip-figure">{{template "coverageStrip" .Strip}}</figure>
+</section>
+
+<div class="split section">
+  <section aria-labelledby="by-state">
+    <h2 id="by-state">Blocks by state</h2>
+    <ul class="counts">
+      {{range .Counts}}<li class="count-row{{if .Zero}} is-zero{{end}}">
+        <div class="count-line">{{template "stateBadge" .State}}<span class="count-n">{{.Count}}</span></div>
+        <p class="count-meaning">{{.State.Meaning}}</p>
+        {{template "explain" .State}}
+      </li>{{end}}
+    </ul>
+  </section>
+  <section aria-labelledby="findings-h">
+    <div class="section-head">
+      <h2 id="findings-h">Findings</h2>
+      {{if .MoreFindings}}<a href="/findings">All {{.TotalFindings}} findings</a>{{end}}
+    </div>
+    {{if .Findings}}<ul class="finding-list">{{range .Findings}}{{template "findingItem" .}}{{end}}</ul>
+    {{else}}<p class="empty">{{.NoFindings}}</p>{{end}}
+  </section>
+</div>
+
+<section class="section" id="servers" aria-labelledby="servers-h">
+  <h2 id="servers-h">Servers</h2>
+  <p class="section-note">{{.ServersNote}}</p>
+  <div class="table-wrap table-stack" role="region" aria-label="Servers table" tabindex="0">
+    <table role="table" class="servers">
+      <thead role="rowgroup"><tr role="row">
+        <th scope="col" role="columnheader">Server</th><th scope="col" role="columnheader">Public key</th>
+        <th scope="col" role="columnheader">Signs records</th><th scope="col" role="columnheader">Signs receipts</th>
+        <th scope="col" role="columnheader">Answered</th><th scope="col" role="columnheader">Tip</th>
+        <th scope="col" role="columnheader">Declared policy</th><th scope="col" role="columnheader">Last error</th>
+      </tr></thead>
+      <tbody role="rowgroup">
+      {{range .Servers}}<tr role="row">
+        <th scope="row" role="rowheader" class="stack-head"><span class="server-name">{{.Label}}</span> <code class="server-url">{{.URL}}</code></th>
+        <td role="cell" data-label="Public key">{{with .Pubkey}}{{template "hashShort" .}}{{else}}{{.NoPubkey}}{{end}}</td>
+        <td role="cell" data-label="Signs records">{{.Records}}</td>
+        <td role="cell" data-label="Signs receipts">{{.Receipts}}</td>
+        <td role="cell" data-label="Answered">{{.Reachable}}</td>
+        <td role="cell" class="nowrap" data-label="Tip">{{with .Tip}}{{.}}{{else}}Unknown{{end}}</td>
+        <td role="cell" class="policy" data-label="Declared policy">{{with .Policy}}{{.}}{{else}}Not declared{{end}}</td>
+        <td role="cell" data-label="Last error">{{with .Error}}{{.}}{{else}}None{{end}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{{if .Payments}}
+<section class="section" aria-labelledby="payments-h">
+  <h2 id="payments-h">Payments you declared</h2>
+  <p class="section-note">{{.PaymentsNote}}</p>
+  {{template "paymentsTable" .Payments}}
+</section>
+{{end}}
+{{end}}{{end}}

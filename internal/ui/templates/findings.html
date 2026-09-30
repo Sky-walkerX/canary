@@ -1,0 +1,15 @@
+{{define "content"}}{{with .Main}}
+<div class="page-head">
+  <h1>Findings</h1>
+  <p class="lede">{{.Intro}}</p>
+</div>
+{{range .Groups}}
+<section class="section" aria-labelledby="g-{{.Kind}}">
+  <h2 id="g-{{.Kind}}">{{.Title}} ({{len .Rows}})</h2>
+  <ul class="finding-list">{{range .Rows}}{{template "findingItem" .}}{{end}}</ul>
+</section>
+{{else}}
+<p class="empty">{{.Empty}}</p>
+{{with .LowerBound}}<p class="lower-bound">{{.}}</p>{{end}}
+{{end}}
+{{end}}{{end}}

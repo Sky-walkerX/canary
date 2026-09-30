@@ -1,0 +1,65 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>{{.Title}}</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/atkinson-hyperlegible-next-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/ui.css">
+<script src="/assets/app.js"></script>
+</head>
+<body data-etag="{{.Chrome.ETag}}" data-build="{{.Chrome.Build}}" data-findings="{{.Chrome.Findings}}">
+{{.Chrome.Sprite}}
+<a class="skip-link" href="#main">Skip to content</a>
+{{with .Chrome.Watermark}}<aside class="watermark" aria-label="Sample data">{{.}}</aside>{{end}}
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="wordmark" href="/">Canary</a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a></li>
+        <li><a href="/blocks"{{if eq .Nav "blocks"}} aria-current="page"{{end}}>Blocks</a></li>
+        <li><a href="/findings"{{if eq .Nav "findings"}} aria-current="page"{{end}}>Findings{{if .Chrome.HasState}} ({{.Chrome.FindingsCount}}){{end}}</a></li>
+        <li><a href="/#servers">Servers</a></li>
+      </ul>
+    </nav>
+    {{with .Chrome.NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
+    <button type="button" class="btn theme-toggle" data-theme-toggle hidden
+      data-label-auto="Theme: automatic" data-label-light="Theme: light" data-label-dark="Theme: dark">
+      {{template "icon" "theme"}}<span data-theme-label>Theme: automatic</span>
+    </button>
+  </div>
+  {{if .Chrome.StatusLine}}<div class="wrap"><p class="status-line">{{.Chrome.StatusLine}}</p></div>{{end}}
+</header>
+{{with .Chrome.Stale}}
+<div class="wrap">
+  <div class="notice" role="note">
+    {{template "icon" "info"}}
+    <p><strong>{{.Title}}.</strong> {{.Body}} {{.Action}}</p>
+  </div>
+</div>
+{{end}}
+<main id="main" class="wrap" tabindex="-1">
+{{template "content" .}}
+</main>
+<footer class="site-footer">
+  <div class="wrap footer-row">
+    <p>{{.Chrome.Framing}}</p>
+    <p>This dashboard: canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}}). It makes no outside requests. <a class="ext" href="{{.Chrome.ReleaseNotes}}" rel="noreferrer">Release notes{{template "icon" "external"}}</a></p>
+  </div>
+  {{with .Chrome.Watermark}}<p class="watermark watermark-foot">{{.}}</p>{{end}}
+</footer>
+<div id="update-bar" class="update-bar" role="status" aria-live="polite"
+  data-msg-results="{{.Chrome.Bar.NewResults}}" data-msg-finding="{{.Chrome.Bar.NewFinding}}"
+  data-msg-findings="{{.Chrome.Bar.NewFindings}}" data-msg-updated="{{.Chrome.Bar.Updated}}"
+  data-msg-lost="{{.Chrome.Bar.Lost}}" data-msg-back="{{.Chrome.Bar.Back}}"
+  data-reload="{{.Chrome.Bar.Reload}}" data-dismiss="{{.Chrome.Bar.Dismiss}}"></div>
+<p class="sr-only" role="status" data-copy-status></p>
+</body>
+</html>
+{{end}}

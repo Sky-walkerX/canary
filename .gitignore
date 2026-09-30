@@ -17,6 +17,10 @@ blindbit.toml
 bitcoin.conf
 
 # Secrets — never commit
+# canary-indexer keeps its signing key at ~/.canary/indexer.key by default.
+# *.key covers the file anywhere; .canary/ covers the directory if a checkout
+# ever holds one.
+.canary/
 *.key
 *.pem
 .env

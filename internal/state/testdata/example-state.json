@@ -1,0 +1,112 @@
+{
+  "format": "canary-state/1",
+  "generated_at": "2026-10-03T08:32:11Z",
+  "canary": { "version": "0.1.0", "build": "abc1234" },
+  "network": { "name": "regtest", "magic": 3669344250 },
+  "chain_tip": {
+    "height": 212,
+    "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2",
+    "source": "core"
+  },
+  "checked": { "from": 0, "to": 212 },
+  "evidence_dir": "/home/you/.canary/evidence",
+  "servers": [
+    {
+      "label": "honest",
+      "url": "http://127.0.0.1:8081",
+      "pubkey": "b3f217a31dbfb8ed4d37b47c28ba531a50bb64426ecf66496eaaeaf5a48b3724",
+      "publishes_records": true,
+      "signs_receipts": true,
+      "reachable": true,
+      "tip": { "height": 212, "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2", "signed": true },
+      "policy": { "prunes_spent": false, "dust_threshold_sat": 0, "dust_configurable": false, "signed": false },
+      "error": null
+    },
+    {
+      "label": "withholder",
+      "url": "http://127.0.0.1:8082",
+      "pubkey": "b1070620799e7da6bbc296ec7ea6aacf7f027317af796abf35f0c9c83710270d",
+      "publishes_records": true,
+      "signs_receipts": true,
+      "reachable": true,
+      "tip": { "height": 212, "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2", "signed": true },
+      "policy": { "prunes_spent": false, "dust_threshold_sat": 0, "dust_configurable": false, "signed": false },
+      "error": null
+    }
+  ],
+  "coverage": [
+    { "from": 0, "to": 204, "state": "verified", "reason": "records_agree" },
+    { "from": 205, "to": 205, "state": "compromised", "reason": "absent_in_window" },
+    { "from": 206, "to": 212, "state": "verified", "reason": "records_agree" }
+  ],
+  "counts": {
+    "verified": 212,
+    "resolved": 0,
+    "unresolvable": 0,
+    "unverified": 0,
+    "disputed": 0,
+    "compromised": 1
+  },
+  "blocks": [
+    {
+      "height": 205,
+      "hash": "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8",
+      "state": "compromised",
+      "reason": "absent_in_window",
+      "servers": [
+        {
+          "label": "honest",
+          "state": "verified",
+          "reason": "records_agree",
+          "record_event_id": "2133b0fe6c4355c08b3fe29a4e796f7610e4e4a432e9e0ff35eece87cc34df19",
+          "n": 3,
+          "root": "46f2d74791bf0922bed8b430d36e6a36020eb00513470bbdad6ef4f0988b4130",
+          "positions": { "full": 3, "hash": 0, "absent": 0 },
+          "filled": 0,
+          "signed": true,
+          "tip": { "height": 212, "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2" }
+        },
+        {
+          "label": "withholder",
+          "state": "compromised",
+          "reason": "absent_in_window",
+          "record_event_id": "90d82e3fd8c4f1ea18c97c9a446672fcb3b81803c5a21675b2fdaa70a49086cc",
+          "n": 3,
+          "root": "46f2d74791bf0922bed8b430d36e6a36020eb00513470bbdad6ef4f0988b4130",
+          "positions": { "full": 2, "hash": 0, "absent": 1 },
+          "filled": 1,
+          "signed": true,
+          "tip": { "height": 212, "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2" }
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "827a8d3f502e",
+      "kind": "withheld",
+      "reason": "absent_in_window",
+      "servers": [
+        { "label": "withholder", "pubkey": "b1070620799e7da6bbc296ec7ea6aacf7f027317af796abf35f0c9c83710270d" }
+      ],
+      "block": { "height": 205, "hash": "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8" },
+      "position": 1,
+      "txid": "01982d712503c4e22cd00be57b905bacf4d8bff0533c23c276c8b738da217c16",
+      "evidence": "omission-regtest-205-01982d71-b1070620.json",
+      "provable": true,
+      "first_seen": "2026-10-03T08:32:11Z",
+      "last_seen": "2026-10-03T08:32:11Z"
+    }
+  ],
+  "expected_payments": [
+    {
+      "txid": "01982d712503c4e22cd00be57b905bacf4d8bff0533c23c276c8b738da217c16",
+      "block": { "height": 205, "hash": "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8" },
+      "outcome": "withheld",
+      "servers": [
+        { "label": "honest", "outcome": "found" },
+        { "label": "withholder", "outcome": "withheld" }
+      ]
+    }
+  ]
+}

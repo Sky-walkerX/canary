@@ -33,3 +33,6 @@ nsec*
 # Scratch
 /tmp/
 /scratch/
+
+# UI screenshots from design reviews
+/.ui-screens/

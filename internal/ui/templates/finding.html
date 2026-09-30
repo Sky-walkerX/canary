@@ -1,0 +1,57 @@
+{{define "content"}}{{with .Main}}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/findings">All findings</a></nav>
+<div class="page-head">
+  <h1>{{.Row.Sentence}}</h1>
+  <p class="state-line">
+    {{if .Row.Glyph}}<span class="badge s-{{.Row.Glyph}}">{{template "glyph" .Row.Glyph}}<span>{{.Row.KindLabel}}</span></span>{{else}}<span class="badge badge-warning">{{template "icon" "info"}}<span>{{.Row.KindLabel}}</span></span>{{end}}
+    <span class="muted">Finding <code class="mono">{{.Row.ID}}</code></span>
+  </p>
+</div>
+
+<dl class="facts">
+  <div><dt>Block</dt><dd>{{if .Row.BlockKnown}}<a href="/blocks/{{.Row.Block.Hash}}">{{.Row.Block.Height}}</a>{{else}}{{.Row.Block.Height}} <span class="muted">{{.Row.BlockNote}}</span>{{end}}{{template "hashFull" .BlockHash}}</dd></div>
+  {{with .Position}}<div><dt>Position in the list</dt><dd>{{.}}</dd></div>{{end}}
+  {{with .Txid}}<div><dt>Left-out transaction</dt><dd>{{template "hashFull" .}}</dd></div>{{end}}
+  {{range .Servers}}<div><dt>Server named</dt><dd><span class="server-name">{{.Label}}</span>{{with .Pubkey}}{{template "hashFull" .}}{{end}}</dd></div>{{end}}
+  <div><dt>First seen</dt><dd>{{.Row.FirstSeen}}</dd></div>
+  <div><dt>Last seen</dt><dd>{{.Row.LastSeen}}</dd></div>
+</dl>
+
+<section class="section prose" aria-labelledby="what-h">
+  <h2 id="what-h">What happened</h2>
+  <p>{{.WhatHappened}}</p>
+</section>
+
+<div class="split-even section">
+  <section class="prose" aria-labelledby="shows-h">
+    <h2 id="shows-h">What this shows</h2>
+    <p>{{.Shows}}</p>
+  </section>
+  <section class="prose" aria-labelledby="not-h">
+    <h2 id="not-h">What this does not show</h2>
+    <p>{{.DoesNotShow}}</p>
+  </section>
+</div>
+
+<section class="section prose" aria-labelledby="prove-h">
+  <h2 id="prove-h">Can you prove it to others?</h2>
+  <p class="provable{{if .IsProvable}} is-provable{{end}}">{{.Provable}}</p>
+</section>
+
+{{with .Evidence}}
+<section class="section" aria-labelledby="ev-h">
+  <h2 id="ev-h">Evidence file</h2>
+  <p class="download-line"><a class="download" href="/evidence/{{.Name}}" download>{{template "icon" "download"}}<span>Download {{.Name}}</span></a></p>
+  <p class="section-note">{{.Note}}</p>
+  {{template "command" (copyOf .VerifyCommand "Copy the canary verify command")}}
+</section>
+{{end}}
+
+{{with .Report}}
+<section class="section" aria-labelledby="rep-h">
+  <h2 id="rep-h">Canary's check of this file</h2>
+  {{template "verifyReport" .}}
+</section>
+{{end}}
+{{with .ReportErr}}<section class="section">{{template "errorInline" .}}</section>{{end}}
+{{end}}{{end}}

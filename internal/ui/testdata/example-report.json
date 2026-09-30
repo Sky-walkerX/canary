@@ -1,0 +1,31 @@
+{
+  "result": "checks_out",
+  "code": "ok",
+  "message": "Checks out. The server signed a record that includes this entry, then signed a list that left it out.",
+  "format": "canary-evidence/1",
+  "claim": "omission",
+  "accused": {
+    "pubkey": "b1070620799e7da6bbc296ec7ea6aacf7f027317af796abf35f0c9c83710270d",
+    "npub": "npub1kyrsvgrene76dw7zjmk8af42ealsyuch4auk40e47ryusdcsyuxsden9fz"
+  },
+  "network": { "name": "regtest", "magic": 3669344250 },
+  "block": { "hash": "cafb64b3cfa7d9c38917ab7fd88107ba27342cadee3dcf2f85138a8322dc09b8", "height": 205 },
+  "missing": {
+    "txid": "01982d712503c4e22cd00be57b905bacf4d8bff0533c23c276c8b738da217c16",
+    "tweak": "02b84222b639a797cbacb1a5c7c3dd9fe766f59f51e823bb85cd446cb454ee3cb0",
+    "index": 1
+  },
+  "commitment_event_id": "90d82e3fd8c4f1ea18c97c9a446672fcb3b81803c5a21675b2fdaa70a49086cc",
+  "has_receipt": true,
+  "receipt_tip": { "height": 212, "hash": "8f5bc4871669d86d1dc72d7961ce7573fb55ccdb59cc9bbd22521c155f1c31d2" },
+  "checks": [
+    { "step": "read", "ok": true, "text": "Format canary-evidence/1, claim omission." },
+    { "step": "record_signature", "ok": true, "text": "The signed record's id and signature are valid." },
+    { "step": "signer", "ok": true, "text": "The record is signed by the accused key." },
+    { "step": "block", "ok": true, "text": "The record names block 205 on regtest, the block this file names." },
+    { "step": "inclusion", "ok": true, "text": "Entry 1 of 3 proves into the signed root." },
+    { "step": "receipt", "ok": true, "text": "The receipt is signed by the same key, names the same block and covers these 137 bytes." },
+    { "step": "served_list", "ok": true, "text": "The served list has 3 positions, and position 1 is marked absent." },
+    { "step": "window", "ok": true, "text": "The server's signed tip was 212, so the block was 7 blocks deep, inside the 144-block window." }
+  ]
+}

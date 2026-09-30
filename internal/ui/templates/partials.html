@@ -1,0 +1,126 @@
+{{/* Shared partials. Every state shows as glyph plus word plus colour. */}}
+
+{{define "glyph"}}<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-{{.}}"></use></svg>{{end}}
+
+{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="#i-{{.}}"></use></svg>{{end}}
+
+{{/* stateBadge takes a wording.StateText. */}}
+{{define "stateBadge"}}<span class="badge s-{{.Code}}">{{template "glyph" .Code}}<span>{{.Label}}</span></span>{{end}}
+
+{{/* explain takes a wording.StateText and answers "What does this mean?" in place.
+     The hidden label tells a screen reader which state each summary explains. */}}
+{{define "explain"}}<details class="explain">
+<summary>{{template "icon" "info"}}<span>What does this mean?</span><span class="sr-only"> {{.Label}}</span></summary>
+<p>{{.Explain}}</p>
+</details>{{end}}
+
+{{/* copyButton takes a copyData. It stays hidden until the page script runs,
+     because copying needs the script; the value is selectable text either way. */}}
+{{define "copyButton"}}<button type="button" class="btn btn-small copy-btn" data-copy="{{.Value}}" data-copied="Copied" aria-label="{{.Label}}" hidden>{{template "icon" "copy"}}<span data-copy-label>Copy</span></button>{{end}}
+
+{{/* hashShort takes a hashView: first 8 and last 8 characters, in groups of 4.
+     Groups are spaced with CSS, so a manual copy carries no spaces. */}}
+{{define "hashShort"}}{{if .Short}}<span class="hash" title="{{.Full}}">{{range .Head}}<span>{{.}}</span>{{end}}<span class="hash-ell">…</span>{{range .Tail}}<span>{{.}}</span>{{end}}</span>{{else}}<span class="hash">{{range .Groups}}<span>{{.}}</span>{{end}}</span>{{end}}{{end}}
+
+{{/* hashFull takes a hashView: the whole value in groups of 4, with a labelled copy button. */}}
+{{define "hashFull"}}<span class="hash-block"><code class="hash hash-full">{{range .Groups}}<span>{{.}}</span>{{end}}</code>{{template "copyButton" (copyOf .Full .CopyLabel)}}</span>{{end}}
+
+{{/* command takes a copyData and shows a shell command with a copy button. */}}
+{{define "command"}}<div class="command"><pre><code>{{.Value}}</code></pre>{{template "copyButton" .}}</div>{{end}}
+
+{{define "errorBody"}}
+<p class="error-body">{{.Moment.Body}}</p>
+<p class="error-action">{{.Moment.Action}}</p>
+{{with .Command}}{{template "command" (copyOf . $.CommandLabel)}}{{end}}
+{{if or .HomeLink .BackLink}}<p class="error-links">
+{{with .BackLink}}<a class="btn" href="{{.}}">{{$.BackText}}</a>{{end}}
+{{if .HomeLink}}<a class="btn" href="/">Overview</a>{{end}}
+</p>{{end}}
+{{with .Tech}}<details class="tech"><summary>{{template "icon" "chevron"}}<span>Technical details</span></summary><pre><code>{{.}}</code></pre></details>{{end}}
+{{end}}
+
+{{/* errorPanel takes an errorView and is a page's main content. */}}
+{{define "errorPanel"}}<section class="error-panel" aria-labelledby="error-title">
+<h1 id="error-title">{{.Moment.Title}}</h1>
+{{template "errorBody" .}}
+</section>{{end}}
+
+{{/* errorInline takes an errorView inside another page. */}}
+{{define "errorInline"}}<div class="error-panel error-inline">
+<h3>{{.Moment.Title}}</h3>
+{{template "errorBody" .}}
+</div>{{end}}
+
+{{/* findingItem takes a findingRow. A block the results hold no detail for
+     has no page, so its height shows as plain text with a note. */}}
+{{define "findingItem"}}<li class="finding-item">
+<h3 class="finding-sentence"><a href="/findings/{{.ID}}">{{.Sentence}}</a></h3>
+<p class="finding-meta">
+{{if .Glyph}}<span class="badge s-{{.Glyph}}">{{template "glyph" .Glyph}}<span>{{.KindLabel}}</span></span>{{else}}<span class="badge badge-warning">{{template "icon" "info"}}<span>{{.KindLabel}}</span></span>{{end}}
+<span>Block {{if .BlockKnown}}<a href="/blocks/{{.Block.Hash}}">{{.Block.Height}}</a>.{{else}}{{.Block.Height}}. <span class="muted">{{.BlockNote}}</span>{{end}}</span>
+<span class="finding-provable">{{.Provable}}</span>
+</p>
+</li>{{end}}
+
+{{/* paymentsTable takes []paymentRow. Under 720px each row stacks into
+     labelled lines; the ARIA roles keep it a table for screen readers. */}}
+{{define "paymentsTable"}}<div class="table-wrap table-stack" role="region" aria-label="Payments table" tabindex="0">
+<table role="table">
+<thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Transaction</th><th scope="col" role="columnheader" class="num">Block</th><th scope="col" role="columnheader">Result</th><th scope="col" role="columnheader">Each server</th></tr></thead>
+<tbody role="rowgroup">
+{{range .}}<tr role="row">
+<td role="cell" class="stack-head">{{template "hashShort" .Txid}}</td>
+<td role="cell" class="num" data-label="Block">{{with .Block}}<a href="/blocks/{{.Hash}}">{{.Height}}</a>{{else}}Unconfirmed{{end}}</td>
+<td role="cell" data-label="Result"><span class="badge tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Outcome}}</span></span><p class="cell-note">{{.OutcomeText}}</p></td>
+<td role="cell" data-label="Each server"><ul class="plain">{{range .Servers}}<li><span class="server-name">{{.Label}}</span> <span class="badge tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Outcome}}</span></span></li>{{end}}</ul></td>
+</tr>{{end}}
+</tbody>
+</table>
+</div>{{end}}
+
+{{/* verifyReport takes a reportView: the result of canary verify on one evidence file. */}}
+{{define "verifyReport"}}<div class="report">
+<p class="report-result"><span class="badge badge-large tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Label}}</span></span></p>
+<p class="report-message">{{.Message}}</p>
+{{range .InclusionDetail}}<p class="report-detail">{{.}}</p>{{end}}
+{{with .NotHonest}}<p class="report-detail">{{.}}</p>{{end}}
+<ol class="report-steps">
+{{range .Steps}}<li class="step step-{{.Status}}">
+<span class="step-status tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Word}}</span></span>
+<span class="step-name">{{.Label}}</span>
+<span class="step-text">{{.Text}}</span>
+</li>{{end}}
+</ol>
+{{if or .Accused .Block .Missing .ReceiptTip}}<dl class="facts facts-compact">
+{{with .Accused}}<div><dt>Accused key</dt><dd>{{template "hashShort" .}}</dd></div>{{end}}
+{{with .Npub}}<div><dt>As npub</dt><dd><code class="mono wrap-anywhere">{{.}}</code></dd></div>{{end}}
+{{with .Block}}<div><dt>Block</dt><dd>{{.}}</dd></div>{{end}}
+{{with .Missing}}<div><dt>Left-out entry</dt><dd>{{.}}</dd></div>{{end}}
+{{with .ReceiptTip}}<div><dt>Signed tip</dt><dd>{{.}}</dd></div>{{end}}
+</dl>{{end}}
+</div>{{end}}
+
+{{/* coverageStrip takes a stripView. Percent x positions and pixel heights:
+     see strip.go. role="img" makes the whole drawing one labelled picture. */}}
+{{define "coverageStrip"}}<svg class="strip" width="100%" height="{{.Height}}" role="img" aria-label="{{.Summary}}" focusable="false">
+<defs>
+<pattern id="{{.ID}}-hatch" patternUnits="userSpaceOnUse" width="{{.HatchPeriod}}" height="{{.HatchPeriod}}" patternTransform="rotate(45)">
+<rect class="strip-ground" width="{{.HatchPeriod}}" height="{{.HatchPeriod}}"></rect>
+<line class="strip-hatch" x1="1" y1="0" x2="1" y2="{{.HatchPeriod}}" stroke-width="{{.HatchStroke}}"></line>
+</pattern>
+</defs>
+<line class="strip-axis" x1="0" x2="100%" y1="{{.AxisY}}" y2="{{.AxisY}}"></line>
+{{range .Segments}}<g class="seg s-{{.State}}"><title>{{.Title}}</title>
+{{if eq .State "resolved"}}<rect class="seg-ring" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}"></rect><rect class="seg-fill" x="{{.X}}%" y="{{$.BandInnerY}}" width="{{.W}}%" height="{{$.BandInnerHeight}}"></rect>
+{{else if eq .State "unresolvable"}}<rect class="seg-hatch" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}" fill="url(#{{$.ID}}-hatch)"></rect>
+{{else if eq .State "unverified"}}<rect class="seg-hollow" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}"></rect>
+{{else if eq .State "disputed"}}<rect class="seg-hollow" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}"></rect><rect class="seg-fill seg-edge" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHalf}}"></rect>
+{{else if eq .State "compromised"}}<rect class="seg-fill seg-edge" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}"></rect>
+{{else}}<rect class="seg-fill" x="{{.X}}%" y="{{$.BandY}}" width="{{.W}}%" height="{{$.BandHeight}}"></rect>
+{{end}}</g>
+{{end}}
+{{range .Markers}}<use href="#g-{{.State}}" class="strip-marker s-{{.State}}" x="{{.X}}%" y="{{$.MarkerY}}" width="{{$.MarkerSize}}" height="{{$.MarkerSize}}" transform="translate({{$.MarkerOffset}} 0)"></use>
+{{end}}
+{{range .Labels}}<line class="strip-tick" x1="{{.X}}%" x2="{{.X}}%" y1="{{$.AxisY}}" y2="{{$.LabelTickEnd}}"></line><text class="strip-label" x="{{.X}}%" y="{{$.LabelBaseline}}" text-anchor="{{.Anchor}}">{{.Text}}</text>
+{{end}}
+</svg>{{end}}

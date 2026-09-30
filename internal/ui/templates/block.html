@@ -1,0 +1,72 @@
+{{define "content"}}{{with .Main}}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/blocks">All blocks</a></nav>
+<div class="page-head">
+  <h1>Block {{.Height}}</h1>
+  <p class="state-line">{{template "stateBadge" .State}}</p>
+  <p class="lede">{{.Reason}}</p>
+  {{template "explain" .State}}
+</div>
+
+<dl class="facts">
+  <div><dt>Block hash</dt><dd>{{template "hashFull" .Hash}}</dd></div>
+</dl>
+
+<section class="section" aria-labelledby="each-h">
+  <h2 id="each-h">Each server</h2>
+  {{/* Servers are columns here, so the table cannot stack by row. Narrow
+       screens get the same facts as one list per server instead. */}}
+  <div class="table-wrap wide-only" role="region" aria-label="Results by server" tabindex="0">
+    <table class="per-server">
+      <thead><tr><th scope="col"><span class="sr-only">Field</span></th>{{range .Servers}}<th scope="col" class="server-name">{{.Label}}</th>{{end}}</tr></thead>
+      <tbody>
+        <tr><th scope="row">Result</th>{{range .Servers}}<td>{{template "stateBadge" .State}}</td>{{end}}</tr>
+        <tr><th scope="row">Why</th>{{range .Servers}}<td class="why">{{.Reason}}</td>{{end}}</tr>
+        <tr><th scope="row">Signed record</th>{{range .Servers}}<td>{{with .Record}}{{template "hashShort" .}}{{else}}None{{end}}</td>{{end}}</tr>
+        <tr><th scope="row">Entries signed for</th>{{range .Servers}}<td class="num-left">{{.N}}</td>{{end}}</tr>
+        <tr><th scope="row">Signed root</th>{{range .Servers}}<td>{{with .Root}}{{template "hashShort" .}}{{else}}None{{end}}</td>{{end}}</tr>
+        <tr><th scope="row">Served list</th>{{range .Servers}}<td>{{.Positions}}</td>{{end}}</tr>
+        <tr><th scope="row">Entries Canary filled</th>{{range .Servers}}<td class="num-left">{{.Filled}}</td>{{end}}</tr>
+        <tr><th scope="row">Receipt covered the list</th>{{range .Servers}}<td>{{.Signed}}</td>{{end}}</tr>
+        <tr><th scope="row">Server's signed tip</th>{{range .Servers}}<td class="num-left">{{.Tip}}</td>{{end}}</tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="server-cards narrow-only">
+    {{range .Servers}}<div class="server-card">
+      <h3 class="server-name">{{.Label}}</h3>
+      <dl class="facts facts-compact">
+        <div><dt>Result</dt><dd>{{template "stateBadge" .State}}</dd></div>
+        <div><dt>Why</dt><dd>{{.Reason}}</dd></div>
+        <div><dt>Signed record</dt><dd>{{with .Record}}{{template "hashShort" .}}{{else}}None{{end}}</dd></div>
+        <div><dt>Entries signed for</dt><dd>{{.N}}</dd></div>
+        <div><dt>Signed root</dt><dd>{{with .Root}}{{template "hashShort" .}}{{else}}None{{end}}</dd></div>
+        <div><dt>Served list</dt><dd>{{.Positions}}</dd></div>
+        <div><dt>Entries Canary filled</dt><dd>{{.Filled}}</dd></div>
+        <div><dt>Receipt covered the list</dt><dd>{{.Signed}}</dd></div>
+        <div><dt>Server's signed tip</dt><dd>{{.Tip}}</dd></div>
+      </dl>
+    </div>{{end}}
+  </div>
+</section>
+
+{{if .Findings}}
+<section class="section" aria-labelledby="bf-h">
+  <h2 id="bf-h">Findings in this block</h2>
+  <ul class="finding-list">{{range .Findings}}{{template "findingItem" .}}{{end}}</ul>
+</section>
+{{end}}
+
+{{if .Payments}}
+<section class="section" aria-labelledby="bp-h">
+  <h2 id="bp-h">Payments you declared in this block</h2>
+  {{template "paymentsTable" .Payments}}
+</section>
+{{end}}
+
+{{if or .Prev .Next}}
+<nav class="pager" aria-label="Nearby blocks">
+  {{with .Prev}}<a rel="prev" href="/blocks/{{.Hash}}"><span class="pager-dir">Previous</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
+  {{with .Next}}<a rel="next" class="pager-next" href="/blocks/{{.Hash}}"><span class="pager-dir">Next</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
+</nav>
+{{end}}
+{{end}}{{end}}

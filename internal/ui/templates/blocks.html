@@ -1,0 +1,36 @@
+{{define "content"}}{{with .Main}}
+<div class="page-head">
+  <h1>Blocks</h1>
+  <p class="lede">{{.Intro}}</p>
+  {{with .LowerBound}}<p class="lower-bound">{{.}}</p>{{end}}
+</div>
+
+<figure class="strip-figure section-tight">{{template "coverageStrip" .Strip}}</figure>
+
+<form class="goto" action="/blocks" method="get">
+  <label for="goto-height">Go to height</label>
+  <div class="goto-row">
+    <input id="goto-height" name="height" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="{{.Query}}"{{if .QueryMiss}} aria-invalid="true" aria-describedby="goto-error"{{end}}>
+    <button type="submit" class="btn">Go</button>
+  </div>
+  {{if .QueryMiss}}<p id="goto-error" class="field-error">{{.QueryError}}</p>{{end}}
+</form>
+
+<section class="section" aria-labelledby="ranges-h">
+  <h2 id="ranges-h">Ranges</h2>
+  <div class="table-wrap table-stack" role="region" aria-label="Ranges table" tabindex="0">
+    <table role="table" class="ranges">
+      <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Heights</th><th scope="col" role="columnheader" class="num">Blocks</th><th scope="col" role="columnheader">State</th><th scope="col" role="columnheader">Why</th><th scope="col" role="columnheader">Open a block</th></tr></thead>
+      <tbody role="rowgroup">
+      {{range .Ranges}}{{$row := .}}<tr role="row">
+        <th scope="row" role="rowheader" class="mono stack-head">{{.Heights}}</th>
+        <td role="cell" class="num" data-label="Blocks">{{.Count}}</td>
+        <td role="cell" data-label="State">{{template "stateBadge" .State}}</td>
+        <td role="cell" class="why" data-label="Why">{{.Reason}}</td>
+        <td role="cell" class="links" data-label="Open a block">{{range $i, $l := .Links}}{{if $i}}{{if $row.Gap}}<span class="range-dots"> to </span>{{else}}, {{end}}{{end}}<a href="/blocks/{{$l.Hash}}">{{$l.Height}}</a>{{else}}<span class="muted">No detail</span>{{end}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}{{end}}

@@ -1,5 +1,6 @@
-// Package wire encodes and decodes the list of entries an indexer serves for
-// one block.
+// Package wire encodes and decodes what an index server sends a client for one
+// block: the tweak list, and the receipt that signs it. It also holds the
+// retention rule, which says where a list may leave a position empty.
 //
 // The list follows the block's canonical order: every eligible transaction, in
 // the order the block holds them. Each position carries one of three things.
@@ -7,8 +8,14 @@
 // 32-byte hash, or nothing. The encoding states the length and each position's
 // kind, so the client never has to guess.
 //
-// The indexer encodes this format and the client decodes it. It lives in the
-// protocol core, not in either program, because Go does not let one module
+// A signed record says what a block contains. A receipt says what the server
+// gave one client for that block. The same key signs both. So an entry that is
+// in the record and missing from a receipted list is a contradiction between
+// two of the server's own signatures. Anyone holding both can check it, not
+// only the client that saw the list.
+//
+// The indexer encodes these formats and the client decodes them. They live in
+// the protocol core, not in either program, because Go does not let one module
 // import another module's internal packages.
 package wire
 
@@ -40,14 +47,13 @@ const (
 	KindHash PositionKind = 2
 
 	// KindAbsent carries nothing. A server may send it only for a block
-	// outside the 144-block retention window, where
-	// depth = tip_height - block_height and depth >= 144. The tip height comes
-	// from the server's signed receipt, and the block height from its signed
-	// record. Inside the window the server must keep at least the hash, so an
-	// absent entry there counts as withholding. The decoder cannot see a
-	// block's depth, so the caller must enforce this rule. Section 4 of the v1
-	// formats doc defines the window. The client cannot recompute the root
-	// until it recovers the entry from another source.
+	// outside the retention window, where InsideRetentionWindow reports false.
+	// The tip height comes from the server's signed receipt, and the block
+	// height from its signed record. Inside the window the server must keep at
+	// least the hash, so an absent entry there counts as withholding. The
+	// decoder cannot see a block's depth, so the caller must enforce this
+	// rule. The client cannot recompute the root until it recovers the entry
+	// from another source.
 	KindAbsent PositionKind = 3
 )
 

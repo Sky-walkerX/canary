@@ -10,6 +10,10 @@ which parts work today.
 Canary does not make tweak sourcing trustless. It makes it *accountable*, under the two
 conditions in the [security claim](#security-claim).
 
+New to silent payments? [How Canary works](docs/how-canary-works.md) walks through the
+checks with a worked example. The [FAQ](docs/faq.md) answers the usual objections, and the
+[glossary](docs/glossary.md) defines every term.
+
 ---
 
 ## Status (30 September 2026)
@@ -46,7 +50,7 @@ Nothing has been run against signet or mainnet servers.
 ## The problem
 
 To receive silent payments (BIP-352) without downloading every block, a light wallet asks
-a server for a [tweak](docs/glossary.md). A tweak is a 33-byte value per eligible
+a server for a [tweak](docs/glossary.md#tweak). A tweak is a 33-byte value per eligible
 transaction, which the wallet combines with its own scan key. If the server leaves a
 transaction out, the wallet never sees that payment. There is no error and no retry. The
 wallet shows the same balance it would show if nobody had paid.
@@ -128,7 +132,8 @@ all history, which Canary's separate per-block events do not.
 
 This section describes the design in
 [`docs/design/2026-09-06-canary-design.md`](docs/design/2026-09-06-canary-design.md). The
-status table above says which parts exist. Version 1 is a command-line checker plus a
+status table above says which parts exist. [How Canary works](docs/how-canary-works.md)
+follows one block through every check. Version 1 is a command-line checker plus a
 reference indexer. The design's proxy, which sits between a wallet and its servers, comes
 after v1.
 
@@ -140,8 +145,9 @@ alarms. On 30 Sep, two live servers returned three different lists for mainnet b
 filtered endpoint, and Cake Wallet's server returned 141. All 141 appear in the list of
 220, and a raw comparison cannot tell whether the missing 79 were filtered or hidden.
 
-So each server signs a [commitment](docs/glossary.md) to the *complete, unfiltered* list
-for every block, and serves whatever subset its policy allows. Two rules follow:
+So each server signs a [commitment](docs/glossary.md#commitment) to the *complete,
+unfiltered* list for every block, and serves whatever subset its policy allows. Two rules
+follow:
 
 - An entry a server sent that is not in its own signed list was made up.
 - An entry in the signed list that the server did not send needs a reason declared in
@@ -302,6 +308,7 @@ policy/                  a server's declared filtering rules
 wire/                    the tweak-list format a server sends
 internal/testvector/     the test-vector file format and its runner
 testdata/                BIP-352 upstream vectors and Canary's own vectors
+docs/*.md                how it works, the FAQ, the glossary and the decision log
 docs/design/             the design document and the frozen v1 formats
 docs/research/           prior art with citations, and the competitor analysis
 docs/roadmap/            the scored feature roadmap, with the v1 cut line

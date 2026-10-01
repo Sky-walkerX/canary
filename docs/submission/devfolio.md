@@ -25,10 +25,11 @@ Canary
 
 ## Tagline
 
-*Under 80 characters. This one is 71. A shorter option, at 58 characters: "Holds
-silent-payments servers to the tweak lists they sign".*
+*Under 80 characters. This one is 77. "Recent" carries the 144-block window. Past it,
+an entry left out is Can't be checked, not an accusation. A shorter option, at 58
+characters: "Holds silent-payments servers to the tweak lists they sign".*
 
-Names the silent-payments server that leaves out an entry it signed for
+Names the silent-payments server that leaves out a recent entry it signed for
 
 ## Track
 
@@ -51,8 +52,10 @@ Cypherpunk
 the recorded run only. Never use the sample-data dashboard, because its data comes from
 no run.*
 
-1. The terminal where `canary check` names the withholding server, block 351. The text
-   is in [docs/runs/2026-10-01/check.txt](../runs/2026-10-01/check.txt).
+1. The local dashboard's finding page, where the run names the withholding server for
+   block 351: `docs/media/dashboard-finding.png`. No terminal screenshot exists yet. The
+   terminal's text is in [docs/runs/2026-10-01/check.txt](../runs/2026-10-01/check.txt);
+   capture the terminal while filming if you want that image too.
 2. The browser checker showing "Checks out." for the evidence file from the run:
    `docs/media/site-checker-real.png`.
 3. The local dashboard's Overview for the same run: `docs/media/dashboard-overview.png`.
@@ -143,8 +146,16 @@ server could stop, stall or exhaust the run that would name it:
 - It could pad every record with a 1 MiB signed tag. At 600 blocks the run reached a
   2.19 GB heap, and it would have died before naming anyone.
 
-Each route is now closed and pinned by a test, and the padded run peaks at 21 MB. One
-route stays open, and the docs name it: a slow server can still stretch a run.
+Each of the five now ends in a bounded result, pinned by a test, and the padded run
+peaks at 21 MB. Some of those results are not accusations. A refused record reads Not
+checked. A "not found" between two signed records raises a warning, and any other refusal
+raises none. A tip Core cannot confirm can shorten the window by up to 6 blocks. A record
+claiming more entries than its block holds counts as no record. An over-long record or
+list is not read. Two routes stay open. A slow server can still stretch a run to hours. A
+server that proves nothing, with no verified record and no usable `/info`, can still stop
+the run, for example to cover another server. The
+[formats doc's limits](../design/2026-09-30-v1-formats.md#10-what-these-formats-do-not-cover)
+list each of these.
 
 ## Technologies used
 
@@ -158,7 +169,8 @@ WebAssembly, html/template
 - **BIP-352** through `github.com/setavenger/go-bip352` v0.1.8, for eligibility, the
   input hash and the tweak.
 - **BIP-340 Schnorr signatures** through `btcec/v2`, for records and receipts.
-- **Nostr** through `go-nostr`. Each record is a signed kind-1352 Nostr event.
+- **Nostr** through `go-nostr`, for the event format only. Each record is a signed
+  kind-1352 Nostr event. v1 serves records over HTTP and publishes nothing to relays.
 - **Bitcoin Core's REST interface**, for block hashes, the chain tip and the outputs each
   transaction spends. The reference index server needs Core v30 or later for
   `/rest/spenttxouts`.
@@ -217,13 +229,21 @@ What works:
   It read Can't be checked, which is neither a pass nor an accusation.
 - That run's evidence file is committed at
   `evidence/omission-regtest-351-ad56b9bb-db614560.json`, and a CI test keeps it
-  checking out. It checks out with `canary verify`, which needs no network, and with the
-  browser checker's WebAssembly build.
+  checking out. It checks out with `canary verify`, which needs no network. On 1 Oct it
+  also checked out in a process that the macOS sandbox cut off from the network, and in
+  the browser checker's WebAssembly build.
 - A one-byte change to an evidence file fails the check, at the step that covers that
   byte.
 
 What doesn't yet:
 
+- With one server, nothing checks that its signed record is complete. A server can sign a
+  record that already leaves out your entry, then serve a list to match. The block reads
+  Checked, reason `own_record`. A second honest server makes that block read Servers
+  disagree, with nobody accused. Only a payment you declared with `--expect` names the
+  server, and v1 cannot prove that to others. v1 fetches each record over HTTP from the
+  server itself, so a server could also sign a different record for each client. Relays
+  would expose that, and v1 uses none.
 - Canary v1 does not check output data. A server can send the right tweak and drop the
   payment's output, and the block still reads Checked.
 - A server that declares a pruning policy can send just an entry's hash. The root still
@@ -244,24 +264,28 @@ What doesn't yet:
 
 *Measured on 1 Oct 2026 unless marked. Recount the tests before pasting.*
 
-- **Tests:** 403 top-level tests, 782 passing cases with subtests, in 19 Go packages.
-  None fail, with or without the race detector, on Go 1.26.4. One of them verifies the
-  committed evidence file.
-- **Code:** about 16,300 lines of Go, plus about 17,000 lines of tests.
+- **Tests:** 413 top-level tests, one of them a fuzz test on its seed inputs, and 791
+  passing cases with subtests, in 19 Go packages. None fail, with or without the race
+  detector, on Go 1.26.4. One of them verifies the committed evidence file. GitHub
+  Actions also runs them on Linux amd64 on every push.
+- **Code:** about 17,400 lines of Go, plus about 17,600 lines of tests, counted with
+  `wc -l` over the tracked `.go` files.
 - **End to end:** one test runs the whole v1 demo in one process, on a 209-block
   synthetic chain with two reference index servers. `canary check` takes about 0.2 s
   there.
 - **Adversarial results:** six one-byte changes to an evidence file each fail at the step
   that covers that byte. Five hostile-server routes are each pinned by a test.
   `canary verify` also passes in a process that macOS cuts off from the network.
-- **Memory bound:** Canary reads at most 4 KiB of a record, against 689 bytes for an
-  honest one on regtest. It reads at most `4 + 66n` bytes of a list of `n` entries.
+- **Memory bound:** Canary reads at most 4 KiB of a record. The 1 Oct run's record
+  for block 351 is 691 bytes. It reads at most `4 + 66n` bytes of a list of `n` entries.
   Against a server that pads every record, a 600-block run peaks at 21 MB, against 16 MB
   for honest servers. Before that fix it reached 2.19 GB.
 - **Browser checker:** 8.68 MB of WebAssembly, or 2.66 MB with gzip -9.
-- **Cost to a server:** one signed record per block, 689 bytes on regtest, and one signed
-  receipt per list it serves. It keeps 36 bytes per block long term, about 35 MB for all
-  of mainnet history (965,000 blocks × 36 bytes).
+- **Cost to a server:** one signed record per block, about 690 bytes (691 in the 1 Oct
+  run), and one signed receipt per list it serves. Records for all of mainnet history
+  come to about 666 MB (965,000 blocks × 690 bytes), held by whoever stores them. The
+  server must keep only 36 bytes per block, about 35 MB (965,000 blocks × 36 bytes). v1's
+  reference server serves its records itself, so it keeps them whole.
 - **Wire size:** a full list is `4 + 66n` bytes. A pruned entry costs 33 bytes as a
   hash, or 1 byte if it is left out.
 - **Retention window:** 144 blocks, about one day at 10 minutes per block.
@@ -286,9 +310,8 @@ Cypherpunk only, and entering a second track without that rule reads as unfocuse
 Freedom Stack is about systems whose useful properties don't depend on trusting their
 operator. Canary applies that to the server a light wallet depends on. Each server signs
 what it indexed for every block. A client checks what the server serves against that
-signature, with no trust in that server's word. Anyone can check an evidence file offline, in a terminal or a
-browser, with no node, account or server. Records are Nostr events, so a server needs no
-new infrastructure to publish them. Version 1 still fetches them over HTTP and uses no
-relays. The limit stays in place. Canary needs at least one honest server and an
-uncensored path to its records. It makes withholding detectable and attributable, not
-impossible.
+signature. Anyone can check an evidence file offline, in a terminal or a browser, with no
+node, account or server. Records are Nostr events, so a server needs no new infrastructure
+to publish them. Version 1 still fetches them over HTTP and uses no relays. The limit
+stays in place. Canary needs at least one honest server and an uncensored path to its
+records. It makes withholding detectable and attributable, not impossible.

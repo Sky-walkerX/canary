@@ -249,6 +249,11 @@ Each part of that claim has a limit, and the limit belongs next to it:
   taproot outputs is unspent, and that finding is not provable to others. A server that
   declares no pruning and sends a hash gets a warning, never an accusation, because v1
   policies are unsigned.
+- **One server alone cannot show that its record is complete.** A server can sign a
+  record that already leaves out your entry, then serve a list to match. With no other
+  server, the block reads Checked, reason `own_record`. A second honest server makes it
+  read Servers disagree, with nobody accused. A payment you declared names the server as
+  Data withheld, and v1 cannot prove that to others.
 - **Detection happens only when you run `canary check`.** v1 has no wallet in the loop
   and no proxy, so nothing stops a wallet from using a block Canary flagged.
 - **v1 is built and tested on regtest only,** against its own reference indexer, which

@@ -111,27 +111,32 @@ Honest servers serve different lists, and BIP-352 allows it: "spent transactions
 optionally can be skipped". A raw diff reports every such difference as an alarm. On
 30 Sep 2026, mainnet block 969,300 came back as 220 tweaks from one server's full index,
 184 from its filtered endpoint and 141 from Cake Wallet's server. All 141 were among the
-220, and a diff cannot tell whether the missing 79 were filtered or hidden.
+220, and a diff cannot tell whether the missing 79 were filtered or hidden. That was a
+one-off measurement. The repository keeps the counts, not the requests or responses, so
+it cannot be re-run from here.
 
 Canary compares signed records of the complete list instead, and lets each server serve
 less of it ([Canonical tweak sets](design/2026-09-06-canary-design.md#2-canonical-tweak-sets-and-policy-normalization)).
 
 ### Why would a withholding server commit honestly?
 
-Once its records are on relays, it cannot take one back, because records use a regular
-Nostr kind, which a later event cannot replace. v1 does not publish records to relays.
-There, the state file and the evidence files keep the copy Canary fetched from the server.
-Each choice left to the server meets a different check:
+Records use a regular Nostr kind, so a later event cannot overwrite one in place. A
+server can still send a NIP-09 deletion request, and many relays honour it. So the design
+relies on the copies that clients and other relays already keep, not on any one relay.
+v1 publishes nothing to relays anyway. In v1 the state file and the evidence files keep
+the copy Canary fetched from the server. Each choice left to the server meets a
+different check:
 
 - **It signs the full list, then sends nothing for your entry inside the retention
   window.** Its own receipt shows the gap. One server is enough, and the evidence file
   lets anyone check it.
 - **It signs the full list, then sends a wrong entry.** The recomputed root does not match
   its signature.
-- **It signs a list without your entry.** Any honest server's root differs, and the block
-  reads Servers disagree until someone holding the block works out which server lied. If
-  you declared that payment as a [tripwire](glossary.md#tripwire), its own record names it
-  as Data withheld. You know, but v1 cannot prove it to others.
+- **It signs a list without your entry.** If it is your only server, the block reads
+  Checked, because nothing else tests the record. Any honest second server's root
+  differs, and the block reads Servers disagree until someone holding the block works out
+  which server lied. If you declared that payment as a [tripwire](glossary.md#tripwire),
+  its own record names it as Data withheld. You know, but v1 cannot prove it to others.
 - **It signs no record for that block.** The block reads Not checked. If the server signed
   the blocks on both sides, Canary adds a warning. v1 does not accuse on it, because a
   missing record carries no signature.
@@ -147,11 +152,14 @@ Canary cannot make it. A server that signs nothing gets Not checked on every blo
 full design, the tripwire is the only check that still works against such a server. v1
 speaks only its own reference indexer's API, so no deployed server works with it yet.
 
-The cost to a server is small. It pays one signature and about 200 bytes per block. It
-keeps 36 bytes per block afterwards, a 32-byte root and a 4-byte count. For all of
-mainnet history that is about 35 MB, from roughly 965,000 blocks × 36 bytes. It may prune
-entries freely once a block is 144 blocks deep. In return, an honest server can show that
-it served everything it signed for.
+The cost to a server is small. It pays one signature per block, and the signed record is
+about 690 bytes. The 1 Oct run's record for block 351 is 691 bytes. For all of mainnet
+history the records come to about 666 MB, from roughly 965,000 blocks × 690 bytes, held
+by whoever stores them, such as relays. The server itself must keep only 36 bytes per
+block, a 32-byte root and a 4-byte count. That is about 35 MB, from 965,000 × 36 bytes.
+v1's reference indexer serves its records itself, so it keeps each one whole. A server may
+prune entries freely once a block is 144 blocks deep. In return, an honest server can
+show that it served everything it signed for.
 
 ### What if every server colludes?
 
@@ -197,10 +205,10 @@ Only with a [receipt](glossary.md#receipt). The evidence file then holds the ser
 signed record, the bytes it served and its signature over those bytes. Anyone can run
 `canary verify` on it offline and see the contradiction.
 
-Without a receipt, you know, and others can check only that the server signed for the
-entry. `canary verify` then prints "Inclusion only: you can be sure of this, you can't yet
-prove it to others." Some findings have no evidence file in v1 at all, such as a false
-chain claim or a missing declared payment. Each finding records which kind it is.
+Without a receipt, the run that wrote the file saw the entry left out, and others can
+check only that the server signed for the entry. `canary verify` then reports the file as
+*Inclusion only*. Some findings have no evidence file in v1 at all, such as a false chain
+claim or a missing declared payment. Each finding records which kind it is.
 
 Canary separates knowing from proving to others. You know whatever your own
 `canary check` saw. Someone else can confirm a finding only from signed data they can
@@ -286,8 +294,9 @@ Core can repeat the run on one machine. Several test cases also need arbitrary s
 control over what goes into a block, which nobody outside the signet operators has.
 
 The cost is real. v1 cannot claim a run on a public network, and no deployed server speaks
-its API yet. `canary check` accepts other networks and prints a notice that v1 was not
-tested on them.
+its API yet. `canary check` accepts regtest and mainnet only. On mainnet it prints a
+notice that v1 is tested on regtest only. It refuses signet and every other chain until a
+flag can name the network.
 
 ### Does Canary make scanning faster?
 

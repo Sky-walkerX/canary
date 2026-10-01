@@ -4,7 +4,7 @@
 |---|---|
 | **Design** | Settled and approved 2026-09-08, after a spec review on 2026-09-07 and a self-review on 2026-09-08 |
 | **Amended** | 2026-09-30, with the eight changes listed under [Amendments of 2026-09-30](#amendments-of-2026-09-30) |
-| **Implementation** | Built and tested: `canonical`, `commit`, `feed`, `policy`, the test vectors, the `wire` tweak list with its receipts, the reference indexer, the state file, and the local dashboard, which runs today over sample data. The commands `canary check`, `canary verify`, `canary status` and `canary ui`, evidence files and the tripwire are still to build. v1 is due 5 Oct 2026 |
+| **Implementation** | As of 1 Oct 2026, every part of the v1 loop is built and tested: `canonical`, `commit`, `feed`, `policy`, the test-vector format, the `wire` tweak list with its receipts, the reference indexer, the `ladder`, evidence files, the state file, the commands `canary check`, `canary verify`, `canary status` and `canary ui`, and the tripwire, which is `canary check --expect`. The local dashboard reads the state files `canary check` writes. A sample-data build exists only behind the `uidev` tag. On 1 Oct, `scripts/demo-regtest.sh --act5` ran the demo end to end on Bitcoin Core v31.1.0 in regtest mode; its output is in [docs/runs/2026-10-01](../runs/2026-10-01/). Not built in v1: the [corner vectors and the agreement harness](#7-testing-with-a-differential-edge-case-suite), relay publishing, the proxy and the daemon. v1 is due 5 Oct 2026 |
 | **Exact formats** | [v1 formats](2026-09-30-v1-formats.md) gives the byte layouts of the response, the receipt, the evidence file and the state file. Where this document and the formats doc disagree, the formats doc wins |
 | **Terms** | [Glossary](../glossary.md) |
 | **History** | [Decision log](../decisions.md): why each rule is what it is, and what earlier drafts said |
@@ -79,17 +79,18 @@ a command-line checker and a reference indexer, with no daemon and no proxy
 
 The project has two layers, on purpose:
 
-- **Tool first.** This layer works against indexers as they exist today, with nobody's
-  cooperation. It takes the union of what they serve
+- **Tool first.** In the design, this layer works against indexers as they exist today,
+  with nobody's cooperation. It takes the union of what they serve
   ([Union for tweaks](#43-union-for-tweaks-k-of-n-belongs-on-filters)). It reads each
   server's policy from its existing `/info` ([Policy declaration](#23-policy-declaration)).
   And it runs the [tripwire](#5-canary-tripwire), which detects *and* attributes without
-  any server committing to anything.
+  any server committing to anything. v1 does not include this layer. `canary check`
+  speaks only the reference indexer's API, which no deployed server speaks yet.
 - **Protocol second.** Signed commitments make detection cheap. Each server publishes a
-  signed event of about 200 bytes per block, which carries the 32-byte root that clients
-  actually compare. The alternative is N full fetches. Once the server also signs
-  receipts ([Receipts](#38-receipts)), an accusation can be handed to others and the
-  server cannot deny it.
+  signed event of about 690 bytes per block, which carries the 32-byte root that clients
+  actually compare. The 1 Oct run's event for block 351 is 691 bytes. The alternative is
+  N full fetches. Once the server also signs receipts ([Receipts](#38-receipts)), an
+  accusation can be handed to others and the server cannot deny it.
 
 **The problem, in the sources' own words.** BIP-352 leaves it open. A footnote says: "It
 is still an open question as to how Bob can source the 33 bytes per transaction in a
@@ -277,6 +278,13 @@ limits follow. The README and the demo's last act state them too.
 | **Hash-only withholding under a declared policy** | A server declares a subtractive policy, such as pruning (`prunes_spent`) or a dust threshold. It serves the victim's entry as its 32-byte hash. The root recomputes and matches, the policy permits the gap, and the retention rule is met because the hash was kept | Passes the per-block check. The block reads *Checked, gap filled*: state `resolved`, reason `hash_retained`. The union ([Union for tweaks](#43-union-for-tweaks-k-of-n-belongs-on-filters)) still recovers the payment when any other server the client consults serves the entry in full. Otherwise nothing in the per-block check catches it. The tripwire can, for a payment the client made itself, when the local Core node shows one of its taproot outputs unspent. That finding is not provable to others ([Canary tripwire](#5-canary-tripwire)). An auditor holding the block can also catch it, by showing the policy did not permit the gap. For example, the transaction behind a hashed entry may still have an unspent taproot output at or above the declared dust threshold ([Policy declaration](#23-policy-declaration)). v1 reads policy from the unsigned `/info`. A server that declares no filtering and still sends a hash gets a warning with the reason `hash_without_policy`. It is never an accusation, because nothing the server signed declares its policy ([v1 formats](2026-09-30-v1-formats.md)) |
 | **Regtest only** | v1 is built and tested on regtest only, against its own reference indexer. `canary check` accepts regtest and main, and refuses signet. Every signet reports the same chain name to Bitcoin Core, so Canary cannot know which network magic to check against | Nothing has been shown on signet or mainnet, or with an unmodified wallet in the path. Signet needs a flag that names the network, which is planned after v1 ([v1 formats](2026-09-30-v1-formats.md#9-the-cli)) |
 
+[v1 formats](2026-09-30-v1-formats.md#10-what-these-formats-do-not-cover) also lists
+smaller gaps. The largest is that one server alone cannot show that its record is
+complete. A server that signs a record already missing an entry, then serves to match,
+reads Verified, shown as Checked, with the reason `own_record`. A second honest server
+turns that block into Disputed. A payment the client declared turns it into Compromised,
+which the client knows but v1 cannot prove to others.
+
 ### 1.6 Non-goals
 
 These are outside the project, on purpose.
@@ -427,9 +435,11 @@ its own window declares zero.
 **Bridge to today's servers.** For the layer that works against indexers as they exist,
 the policy struct comes from blindbit's existing `GET /info` feature flags. That is
 unsigned and not per block, so a server can revise it after the fact, and it is strictly
-weaker. It is also what lets the checker run against unmodified blindbit today. The
-signed per-block policy is the protocol layer. This is where "tool first, protocol
-second" ([Summary](#0-summary)) becomes concrete.
+weaker. It is also what would let the checker run against unmodified blindbit. v1's
+`policy` package parses blindbit's `/info`, but `canary check` speaks only the reference
+indexer's API, so v1 does not run against blindbit. The signed per-block policy is the
+protocol layer. This is where "tool first, protocol second" ([Summary](#0-summary))
+becomes concrete.
 
 ### 2.4 Wire model
 
@@ -764,7 +774,9 @@ Without it, a server could deny its own statements. Replaceable kinds (10000–1
 parameterized replaceable kinds (30000–39999) are overwritten in place. So a server could
 publish a cut-through declaration *after* using it as cover, and the original would be
 gone from relays. Policy events and commitment events are both **regular kinds, so they
-are append-only**.
+are append-only**: no later event overwrites one in place. An author can still send a
+NIP-09 deletion request, and many relays honour it. So the design relies on the copies
+that clients and other relays already hold, not on any one relay keeping the event.
 
 Proposed kind **1352**, chosen as a mnemonic. The regular range is 1000–9999. Check it
 against the kind registry before shipping; nobody asserts that it is unclaimed.
@@ -796,7 +808,9 @@ detectable.
 
 ### 3.4 Two channels, two jobs
 
-A commitment travels two ways: pulled from the indexer, and published to relays.
+A commitment travels two ways: pulled from the indexer, and published to relays. v1 uses
+only the first. `canary check` fetches each record over HTTP from its server, and v1
+publishes nothing to relays.
 
 [Comparison procedure](#25-comparison-procedure) step 0 warns about a server that commits
 to neighbouring blocks but not to this one. If commitments came only from relays, that
@@ -838,13 +852,14 @@ honest scope for v1, and the design states it as a limitation.
 
 ### 3.7 Cost
 
-Commitments cost an indexer 36 bytes per block to keep, about 35 MB for all of mainnet.
+Commitments cost an indexer one signed event of about 690 bytes per block, and 36 bytes
+per block to keep, about 35 MB for all of mainnet.
 
 | Party | Cost |
 |---|---|
-| Indexer | One signature and ~200 bytes per block. Retained state: 36 bytes per block, a 32-byte root plus `n`. That is **about 35 MB for all of mainnet history** (≈965k blocks × 36 B). Add the 144-block hash window from [Wire model](#24-wire-model), bounded by 9.2 MB and near zero in practice |
-| Client | One relay subscription filtered by author, and 32 bytes per block per server to compare |
-| Relay | ~144 events per day per indexer |
+| Indexer | One signature and one event of about 690 bytes per block. The 1 Oct run's event for block 351 is 691 bytes, and an honest event stays under 720 bytes at any height. Events for all of mainnet come to **about 666 MB** (≈965k blocks × 690 B), held by the relays that carry them. Retained state: 36 bytes per block, a 32-byte root plus `n`. That is **about 35 MB for all of mainnet history** (≈965k blocks × 36 B). A server that serves its own events, as v1's reference indexer does, keeps them whole instead, about 666 MB. Add the 144-block hash window from [Wire model](#24-wire-model), bounded by 9.2 MB and near zero in practice |
+| Client | One relay subscription filtered by author. It downloads about 690 bytes per block per server and compares the 32-byte root inside |
+| Relay | ~144 events per day per indexer, about 99 KB a day (144 × 690 B) |
 
 The prune-freely property now states cleanly: **commit at index time, discard at will
 once a leaf is 144 blocks old.** That means its block sits 144 or more blocks below the
@@ -1132,8 +1147,9 @@ leaves those blocks Unverified, with the warning from
 [Comparison procedure](#25-comparison-procedure) step 0 where it signed their
 neighbours. Neither outcome is a pass.
 [The commitment object](#33-the-commitment-object) uses append-only kinds, so a server
-cannot withdraw a commitment once published. A fabrication that the server does sign
-lands in the public feed, keyed by height and hash. A height where two servers name
+cannot overwrite a commitment once published. A deletion request does not reach the
+copies that clients and other relays already hold. A fabrication that the server does
+sign lands in the public feed, keyed by height and hash. A height where two servers name
 different hashes is **contested**. Contested and transient is a reorg, and Canary ignores
 it. Contested past six confirmations is a signed statement about the chain contradicted
 by another signed statement. That is a heavier accusation than omission. It costs
@@ -1633,6 +1649,13 @@ These are the risks the original plan named, with how it meant to handle each.
 Canary tests the canonical set with vectors built on regtest to hit BIP-352's unclear
 eligibility rules on purpose, instead of hoping a chain holds one.
 
+**Status in v1.** Most of this section is planned work. `testdata/vectors` holds one
+Canary vector, an empty block. The corner vectors in [The corners](#73-the-corners), the
+generator that would build them from a regtest node, and the Layer C agreement harness
+are not built. `make vectors` says so and exits 1. What runs today is Layer A, BIP-352's
+own send-and-receive vectors, plus the unit tests of `canonical` and the
+[property tests](#75-property-tests) of `commit`.
+
 ### 7.1 Three layers
 
 Three layers of tests cover the canonical set, and only the middle one is new work.
@@ -1671,8 +1694,8 @@ The v1 demo moved to regtest on 2026-09-30.
 [What the format dictates](#81-what-the-format-dictates) gives the reason.
 
 v1 uses its own reference indexer ([Binaries](#61-binaries)), not blindbit-oracle. So
-only one regtest check remains before building: Core's REST endpoints behave as expected
-on regtest.
+only one regtest check remained before building: Core's REST endpoints behave as expected
+on regtest. The 1 Oct run on Bitcoin Core v31.1.0 settled it.
 
 ### 7.3 The corners
 
@@ -1773,7 +1796,8 @@ zero to two real bugs. The suite is the contribution either way. *"We tested thi
 N implementations and they agree"* is a legitimate and reportable result. It answers how
 we know the canonical set is right.
 
-The work is time-boxed. The vectors ship whether or not they find anything.
+The work is time-boxed. Once built, the vectors ship whether or not they find anything.
+For v1 they are not built; see the status note at the top of this section.
 
 ## 8. Demo
 
@@ -1821,16 +1845,21 @@ viewer to take the problem on faith.
 v1 has no wallet in the path ([Binaries](#61-binaries)). So act 1 shows the served data
 directly: the chain holds the payment, and the indexer's response has no entry for it.
 
+Times follow the [video script](../submission/video-script.md), which holds the
+shot-by-shot timings and wins where the two differ. They are given without act 3b. Act
+3b, when kept, adds 25 seconds after act 3, and every later act moves by 0:25.
+
 | Act | Time | On screen | What it establishes |
 |---|---|---|---|
-| **1. The loss** | 0:00–0:40 | Split screen. Left: Bitcoin Core on regtest shows the payment, confirmed in block *B*. Right: the indexer's response for *B*, HTTP 200, with no entry for that transaction | A client reading this response finds no payment. The response carries no error, and a hole is also what an honest server sends for an old, pruned block |
-| **2. The cause** | 0:40–1:05 | The `--withhold-txid <txid>` switch on the indexer's command line, with its help text. Then the indexer's log: no error, no warning | That is the whole attack. It produces no error because it needs none |
-| **3. Detection** | 1:05–2:05 | `canary check` fetches the signed commitment and the response with its receipt. It finds a hole inside the retention window. It fills the gap with the entry it computes from the payment declared with `--expect`, which the local Core node supplies. Then it recomputes the root, and names the server, the block and the txid | The server's own signed statements contradict each other ([Comparison procedure](#25-comparison-procedure)). One server is enough, with no trust in it. Its signed tip and its signed block height put the block inside the window, so no outside chain fact is needed. The local Core node supplies the block hashes and the declared payment, not the verdict |
-| **3b. The other branch** | 2:05–2:35 | A second, honest indexer. The attacker now signs a record for the set without the entry. The two roots differ, and the block reads *Servers disagree*, the Disputed state | Committing to the smaller set shows up in the cross-check instead, as a dispute between two named servers. It is not yet an attribution. v1 detects this case. Only staging the scene is optional |
-| **4. Independent check** | 2:35–3:20 | A second terminal, with the network interface visibly down and `canary` built beforehand. `canary verify evidence/<file>.json` passes. A tampered copy, with the flipped byte named, fails | The accusation survives without us and without the internet ([Evidence artifact](#47-evidence-artifact)) |
-| **5. The limit** | 3:20–4:10 | The limits from [Limits of v1](#limits-of-v1): output-side withholding, hash-only withholding under a declared pruning or dust policy, and v1 built and tested on regtest only. It closes on `canary status` showing a *Can't be checked* range, the unresolvable state. Closing line: accountable, not trustless | The boundary, stated before anyone asks. Can't be checked is neither a pass nor an accusation |
+| **1. The loss** | 0:00–0:44 | Split screen. Left: Bitcoin Core on regtest shows the payment, confirmed in block *B*. Right: the indexer's response for *B*, HTTP 200, with no entry for that transaction | A client reading this response finds no payment. The response carries no error, and a hole is also what an honest server sends for an old, pruned block |
+| **2. The cause** | 0:44–1:24 | The `--withhold-txid <txid>` switch on the indexer's command line, with its help text. Then the indexer's log: a start-up warning, because this is a demo tool, and no error when it serves the list. Then why the run is on regtest | That is the whole attack. Serving the list produces no error because it needs none. A real withholder would print no warning either |
+| **3. Detection** | 1:24–2:18 | `canary check` fetches the signed commitment and the response with its receipt. It finds a hole inside the retention window. It fills the gap with the entry it computes from the payment declared with `--expect`, which the local Core node supplies. Then it recomputes the root, and names the server, the block and the txid | The server's own signed statements contradict each other ([Comparison procedure](#25-comparison-procedure)). One server is enough, with no trust in it. Its signed tip and its signed block height put the block inside the window, so no outside chain fact is needed. The local Core node supplies the block hashes and the declared payment, not the verdict |
+| **3b. The other branch** | 2:18–2:43, optional | A second, honest indexer. The attacker now signs a record for the set without the entry. The two roots differ, and the block reads *Servers disagree*, the Disputed state | Committing to the smaller set shows up in the cross-check instead, as a dispute between two named servers. It is not yet an attribution. v1 detects this case. Only staging the scene is optional |
+| **4. Independent check** | 2:18–3:02 | The browser checker on a locally served copy of the site: the evidence file checks out, and a tampered copy with one byte changed fails. Then a terminal with the network visibly off and `canary` built beforehand. `canary verify evidence/<file>.json` passes, and the tampered copy fails | The accusation survives without us and without the internet ([Evidence artifact](#47-evidence-artifact)) |
+| **5. The limit** | 3:02–3:56 | The limits from [Limits of v1](#limits-of-v1): output-side withholding, hash-only withholding under a declared pruning or dust policy, v1 built and tested on regtest only, and no relays. Then `canary check` on an older block alone reads *Can't be checked*, the unresolvable state. Closing line: accountable, not trustless | The boundary, stated before anyone asks. Can't be checked is neither a pass nor an accusation |
 
-Without act 3b the video runs about 3:40 (4:10 minus 0:30), still inside the target.
+Without act 3b the video runs 3:56. With it, the video runs 4:21 (3:56 plus 0:25). Both
+are inside the target.
 
 **Staging act 3b.** v1 detects Servers disagree, so the scene would show a real v1
 result. Staging it needs an indexer switch that signs a record without the entry.
@@ -1898,11 +1927,12 @@ caused. Five rules follow.
 A reader who never opens the video can check a real accusation from the README in under
 a minute.
 
-`evidence/` holds a real file from a real recorded run, not a hand-built fixture. The
-README's first code block verifies it:
+`evidence/` holds a real file from a real run, not a hand-built fixture. It comes from
+the 1 Oct run of `scripts/demo-regtest.sh --act5` on Bitcoin Core v31.1.0. The README's
+first code block verifies it:
 
 ```
-go run ./cmd/canary verify evidence/<file>.json
+go run ./cmd/canary verify evidence/omission-regtest-351-ad56b9bb-db614560.json
 ```
 
 The first build downloads the Go module dependencies. So it needs a network connection,
@@ -1915,15 +1945,18 @@ With a receipt in the file, the result is an accusation anyone can check. Withou
 `canary verify` reports *inclusion only* and says why
 ([Evidence artifact](#47-evidence-artifact)).
 
-If the run's signed events are also published to public relays, a reader can fetch the
-same commitment independently. Publishing is a stretch goal for v1, and the README claims
-it only if it happened. Relays differ in how long they keep events, so the publisher
-picks relays it has checked for retention.
+If a run's signed events are also published to public relays, a reader can fetch the
+same commitment independently. The 1 Oct run published nothing to relays, and the README
+says so. Publishing comes after v1. Relays differ in how long they keep events, so the
+publisher will pick relays it has checked for retention.
 
 ### 8.6 Fallbacks
 
 The run is on regtest, so block timing is under our control, and no public faucet or
-server is involved. The remaining risks are in the build, and each has a stated fallback:
+server is involved. The remaining risks were in the build, and each has a stated
+fallback. On 1 Oct the scripted run, the tripwire, receipt checking and act 5's Can't be
+checked block all worked on Bitcoin Core v31.1.0, so none of the four fallbacks below is
+needed unless something breaks before filming.
 
 | Risk | Fallback |
 |---|---|
@@ -1955,13 +1988,16 @@ legitimate either. SPCOMMIT's v2 format also covers each transaction's output pr
 and the block's spent outputs, which Canary v1 does not ([Limits of v1](#limits-of-v1)).
 
 **Why would a withholding server commit honestly?**
-It cannot withdraw a published commitment, and each of its three choices meets a
+It cannot overwrite a published commitment, and a deletion request does not reach copies
+others already hold. v1 publishes nothing to relays, so there the state file and the
+evidence file keep the copy Canary fetched. Each of the server's three choices meets a
 different check. If it commits honestly and leaves a hole inside the retention window,
 its own signed receipt shows the hole, and one server is enough. If it serves a wrong
 entry, the recomputed root does not match its signature. If it commits to the smaller
-set, any honest server's root differs, and the two servers stand as Disputed until
-attribution names the liar. For a payment the client declared, the smaller set names the
-server directly, because its own record leaves out the entry. The client knows, but v1
+set and is the client's only server, the block reads Verified, because nothing else tests
+the record. Any honest second server's root differs, and the two servers stand as
+Disputed until attribution names the liar. For a payment the client declared, the
+smaller set names the server directly, because its own record leaves out the entry. The client knows, but v1
 cannot prove it to others ([Canary tripwire](#5-canary-tripwire)). Two variants pass the
 per-block check: serving the entry's hash under a declared pruning or dust policy, and
 hiding the output data instead of the entry. [Limits of v1](#limits-of-v1) states both.

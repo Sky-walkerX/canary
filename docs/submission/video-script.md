@@ -9,12 +9,12 @@ anyone can repeat, then the limits. The video ends on a block Canary could not c
 because that state shows how the design treats what it cannot know.
 
 The values quoted below come from the recorded run of 1 Oct 2026, whose output is in
-[docs/runs/2026-10-01](../runs/2026-10-01/). The setup repeats that run's steps. So every
-take gives the same block heights, 201 and 351, the same five entries in block 351 and
-the same counts lines. Txids, block hashes, keys and the evidence file's name change on
-every run, and the withheld entry's position can change too. If a take differs from the
-values here, the screen wins. Take the new values from the terminal while editing, never
-from memory.
+[docs/runs/2026-10-01](../runs/2026-10-01/). The setup repeats that run's steps, and each
+take, dry runs included, starts from an empty run directory. So every take gives the same
+block heights, 201 and 351, the same five entries in block 351 and the same counts lines.
+Txids, block hashes, keys and the evidence file's name change on every run, and the
+withheld entry's position can change too. If a take differs from the values here, the
+screen wins. Take the new values from the terminal while editing, never from memory.
 
 ## Rules for the recording
 
@@ -62,8 +62,8 @@ With it:
 4:09 Accountable, not trustless
 ```
 
-Suggested title: *Canary: catching a silent-payments server that leaves out an entry it
-signed for*.
+Suggested title: *Canary: catching a silent-payments server that leaves out a recent entry
+it signed for*.
 
 Suggested description, above the chapters:
 
@@ -92,10 +92,15 @@ steps, but do a full dry run of them before the take you keep.
 You need Bitcoin Core v30 or later, Go and curl. Run everything from the repository root,
 in zsh or bash.
 
-**Build once, while online.** The run directory sits outside the repository.
+**Build once per take, while online.** The run directory sits outside the repository.
+Every take starts from an empty one. A second pass in the same directory fails at
+`createwallet`, because the wallet already exists, and leftover evidence files break the
+site build in act 4. If a previous take is still running, run the commands under
+[After recording](#after-recording) first.
 
 ```sh
 export RUN=~/canary-run
+rm -rf "$RUN"
 mkdir -p "$RUN"/{bin,keys,logs,evidence,bitcoin}
 go build -o "$RUN/bin/canary" ./cmd/canary
 go build -o "$RUN/bin/canary-indexer" ./cmd/canary-indexer
@@ -258,12 +263,12 @@ a 33-byte tweak. Withholder: the payment's slot is kind 03, empty.
 canary-indexer --help
 ```
 
-**Say.** "Here's the cause. Our reference server has one switch, withhold-txid. It leaves
-one transaction out of every list it serves, and still signs it into its record for that
-block."
+**Say.** "Here's the cause. Our reference server has one switch, withhold-txid. Each use
+leaves one transaction out of every list it serves, and still signs it into its record.
+Here it's set twice: my payment, and an earlier one for the last scene."
 
-**Caption.** --withhold-txid leaves one transaction out of what the server sends. The
-signed record still includes it.
+**Caption.** Each --withhold-txid leaves one transaction out of what the server sends.
+The signed record still includes it. This run sets it twice.
 
 ### Shot 5, 0:58 to 1:10. Why a transaction, and why the sender
 
@@ -273,8 +278,9 @@ signed record still includes it.
 cat "$RUN/logs/withholder.log"
 ```
 
-It shows the start-up warning, the pubkey and the indexed heights, and no error. Point
-at the warning in the edit. It is there because this is a demo tool, and a real
+It shows the start-up warning, the pubkey and the indexed heights, and no error. The
+warning says the server leaves 2 transactions out of every list it serves, and names both
+txids. Point at it in the edit. It is there because this is a demo tool, and a real
 withholder would print nothing. Serving the list logged no error.
 
 **Say.** "It targets a transaction, not an address. No server can find your payments
@@ -400,6 +406,7 @@ and the site, and serve the site on this computer:
 
 ```sh
 EV=$(ls "$RUN"/evidence/omission-regtest-*.json)
+[ "$(printf '%s\n' "$EV" | wc -l)" -eq 1 ] || echo "STOP: $RUN/evidence must hold exactly one omission file"
 NAME=$(basename "$EV")
 cp "$EV" evidence/
 make wasm
@@ -407,11 +414,12 @@ go run ./cmd/site -evidence "evidence/$NAME"
 python3 -m http.server 8080 --bind 127.0.0.1 --directory site/dist
 ```
 
-The last command serves the site until you press Ctrl-C, so give it its own terminal and
-stop it after shot 13. Set `EV` and `NAME` the same way in the terminal you film for shot
-12. The site build also writes a tampered copy, with one byte changed, to
-`site/dist/evidence/`, under the same name with `-tampered` before `.json`. It flips one
-hex digit of the first proof hash, and the page's note names the byte.
+If the second line prints STOP, go no further. The run directory was not empty, so start
+the take again. The last command serves the site until you press Ctrl-C, so give it its
+own terminal and stop it after shot 13. Set `EV` and `NAME` the same way in the terminal
+you film for shot 12. The site build also writes a tampered copy, with one byte changed,
+to `site/dist/evidence/`, under the same name with `-tampered` before `.json`. It flips
+one hex digit of the first proof hash, and the page's note names the byte.
 
 In the 1 Oct run, `NAME` was `omission-regtest-351-ad56b9bb-db614560.json`, which is
 already committed. A new take adds its own file beside it, and

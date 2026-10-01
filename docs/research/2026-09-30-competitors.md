@@ -371,7 +371,7 @@ SPCOMMIT is Rob Segers' commitment scheme for silent-payment tweak indexes. He r
 
 [silent-payments/tweak-service-auditor](https://github.com/silent-payments/tweak-service-auditor) is a Python tool, active on 30 September. It compares the raw tweak lists served by rbitcoin, BlindBit's gRPC interface, Cake Wallet's electrs server and Bitcoin Core. It runs on the operator's side, after the fact, and nothing in it is signed.
 
-Raw comparison has a known weakness: it cannot tell honest filtering from withholding. On 30 September, three live answers for mainnet block 969300 held 220, 184 and 141 entries. Those came from silentpayments.dev's two endpoints and Cake's server. That noise is why Canary compares against signed records instead. The roadmap plans to offer Canary's block-level test vectors to this project (F27).
+Raw comparison has a known weakness: it cannot tell honest filtering from withholding. On 30 September, three live answers for mainnet block 969300 held 220, 184 and 141 entries. Those came from silentpayments.dev's two endpoints and Cake's server. It was a one-off measurement, and only the counts were kept. That noise is why Canary compares against signed records instead. The roadmap plans to offer Canary's block-level test vectors to this project (F27).
 
 ### The index-server specification
 

@@ -499,7 +499,7 @@ Left out of the minimum form:
 **Use cases.**
 - A judge watching the video sees `--withhold-txid <txid>` typed on screen and listed in `--help`. The missing entry reads as an attack the team staged, not as a bug in Canary.
 - A judge reading `--help` sees that the attack targets a txid, not an address. An indexer cannot find a receiver's payments without the scan key, but a paying exchange knows its own txid. The threat model stays honest.
-- An index-server operator curls the endpoint and sees what records cost. A root is about 36 bytes per block, about 35 MB for the chain's roughly 965,000 blocks. A signed event is about 200 bytes per block, about 190 MB for all blocks.
+- An index-server operator curls the endpoint and sees what records cost. A root is about 36 bytes per block, about 35 MB for the chain's roughly 965,000 blocks. A signed event is about 690 bytes per block, about 666 MB for all blocks (965,000 × 690 bytes). The 1 Oct run's record for block 351 is 691 bytes.
 
 **Why it matters.** Every check except the tripwire needs a server that publishes per-block records. No live server publishes Canary's records, so without this indexer there is nothing to catch.
 
@@ -552,7 +552,7 @@ The 9 hours cover:
 - **The planned version never reported withholding.** It returned "unresolvable" when no second source existed, and "clean" when a second source filled the gap. The retention rule fixes this. Add a test that fails without it.
 - **Hash-only withholding.** A server that *declares* cut-through can send the correct hash in place of the entry, and the block reads Checked, gap filled, with the reason `hash_retained`. A server whose `/info` declares no pruning and does the same gets a warning, reason `hash_without_policy`. It is never an accusation, because v1 policies are unsigned. F11 names this limit, and F24 fixes it.
 - **Checked means less than it sounds.** It means the scan entries matched, never that your payments were found. See F11.
-- **Raw comparisons.** Show a raw comparison only as quoted research, with its date. On 30 September, three live answers for mainnet block 969300 held 220, 184 and 141 entries: silentpayments.dev's two endpoints and Cake's server. A raw diff cannot tell filtering from withholding. That is why Canary compares against signed records instead.
+- **Raw comparisons.** Show a raw comparison only as quoted research, with its date. On 30 September, three live answers for mainnet block 969300 held 220, 184 and 141 entries: silentpayments.dev's two endpoints and Cake's server. It was a one-off measurement, and only the counts were kept. A raw diff cannot tell filtering from withholding. That is why Canary compares against signed records instead.
 
 **Score rationale.** Judge 10/9, engineer 10/9, privacy 6/8. The critic raised hours from 7 to 9 for the parts listed above, which the original estimate left out. Complexity stays at 6.
 

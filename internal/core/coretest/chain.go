@@ -81,6 +81,7 @@ type Chain struct {
 	nextKey uint64
 	nonce   uint32 // never reset, so a block mined after Reorg gets a new hash
 	ibd     bool
+	txindex bool // Core's -txindex, for /rest/tx; off by default, as in Core
 }
 
 // NewChain returns a chain holding one block, at height 0, whose coinbase

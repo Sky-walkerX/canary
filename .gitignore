@@ -40,3 +40,6 @@ nsec*
 
 # UI screenshots from design reviews
 /.ui-screens/
+
+# Playwright MCP session files
+/.playwright-mcp/

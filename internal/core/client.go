@@ -1,11 +1,14 @@
 // Package core reads a Bitcoin Core node over its unauthenticated REST
 // interface. Core must run with -rest=1. The client needs no RPC credentials.
 //
-// It reads four things: the chain tip, the block hash at a height, a raw
-// block, and the outputs a block's inputs spend. The last comes from
-// /rest/spenttxouts, added in Core v30, so the client needs Core v30 or
+// It reads four things for the index: the chain tip, the block hash at a
+// height, a raw block, and the outputs a block's inputs spend. The last comes
+// from /rest/spenttxouts, added in Core v30, so the client needs Core v30 or
 // later. Together they give the canonical package everything it needs to
 // compute a block's entries.
+//
+// For declared payments it also reads one transaction by txid, which needs
+// Core's -txindex=1, and whether given outputs are still unspent.
 //
 // Hashes cross this package in internal order. The package converts to and
 // from display order in one place, ParseDisplayHash and DisplayHex.

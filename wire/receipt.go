@@ -93,8 +93,9 @@ type Receipt struct {
 	Sig [64]byte
 }
 
-// ReceiptRequest is what the client asked the server for. VerifyReceipt
-// compares a receipt against it.
+// ReceiptRequest is what the client expects a receipt to cover: its own
+// network, the block it asked for and the dust threshold it asked for.
+// VerifyReceipt compares a receipt against it.
 type ReceiptRequest struct {
 	Network   canonical.Network
 	BlockHash [32]byte // internal byte order
@@ -258,6 +259,10 @@ func VerifyReceiptSignature(r Receipt, pubkey [32]byte) error {
 //
 // VerifyReceipt does not judge the signed tip. The retention rule reads it
 // through InsideRetentionWindow, and only where a position is absent.
+//
+// An evidence file records no requested dust threshold, so evidence
+// verification does not call VerifyReceipt. It calls VerifyReceiptSignature
+// and checks the network, resource, block hash and body digest itself.
 func VerifyReceipt(r Receipt, pubkey [32]byte, req ReceiptRequest, body []byte) error {
 	if err := VerifyReceiptSignature(r, pubkey); err != nil {
 		return err
@@ -299,10 +304,12 @@ func BlockDepth(tipHeight, blockHeight uint32) int64 {
 // window when the server served it. Inside means a depth below
 // RetentionWindow, so depth 143 is the oldest block inside.
 //
-// Both heights must be ones the server signed with the same key. tipHeight
-// comes from the receipt that covers the list. blockHeight comes from the
-// height tag of the server's signed record for the block. An absent position
-// in a block inside the window is an omission.
+// For a provable finding, both heights come from the server's own
+// signatures: tipHeight from the receipt that covers the list, and
+// blockHeight from the height tag of its signed record for the block. Without
+// a valid receipt, callers pass Core's tip and Core's height for the block
+// instead. The comparison is the same, and this function is its only
+// definition. An absent position in a block inside the window is an omission.
 //
 // A negative depth counts as inside. A server cannot escape the rule by
 // understating its tip.

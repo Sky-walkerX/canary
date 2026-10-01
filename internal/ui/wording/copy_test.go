@@ -123,6 +123,7 @@ func allText() []string {
 	for _, s := range VerifySteps {
 		out = append(out, VerifyStep(s))
 	}
+	out = append(out, verifyCheckTexts()...)
 	for code := range paymentOutcomes {
 		l, s := PaymentOutcome(code)
 		out = append(out, l, s)

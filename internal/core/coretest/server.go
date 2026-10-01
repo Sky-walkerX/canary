@@ -32,6 +32,8 @@ func Serve(t testing.TB, c *Chain) string {
 //	/rest/blockhashbyheight/<height>.<bin|hex|json>
 //	/rest/block/<hash>.<bin|hex>
 //	/rest/spenttxouts/<hash>.<bin|hex>
+//	/rest/tx/<txid>.<bin|hex|json>
+//	/rest/getutxos/<txid>-<n>/....json
 //
 // Binary bodies match Core byte for byte. The chaininfo JSON carries the
 // fields Canary reads plus a few others, in Core's order. Errors use Core's
@@ -53,6 +55,10 @@ func (c *Chain) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.serveBlock(w, strings.TrimPrefix(p, "/rest/block/"))
 	case strings.HasPrefix(p, "/rest/spenttxouts/"):
 		c.serveSpent(w, strings.TrimPrefix(p, "/rest/spenttxouts/"))
+	case strings.HasPrefix(p, "/rest/tx/"):
+		c.serveTx(w, strings.TrimPrefix(p, "/rest/tx/"))
+	case strings.HasPrefix(p, "/rest/getutxos/"):
+		c.serveUTXOs(w, strings.TrimPrefix(p, "/rest/getutxos/"))
 	default:
 		http.NotFound(w, r)
 	}

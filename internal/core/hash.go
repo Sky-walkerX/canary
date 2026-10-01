@@ -11,8 +11,9 @@ import (
 // them. Canary's URLs, JSON and Nostr tags also use display order, while its
 // binary formats and hash preimages use internal order.
 //
-// These two functions are the one place the reference indexer converts
-// between the orders. Everything else holds hashes in internal order.
+// These two functions are the one place Canary's programs convert between
+// the orders: the reference indexer, canary check and the evidence package
+// all call them. Everything else holds hashes in internal order.
 
 // ParseDisplayHash reads a hash written in display order and returns its
 // bytes in internal order. It accepts exactly 64 lowercase hex characters, so

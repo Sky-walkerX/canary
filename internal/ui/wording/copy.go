@@ -873,3 +873,570 @@ func VerifyStep(step string) string {
 	}
 	return step
 }
+
+// Check texts for the verify report, one sentence per step. The evidence
+// package picks the text for each step it runs. A passing step's text matches
+// the report example in the v1 formats doc. Nothing here echoes a value the
+// file's author chose, apart from numbers and names verify has already checked.
+
+// VerifyReadOK is the read step's text when the file parses.
+func VerifyReadOK(format, claim string) string {
+	return "Format " + format + ", claim " + claim + "."
+}
+
+// Texts for the read and record_signature steps.
+const (
+	VerifyReadMalformed = "The file is not valid canary-evidence/1. " +
+		"It has bad JSON, an unknown or missing field, or a value of the wrong type or length."
+	VerifyReadUnsupported    = "The file does not name canary-evidence/1 with the omission claim, so this build can't check it."
+	VerifyRecordSignatureOK  = "The signed record's id and signature are valid."
+	VerifyRecordSignatureBad = "The signed record's id or signature is invalid."
+	VerifyRecordMalformed    = "The signed record is not a kind-1352 record with every tag, or its root tag differs from its content."
+	VerifySignerOK           = "The record is signed by the accused key."
+	VerifySignerBad          = "A key other than the accused key signed the record."
+	VerifyBlockBad           = "The record names a different block, height or network than this file does."
+)
+
+// networkWords names a network for a sentence. An unknown magic prints as its
+// decimal value, since "on unknown" reads as a typo.
+func networkWords(name string, magic uint32) string {
+	if name == "" || name == "unknown" {
+		return "network " + strconv.FormatUint(uint64(magic), 10)
+	}
+	return name
+}
+
+// VerifyBlockOK is the block step's text when the record and the file agree.
+func VerifyBlockOK(height uint32, network string, magic uint32) string {
+	return fmt.Sprintf("The record names block %d on %s, the block this file names.", height, networkWords(network, magic))
+}
+
+// VerifyInclusionOK is the inclusion step's text when the proof holds.
+func VerifyInclusionOK(index, n uint32) string {
+	return fmt.Sprintf("Entry %d of %d proves into the signed root.", index, n)
+}
+
+// VerifyInclusionBad is the inclusion step's text when the proof fails.
+func VerifyInclusionBad(index, n uint32) string {
+	return fmt.Sprintf("Entry %d of %d does not prove into the signed root.", index, n)
+}
+
+// VerifyInclusionWrongSize is the inclusion step's text when the proof is for
+// a different number of entries than the record signs for.
+func VerifyInclusionWrongSize(proofN, n uint32) string {
+	return fmt.Sprintf("The proof is for %d %s, but the record signs for %d.", proofN, plural(int(proofN), "entry", "entries"), n)
+}
+
+func byteCount(n int) string {
+	return strconv.Itoa(n) + " " + plural(n, "byte", "bytes")
+}
+
+// VerifyReceiptOK is the receipt step's text when every receipt check passes.
+func VerifyReceiptOK(size int) string {
+	return "The receipt is signed by the same key, names the same block and covers these " + byteCount(size) + "."
+}
+
+// Texts for a receipt that fails.
+const (
+	VerifyReceiptMalformed     = "The receipt is not 178 bytes of lowercase hex with version 1."
+	VerifyReceiptWrongKey      = "The receipt is not signed by the accused key."
+	VerifyReceiptOtherNetwork  = "The receipt names a different network than the record."
+	VerifyReceiptOtherBlock    = "The receipt names a different block than the record."
+	VerifyReceiptOtherResource = "The receipt covers something other than a tweak list."
+)
+
+// VerifyReceiptOtherBody is the receipt step's text when the receipt signs
+// different bytes than the file carries.
+func VerifyReceiptOtherBody(size int) string {
+	return "The receipt does not cover these " + byteCount(size) + "."
+}
+
+func positions(n uint32) string {
+	return fmt.Sprintf("%d %s", n, plural(int(n), "position", "positions"))
+}
+
+// VerifyServedAbsent is the served_list step's text when the position is
+// marked absent.
+func VerifyServedAbsent(n, index uint32) string {
+	return fmt.Sprintf("The served list has %s, and position %d is marked absent.", positions(n), index)
+}
+
+// VerifyServedOtherEntry is the served_list step's text when the position
+// holds a different entry.
+func VerifyServedOtherEntry(n, index uint32) string {
+	return fmt.Sprintf("The served list has %s, and position %d holds a different entry.", positions(n), index)
+}
+
+// VerifyServedOtherHash is the served_list step's text when the position holds
+// a hash other than the entry's hash.
+func VerifyServedOtherHash(n, index uint32) string {
+	return fmt.Sprintf("The served list has %s, and position %d holds a hash other than this entry's hash.", positions(n), index)
+}
+
+// VerifyServedMalformed is the served_list step's text when the served bytes
+// fail the tweak list's reader rules.
+const VerifyServedMalformed = "The served bytes do not decode as a tweak list."
+
+// VerifyServedWrongSize is the served_list step's text when the list's length
+// differs from the record's n.
+func VerifyServedWrongSize(got, n uint32) string {
+	return fmt.Sprintf("The served list has %s, but the record signs for %d.", positions(got), n)
+}
+
+// VerifyServedEntry is the served_list step's text when the position carries
+// the entry itself.
+func VerifyServedEntry(index uint32) string {
+	return fmt.Sprintf("Position %d of the served list carries the entry.", index)
+}
+
+// VerifyServedEntryHash is the served_list step's text when the position
+// carries the entry's correct hash.
+func VerifyServedEntryHash(index uint32) string {
+	return fmt.Sprintf("Position %d of the served list carries the entry's hash.", index)
+}
+
+func depthWords(depth int64) string {
+	return fmt.Sprintf("%d %s", depth, plural(int(depth), "block", "blocks"))
+}
+
+// VerifyWindowInside is the window step's text when the block sat inside the
+// retention window. window is the protocol's window, passed in so this table
+// holds no second copy of it.
+func VerifyWindowInside(tip uint32, depth int64, window int) string {
+	return fmt.Sprintf("The server's signed tip was %d, so the block was %s deep, inside the %d-block window.", tip, depthWords(depth), window)
+}
+
+// VerifyWindowAboveTip is the window step's text when the server signed a tip
+// below the block. That counts as inside, so a server cannot escape the rule
+// by understating its tip.
+func VerifyWindowAboveTip(tip uint32, window int) string {
+	return fmt.Sprintf("The server's signed tip was %d, below the block, which counts as inside the %d-block window.", tip, window)
+}
+
+// VerifyWindowOutside is the window step's text when the block sat outside the
+// retention window, where an absent position is allowed.
+func VerifyWindowOutside(tip uint32, depth int64, window int) string {
+	return fmt.Sprintf("The server's signed tip was %d, so the block was %s deep, outside the %d-block window, where an absent position is allowed.",
+		tip, depthWords(depth), window)
+}
+
+// VerifyWindowNotNeeded is the window step's text when the position holds
+// different data. That is never allowed at a committed position, at any depth.
+func VerifyWindowNotNeeded(index uint32) string {
+	return fmt.Sprintf("Position %d holds different data, which is never allowed at a committed position, so depth does not matter.", index)
+}
+
+// Command-line wording. canary check, verify, status and ui print every line
+// from here. A Go error's own text appears only after CLIDetails, the way the
+// dashboard keeps it behind "Technical details".
+
+// CLIUsage is what canary help prints.
+const CLIUsage = `Usage: canary <command> [flags]
+
+Canary holds tweak servers to what they signed. It does not remove the need to trust one.
+
+Commands:
+  check    Check a range of blocks against each server, then write the state file and evidence files.
+  verify   Check one evidence file offline.
+  status   Print a summary of the state file.
+  ui       Serve the dashboard for the state file on this computer.
+
+Run canary <command> --help for a command's flags.`
+
+// CLIHelpHint follows a top-level usage error.
+const CLIHelpHint = "Run canary help for the commands."
+
+// CLINoCommand is the usage error for a bare canary.
+const CLINoCommand = "Give a command: check, verify, status or ui."
+
+// CLIUnknownCommand is the usage error for a command canary does not have.
+func CLIUnknownCommand(name string) string {
+	return "There is no command " + strconv.Quote(name) + ". The commands are check, verify, status and ui."
+}
+
+// CLICommandHelpHint follows a usage error in one command.
+func CLICommandHelpHint(command string) string {
+	return "Run canary " + command + " --help for the flags."
+}
+
+// CLIFlagError wraps the flag parser's own message.
+func CLIFlagError(detail string) string {
+	return "Can't read the flags: " + strings.TrimSuffix(detail, ".") + "."
+}
+
+// CLIUnexpectedArgument is the usage error for a stray argument.
+func CLIUnexpectedArgument(arg string) string {
+	return "Unexpected argument " + strconv.Quote(arg) + "."
+}
+
+// CLIDetails introduces a Go error's own text under a plain sentence.
+func CLIDetails(detail string) string {
+	return "  Details: " + detail
+}
+
+// VersionLine is what canary --version prints.
+func VersionLine(version, build string) string {
+	return "canary " + version + " (" + build + ")"
+}
+
+// CLIFlagsHeading heads the flag list in a command's help.
+const CLIFlagsHeading = "Flags:"
+
+// FlagHelp is one flag in a command's usage text.
+type FlagHelp struct {
+	Name string // without dashes
+	Arg  string // the value's placeholder, empty for a switch
+	Text string
+}
+
+// Usage lines, one per command.
+const (
+	CheckUsage  = "Usage: canary check --indexer URL=label --pubkey label=HEX --core-rest URL [flags]"
+	VerifyUsage = "Usage: canary verify FILE [--json]"
+	StatusUsage = "Usage: canary status [--json] [--state PATH]"
+	UIUsage     = "Usage: canary ui [--addr 127.0.0.1:7352] [--state PATH]"
+)
+
+// Flags for each command, in the order the formats doc lists them.
+var (
+	CheckFlags = []FlagHelp{
+		{"indexer", "URL=label", "A server to check. Repeat it for each server. A label is up to 32 lowercase letters, digits and -."},
+		{"pubkey", "label=HEX", "Pins a server's 32-byte public key, one per server. Give label=none for a server that signs nothing. Canary never learns a key from a server."},
+		{"core-rest", "URL", "Bitcoin Core's REST address, for example http://127.0.0.1:18443/rest. Core must run with -rest=1."},
+		{"from", "H", "First height to check. Default 0."},
+		{"to", "H", "Last height to check. Default Core's tip."},
+		{"expect", "TXID[@BLOCKHASH]", "A payment you made and expect each server to report, in display order. Repeatable. A bare TXID needs Core's -txindex=1."},
+		{"state", "PATH", "State file. Default ~/.canary/state.json."},
+		{"evidence-dir", "DIR", "Where evidence files go. Default ~/.canary/evidence."},
+	}
+	VerifyFlags = []FlagHelp{
+		{"json", "", "Print the VerifyReport as JSON."},
+	}
+	StatusFlags = []FlagHelp{
+		{"json", "", "Print the state file itself."},
+		{"state", "PATH", "State file. Default ~/.canary/state.json."},
+	}
+	UIFlags = []FlagHelp{
+		{"addr", "HOST:PORT", "Listen address. It must be a loopback address. Default 127.0.0.1:7352."},
+		{"state", "PATH", "State file to read. Default ~/.canary/state.json."},
+	}
+)
+
+// Usage errors from canary check.
+const (
+	CheckNoIndexer = "Give at least one server with --indexer URL=label."
+	CheckNoCore    = "Give Bitcoin Core's REST address with --core-rest, for example http://127.0.0.1:18443/rest."
+)
+
+// CheckBadIndexer is the usage error for an --indexer value that is not
+// URL=label.
+func CheckBadIndexer(v string) string {
+	return "--indexer " + strconv.Quote(v) + " is not URL=label with an http or https URL."
+}
+
+// CheckBadLabel is the usage error for a label outside the allowed set.
+func CheckBadLabel(label string) string {
+	return "Label " + strconv.Quote(label) + " must be 1 to 32 lowercase letters, digits or -."
+}
+
+// CheckDuplicateLabel is the usage error for two servers with one label.
+func CheckDuplicateLabel(label string) string {
+	return "Label " + label + " names two servers. Each --indexer needs its own label."
+}
+
+// CheckBadPubkeyFlag is the usage error for a --pubkey value that is not
+// label=HEX.
+func CheckBadPubkeyFlag(v string) string {
+	return "--pubkey " + strconv.Quote(v) + " is not label=HEX or label=none."
+}
+
+// CheckBadPubkey is the usage error for a pin that is not a public key.
+func CheckBadPubkey(label string) string {
+	return "The --pubkey for " + label + " is not a 32-byte public key written as 64 lowercase hex characters."
+}
+
+// CheckPubkeyUnknownLabel is the usage error for a pin no server uses.
+func CheckPubkeyUnknownLabel(label string) string {
+	return "--pubkey names " + label + ", but no --indexer has that label."
+}
+
+// CheckDuplicatePubkey is the usage error for a server pinned twice.
+func CheckDuplicatePubkey(label string) string {
+	return "Server " + label + " has two --pubkey pins. Give it one."
+}
+
+// CheckMissingPin is the usage error for a server with no pinned key.
+func CheckMissingPin(label string) string {
+	return "Server " + label + " has no pinned key. Add --pubkey " + label + "=HEX, or " + label +
+		"=none for a server that signs nothing. Canary never learns a key from a server."
+}
+
+// CheckBadCore is the usage error for a --core-rest value that is not a URL.
+func CheckBadCore(v string) string {
+	return "--core-rest " + strconv.Quote(v) + " is not a URL like http://127.0.0.1:18443/rest."
+}
+
+// CheckBadHeight is the usage error for a --from or --to that is not a
+// height.
+func CheckBadHeight(flag, v string) string {
+	return flag + " " + strconv.Quote(v) + " is not a block height. Give a whole number."
+}
+
+// CheckRangeBackwards is the usage error for --from above --to.
+func CheckRangeBackwards(from, to uint32) string {
+	return fmt.Sprintf("--from %d is above --to %d.", from, to)
+}
+
+// CheckRangeAboveTip is the usage error for a --to above Core's tip.
+func CheckRangeAboveTip(to, tip uint32) string {
+	return fmt.Sprintf("--to %d is above Bitcoin Core's tip at height %d.", to, tip)
+}
+
+// CheckBadExpect is the usage error for an --expect value that does not
+// parse.
+func CheckBadExpect(v string) string {
+	return "--expect " + strconv.Quote(v) + " is not TXID or TXID@BLOCKHASH, each 64 lowercase hex characters in display order."
+}
+
+// CheckDuplicateExpect is the usage error for a payment declared twice.
+func CheckDuplicateExpect(txid string) string {
+	return "--expect " + txid + " is given twice."
+}
+
+// CheckExpectNotInBlock is the usage error for a declared payment that is not
+// in the block named.
+func CheckExpectNotInBlock(txid, block string) string {
+	return "Transaction " + txid + " is not in block " + block + "."
+}
+
+// CheckExpectBlockUnknown is the usage error for an --expect block that Core
+// does not have.
+func CheckExpectBlockUnknown(block string) string {
+	return "Bitcoin Core has no block " + block + "."
+}
+
+// CheckExpectNotChecked is the usage error for a declared payment whose
+// block is not among the blocks this run checks: it is outside the range, or
+// it left Core's active chain.
+func CheckExpectNotChecked(txid, block string, from, to uint32) string {
+	return fmt.Sprintf("Payment %s is in block %s, which this run does not check. "+
+		"The run checks heights %d–%d on Bitcoin Core's active chain.", txid, block, from, to)
+}
+
+// CheckExpectNotFound is the error for a bare --expect TXID that Core cannot
+// find. It names both fixes.
+func CheckExpectNotFound(txid string) string {
+	return "Bitcoin Core can't find transaction " + txid + ". Run Core with -txindex=1, or name the block with --expect " +
+		txid + "@BLOCKHASH."
+}
+
+// CheckPaymentEntry is the error when Canary cannot compute a declared
+// payment's entry from Core's copy of its block.
+func CheckPaymentEntry(txid string) string {
+	return "Can't compute the entry for payment " + txid + " from Bitcoin Core's copy of its block."
+}
+
+// CheckNoHome is the usage error when the default path needs a home
+// directory Canary cannot find.
+func CheckNoHome(what string) string {
+	return "Can't find your home directory for the default " + what + ". Give the path with its flag."
+}
+
+// Refusals to overwrite the state file, exit code 3.
+
+// CheckStateUnreadable refuses a state file Canary cannot read.
+func CheckStateUnreadable(path string) string {
+	return "Won't overwrite the state file at " + path + ": Canary can't read it, and it may hold findings. " +
+		"Move it aside, or give another --state path."
+}
+
+// CheckStateNewer refuses a state file from a later Canary.
+func CheckStateNewer(path, found string) string {
+	return "Won't overwrite the state file at " + path + ": it is " + found + ", newer than this Canary reads. " +
+		"Update Canary, or give another --state path."
+}
+
+// CheckStateOtherNetwork refuses a state file for another network.
+func CheckStateOtherNetwork(path, fileNetwork, coreNetwork string) string {
+	return "Won't overwrite the state file at " + path + ": it holds results for " + fileNetwork +
+		", and Bitcoin Core is on " + coreNetwork + ". Use a separate --state path for each network."
+}
+
+// Operational failures, exit code 5.
+
+// CheckCoreUnreachable is the error when Core's REST interface does not
+// answer.
+func CheckCoreUnreachable(url string) string {
+	return "Can't read Bitcoin Core's REST interface at " + url + ". Check that Core is running with -rest=1."
+}
+
+// CheckCoreSyncing is the error while Core is in its initial sync.
+const CheckCoreSyncing = "Bitcoin Core is still in its initial sync, so honest tips would look false. " +
+	"Run canary check again when the sync finishes."
+
+// CheckCoreChain is the error for a chain canary check cannot name.
+func CheckCoreChain(chain string) string {
+	return "Bitcoin Core reports chain " + strconv.Quote(chain) + ". canary check v1 runs on regtest and main only."
+}
+
+// CheckServerUnusable is the error for a server whose answer Canary cannot
+// use, usually a wrong --indexer URL.
+func CheckServerUnusable(label, url string) string {
+	return "Server " + label + " at " + url + " answered in a way Canary can't use. Check its --indexer URL."
+}
+
+// CheckWriteState is the error when the state file cannot be written.
+func CheckWriteState(path string) string {
+	return "Can't write the state file at " + path + "."
+}
+
+// CheckInterrupted is the error when the run is interrupted, as by Ctrl-C.
+// A cut-off request says nothing about a server, so nothing is saved.
+const CheckInterrupted = "Stopped before the run finished, so the state file was not changed. " +
+	"Evidence files written so far stay on disk."
+
+// CheckWriteEvidence is the error when an evidence file cannot be written.
+func CheckWriteEvidence(path string) string {
+	return "Can't write the evidence file " + path + "."
+}
+
+// Progress and notices from canary check.
+
+// CheckStarting opens a run.
+func CheckStarting(from, to uint32, servers int) string {
+	return fmt.Sprintf("Checking blocks %d–%d against %s.", from, to, plural(servers, "1 server", strconv.Itoa(servers)+" servers"))
+}
+
+// CheckDroppedFinding reports a finding dropped because Core no longer knows
+// its block.
+func CheckDroppedFinding(id, blockHash string) string {
+	return "Dropped finding " + id + ": Bitcoin Core no longer knows block " + blockHash + ". Its evidence file stays on disk."
+}
+
+// CheckSaved closes a run.
+func CheckSaved(path string) string {
+	return "Results saved to " + path + "."
+}
+
+// A server's last error, as the state file records it. Each is a plain
+// sentence. The Go error's own text goes to the terminal after
+// CheckServerLastError and CLIDetails, never into the state file.
+
+// ServerInfoFailed is a server's error when /info did not answer.
+const ServerInfoFailed = "Its /info did not answer."
+
+// ServerRecordUnanswered is a server's error when a record request failed.
+func ServerRecordUnanswered(height uint32) string {
+	return fmt.Sprintf("It did not answer for block %d's record.", height)
+}
+
+// ServerRecordRejected is a server's error when a record failed the checks.
+func ServerRecordRejected(height uint32) string {
+	return fmt.Sprintf("Its record for block %d failed Canary's checks.", height)
+}
+
+// ServerListUnanswered is a server's error when a list request failed.
+func ServerListUnanswered(height uint32) string {
+	return fmt.Sprintf("It served no list for block %d.", height)
+}
+
+// ServerNotAsked is a server's error when canary check stopped sending it
+// requests. The blocks it was not asked about read Not checked.
+func ServerNotAsked(streak int) string {
+	return fmt.Sprintf("Canary stopped asking it after %d requests in a row got no answer.", streak)
+}
+
+// ServerReceiptRejected is a server's error when a receipt failed the checks.
+func ServerReceiptRejected(height uint32) string {
+	return fmt.Sprintf("The receipt for block %d's list failed Canary's checks.", height)
+}
+
+// ServerListRejected is a server's error when a list could not be matched to
+// its record.
+func ServerListRejected(height uint32) string {
+	return fmt.Sprintf("Its list for block %d does not match its record.", height)
+}
+
+// CheckServerLastError introduces a server's last error on the terminal,
+// where CLIDetails follows it with the Go error's own text.
+func CheckServerLastError(label, sentence string) string {
+	return "Last error from " + label + ": " + sentence
+}
+
+// canary status failures, exit code 3.
+
+// StatusMissing is the error when there is no state file.
+func StatusMissing(path string) string {
+	return "No state file at " + path + ". Run canary check first."
+}
+
+// StatusUnreadable is the error for a state file Canary cannot read.
+func StatusUnreadable(path string) string {
+	return "Can't read the state file at " + path + ". It is not a canary-state/1 file this Canary can read."
+}
+
+// StatusNewer is the error for a state file from a later Canary.
+func StatusNewer(path, found string) string {
+	return "The state file at " + path + " is " + found + ", newer than this Canary reads. Update Canary to read it."
+}
+
+// Reasons canary verify gives after "Can't read this file:".
+const (
+	VerifyReasonMissing     = "there is no file at this path"
+	VerifyReasonNotOpened   = "the system would not let Canary open it"
+	VerifyReasonMalformed   = "it is not valid canary-evidence/1"
+	VerifyReasonUnsupported = "it is not canary-evidence/1 with the omission claim"
+)
+
+// VerifyNoFile is the usage error for canary verify with no file.
+const VerifyNoFile = "Give one evidence file to check."
+
+// VerifyReasonTooLarge is the reason for a file over canary verify's size
+// limit.
+func VerifyReasonTooLarge(limit int) string {
+	return fmt.Sprintf("it is larger than %d MiB, far more than any block's evidence", limit>>20)
+}
+
+// VerifyChecksOutDetail follows the Checks out headline.
+const VerifyChecksOutDetail = "The server signed a record that includes this entry, then signed a list that left it out."
+
+// VerifySubject names what a file that checks out is about. key and txid are
+// shortened hex.
+func VerifySubject(key string, height uint32, network string, index uint32, txid string) string {
+	return fmt.Sprintf("Accused key %s. Block %d on %s, position %d, txid %s.", key, height, network, index, txid)
+}
+
+// VerifyCheckLine prints one verify step. ok is nil when the step did not
+// run; its text then already says so.
+func VerifyCheckLine(ok *bool, step, text string) string {
+	label := "  " + VerifyStep(step) + ": "
+	switch {
+	case ok == nil:
+		return label + text
+	case *ok:
+		return label + StepPassed + ". " + text
+	}
+	return label + StepFailed + ". " + text
+}
+
+// canary ui lines.
+
+// UIServing tells the user where the dashboard is.
+func UIServing(url string) string {
+	return "Serving the dashboard at " + url + ". Press Ctrl-C to stop."
+}
+
+// UINotLoopback is the usage error for a listen address off this computer.
+func UINotLoopback(addr string) string {
+	return "--addr " + addr + " is not a loopback address. canary ui serves this computer only, for example on 127.0.0.1:7352."
+}
+
+// UIBadAddr is the usage error for a listen address that is not host:port.
+func UIBadAddr(addr string) string {
+	return "--addr " + strconv.Quote(addr) + " is not HOST:PORT, for example 127.0.0.1:7352."
+}
+
+// UICantListen is the error when the listen address cannot be bound.
+func UICantListen(addr string) string {
+	return "Can't listen on " + addr + "."
+}

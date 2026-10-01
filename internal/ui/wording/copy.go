@@ -409,8 +409,12 @@ func VerdictSomeChecked(passed, total int) Verdict {
 
 // VerdictNoneChecked is the verdict when no block could be checked.
 func VerdictNoneChecked(total int) Verdict {
+	head := "None of the " + blocks(total) + " could be checked."
+	if total == 1 {
+		head = "The 1 block could not be checked."
+	}
 	return Verdict{
-		Headline: "None of the " + blocks(total) + " could be checked.",
+		Headline: head,
 		Lede:     "No block had a signed record and a list Canary could check against it.",
 	}
 }
@@ -647,6 +651,25 @@ const Framing = "Canary holds tweak servers to what they signed. It does not rem
 
 // RegtestBadge is the network notice shown on regtest.
 const RegtestBadge = "regtest: a private test chain on this computer"
+
+// RecordedRegtestBadge is the network notice on a recorded run's pages. The
+// reader's computer never ran that chain, so it names no computer.
+const RecordedRegtestBadge = "regtest: a private test chain, not a public network"
+
+// Labels for the dashboard's links. A recorded run's pages sit inside the
+// public site, whose own links are already called Main.
+const (
+	DashboardNavLabel = "Main"
+	RecordedNavLabel  = "Recorded dashboard"
+)
+
+// RecordedNetworkBadge returns the network notice for a recorded run's pages.
+func RecordedNetworkBadge(name string) string {
+	if name == "regtest" {
+		return RecordedRegtestBadge
+	}
+	return NetworkBadge(name)
+}
 
 // NetworkBadge returns the network notice for the header.
 func NetworkBadge(name string) string {
@@ -1606,7 +1629,20 @@ type SiteText struct {
 	RunFilePlaceholder, RunPlaceholderNote       string
 	RunCloneLabel, RunBuildLabel, RunVerifyLabel string
 
-	RunsEmpty, RunsAbout, RunsAction string
+	// The runs index. RunsEmpty, RunsAboutEmpty and RunsAction show only
+	// while no run is recorded.
+	RunsEmpty, RunsAboutEmpty, RunsAction string
+	RunsAbout, RunsOpen, RunsStateHash    string
+
+	// A recorded run's pages. Each one shows the dashboard as canary ui
+	// showed it, under a banner that says it is a recording.
+	RecordedFilesLink, RecordedSource, RecordedCrumbs  string
+	RecordedFilesTitle, RecordedFetched, RecordedClone string
+	RecordedRendered                                   string
+	RecordedFileHead, RecordedAboutHead                string
+	RecordedSizeHead, RecordedHashHead                 string
+	RecordedHashLabel, RecordedNoAccusation            string
+	CheckerSeeRun                                      string
 
 	NotFoundBody, NotFoundHome string
 
@@ -1649,7 +1685,7 @@ var Site = SiteText{
 	},
 	Runs: SitePage{
 		Title:       "Recorded runs",
-		Description: "Recorded runs of canary check on regtest. None is published yet.",
+		Description: "Real runs of canary check on regtest, each shown as the dashboard stood after the run, with the SHA-256 of every file.",
 	},
 	NotFound: SitePage{
 		Title:       "Page not found",
@@ -1736,7 +1772,7 @@ var Site = SiteText{
 			"A server can send the right tweak and hide the output, and the block still reads Checked. Output keys in the entry are planned for version 2."},
 		{Label: "A server that serves less than it signed for gets named", Text: "Not when it sends the entry's hash under a declared pruning policy. The block then reads Checked, gap filled."},
 		{Label: "Omission is detected", Text: "Only when you run canary check. Version 1 has no wallet in the loop, so nothing stops a wallet from using a block Canary flagged."},
-		{Label: "Detection works", Text: "Version 1 runs on regtest only, against its own reference indexer, which shares the checker's canonical package. No deployed server speaks this protocol yet."},
+		{Label: "Detection works", Text: "Version 1 is built and tested on regtest only, against its own reference indexer, which shares the checker's canonical package. No deployed server speaks this protocol yet."},
 		{Label: "Several servers catch a lying one", Text: "If every server colludes, only a tripwire helps, and only for payments you know exist."},
 		{Label: "Records are public", Text: "Version 1 fetches each server's records from that server over HTTP, and publishes them nowhere else yet."},
 		{Label: "A lying server gets caught", Text: "Canary looks for entries left out, never for fake ones. Adding fake entries is a different attack."},
@@ -1758,9 +1794,29 @@ var Site = SiteText{
 	RunVerifyLabel:     "Copy the verify command",
 
 	RunsEmpty: "No recorded run is published yet.",
-	RunsAbout: "A recorded run is one real canary check on regtest, against two reference indexers, one of them told to withhold an entry. " +
+	RunsAboutEmpty: "A recorded run is one real canary check on regtest, against two reference indexers, one of them told to withhold an entry. " +
 		"Its page will show the results as they were, with the time of the run and the SHA-256 of its state file. It is a recording, not a live view.",
 	RunsAction: "Until then, run it yourself",
+	RunsAbout: "Each run here is one real canary check against Bitcoin Core on regtest, with reference indexers we ran ourselves. " +
+		"Its pages show the dashboard as it stood after the run, rendered from the state files the run wrote. They are a recording, not a live view.",
+	RunsOpen:      "Open the recording",
+	RunsStateHash: "State file SHA-256",
+
+	RecordedFilesLink:  "Files and hashes",
+	RecordedSource:     "Rendered from",
+	RecordedCrumbs:     "Where this page sits",
+	RecordedFilesTitle: "This recording",
+	RecordedRendered:   "These pages render the state files it wrote, with the dashboard's own templates and words.",
+	RecordedFetched: "canary check fetched each server's signed records from that server over HTTP. " +
+		"This run published them nowhere else.",
+	RecordedClone:        "The same files are in the repository. In a clone, this command prints the SHA-256 of each state file:",
+	RecordedFileHead:     "File",
+	RecordedAboutHead:    "What it holds",
+	RecordedSizeHead:     "Bytes",
+	RecordedHashHead:     "SHA-256",
+	RecordedHashLabel:    "Copy the command that hashes the state files",
+	RecordedNoAccusation: "Can't be checked is neither a pass nor an accusation.",
+	CheckerSeeRun:        "See the recorded run",
 
 	NotFoundBody: "This site has no page at this address. The link may be old, or mistyped.",
 	NotFoundHome: "Go to the home page",
@@ -1802,6 +1858,120 @@ func (s SiteText) TableLabel(heading string) string {
 func (s SiteText) TamperNote(offset int, field, from, to, step string) string {
 	return fmt.Sprintf("The tampered copy changes one byte of the original. Byte %d, inside %s, reads %q where the original has %q. "+
 		"That one change makes the %s step fail.", offset, field, to, from, VerifyStep(step))
+}
+
+// CheckerSourceRun says where a sample from a recorded run comes from: the
+// network, the day of the run, and the Bitcoin Core release it ran against,
+// when the run's output names one.
+func (s SiteText) CheckerSourceRun(network, date, core string) string {
+	out := "The sample comes from our recorded " + network + " run on " + date
+	if core != "" {
+		out += ", against Bitcoin Core " + core
+	}
+	return out + "."
+}
+
+// RecordedBanner is the notice at the top of every recorded page. It can't
+// be dismissed, so no page of a recording reads as live.
+func (s SiteText) RecordedBanner(network, date string) (lead, body string) {
+	return "Recorded run, not live.", "The dashboard as it stood after our " + network + " run on " + date + "."
+}
+
+// RecordedRunTitle names one recorded run.
+func (s SiteText) RecordedRunTitle(date string) string { return "Run of " + date }
+
+// RecordedTitle is a recorded page's title. part names a later check in the
+// same run, such as "Act 5", or is empty.
+func (s SiteText) RecordedTitle(page, date, part string) string {
+	t := "Recorded: " + page + " · " + s.RecordedRunTitle(date)
+	if part != "" {
+		t += " · " + part
+	}
+	return t
+}
+
+// RecordedDescription describes a recorded page for search results and
+// link previews.
+func (s SiteText) RecordedDescription(network, date, counts string) string {
+	return "Canary's dashboard as it stood after our " + network + " run on " + date + ": " + counts + "."
+}
+
+// RecordedRanWith says how a run was made. script is the command that made
+// it, and core the Bitcoin Core release; either is empty when the run's
+// output does not show it.
+func (s SiteText) RecordedRanWith(script, network, date, core string) string {
+	out := "We ran "
+	if script != "" {
+		out += script + " "
+	}
+	out += "on " + date
+	if core != "" {
+		out += ", against Bitcoin Core " + core + " on " + network
+	} else {
+		out += ", on " + network
+	}
+	return out + "."
+}
+
+// recordedFiles says what each file a run writes holds, by its name.
+var recordedFiles = map[string]string{
+	"state.json":              "The state file canary check wrote. These pages render it.",
+	"check.txt":               "What canary check printed.",
+	"verify.txt":              "What canary verify printed for the evidence file. It opens no connection.",
+	"status.txt":              "What canary status printed.",
+	"run.txt":                 "The network, transactions, servers and public keys of the run.",
+	"demo-regtest-output.txt": "Everything the demo script printed, step by step.",
+}
+
+// RecordedFileAbout says what one file of a recorded run holds. name is the
+// file's base name. It returns "" for a file it does not know.
+func (s SiteText) RecordedFileAbout(name string) string {
+	if about, ok := recordedFiles[name]; ok {
+		return about
+	}
+	if server, ok := strings.CutSuffix(name, ".log"); ok {
+		return "The log of the " + server + " indexer."
+	}
+	return ""
+}
+
+// RecordedEvidenceAbout says what the evidence file in a run's list holds.
+func (s SiteText) RecordedEvidenceAbout(id string) string {
+	return "The evidence file for finding " + id + ". Its page shows Canary's check of it."
+}
+
+// RecordedPartIntro says what a later check in the same run covered, such as
+// act 5's single block.
+func (s SiteText) RecordedPartIntro(label string, from, to uint32, servers []string) string {
+	what := "block " + strconv.FormatUint(uint64(from), 10)
+	if from != to {
+		what = fmt.Sprintf("blocks %d to %d", from, to)
+	}
+	who := "only " + strings.Join(servers, "") + " pinned"
+	if len(servers) != 1 {
+		who = strconv.Itoa(len(servers)) + " servers pinned"
+	}
+	return label + " ran canary check again on " + what + " alone, with " + who + "."
+}
+
+// RecordedDepth says how deep one block sat below a server's signed tip.
+func (s SiteText) RecordedDepth(server string, tip, height uint32) string {
+	return fmt.Sprintf("Server %s's signed tip was %d, so block %d sat %d blocks deep.", server, tip, height, tip-height)
+}
+
+// RecordedOpenPart links a later check's own pages.
+func (s SiteText) RecordedOpenPart(label string) string { return "Open " + label + "'s dashboard" }
+
+// RecordedRange names what a run's check covered, on the runs index.
+func (s SiteText) RecordedRange(label string, from, to uint32, servers int) string {
+	r := fmt.Sprintf("Blocks %d to %d", from, to)
+	if from == to {
+		r = "Block " + strconv.FormatUint(uint64(from), 10)
+	}
+	if label != "" {
+		r = label + ", " + strings.ToLower(r[:1]) + r[1:]
+	}
+	return r + ", " + strconv.Itoa(servers) + " " + plural(servers, "server", "servers")
 }
 
 // CheckerSourceRecorded says where a sample from the recorded run comes from.

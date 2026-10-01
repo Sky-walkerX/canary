@@ -36,6 +36,7 @@ type chrome struct {
 	UIBuild      string
 	ReleaseNotes string
 	Framing      string
+	NavLabel     string
 	Watermark    string
 	Sprite       template.HTML
 	Bar          barText
@@ -72,6 +73,7 @@ func (h *handler) page(r *http.Request, s snapshot, title, nav string) page {
 		UIBuild:      h.opts.Build,
 		ReleaseNotes: h.opts.ReleaseNotesURL,
 		Framing:      wording.Framing,
+		NavLabel:     wording.DashboardNavLabel,
 		Watermark:    watermark,
 		Sprite:       sprite,
 		Bar:          updateBar,
@@ -113,6 +115,10 @@ type copyData struct {
 
 var funcs = template.FuncMap{
 	"copyOf": func(value, label string) copyData { return copyData{Value: value, Label: label} },
+	// link turns a dashboard address, such as "/blocks/HASH", into the one
+	// the page links to. The dashboard serves those addresses as they are;
+	// a recorded run swaps in its own link. See RenderStatic.
+	"link": func(p string) string { return p },
 	"themeLabel": func(mode string) string {
 		switch mode {
 		case "light":
@@ -586,6 +592,10 @@ type blocksView struct {
 	Query      string
 	QueryMiss  bool
 	QueryError string
+
+	// Recorded is true on a recorded run's page, which has no server to
+	// answer a height lookup, so it shows no lookup form.
+	Recorded bool
 }
 
 // heights returns "205" or "0–204".

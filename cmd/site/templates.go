@@ -18,7 +18,7 @@ var siteAssets embed.FS
 
 // pageNames are the site's page templates. Each defines "content" and is
 // parsed on its own copy of the layout and the partials.
-var pageNames = []string{"home", "doc", "runs", "notfound"}
+var pageNames = []string{"home", "doc", "runs", "recorded", "notfound"}
 
 var siteFuncs = template.FuncMap{
 	"state":     wording.State,

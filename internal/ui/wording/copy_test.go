@@ -107,7 +107,7 @@ func allText() []string {
 		EvidenceNotFound("x.json"), EvidenceNotFound(""), ServerError("1a2b3c4d"), Stale("3 h")} {
 		out = append(out, m.Title, m.Body, m.Action)
 	}
-	for _, v := range []Verdict{VerdictAllChecked(213), VerdictSomeChecked(200, 213), VerdictNoneChecked(213),
+	for _, v := range []Verdict{VerdictAllChecked(213), VerdictSomeChecked(200, 213), VerdictNoneChecked(213), VerdictNoneChecked(1),
 		VerdictDisputed(2), VerdictWithheldOne("withholder left out an entry it had signed for.", 205, "You can prove this to others."), VerdictWithheldMany(3),
 		VerdictOpenFindings(VerdictAllChecked(220), 1), VerdictOpenFindings(VerdictSomeChecked(200, 213), 2)} {
 		out = append(out, v.Headline, v.Lede)
@@ -115,7 +115,7 @@ func allText() []string {
 	out = append(out, LowerBound(1, false), LowerBound(24, true), NoFindings, BlockNotCovered, ServersNote, PaymentsNote, FindingsIntro,
 		EvidenceNote, BlocksIntro(0, 212, 213), HeightNotFound("150", 1, 213), HeightNotFound("abc", 1, 213),
 		UpdateNewResults, UpdateNewFindings(1), UpdateNewFindings(3), UpdateUpdated, UpdateLost("14:02"), UpdateBack,
-		UpdateReload, UpdateDismiss, RegtestBadge, NetworkBadge("signet"), Framing, WarningSuffix, NoPubkey,
+		UpdateReload, UpdateDismiss, RegtestBadge, RecordedRegtestBadge, RecordedNavLabel, NetworkBadge("signet"), Framing, WarningSuffix, NoPubkey,
 		PolicyText(true, 546, false), PolicyText(false, 0, false), PolicyNotDeclared, PolicyUnknown, TipText(212, true), TipText(210, false),
 		VerifyChecksOut, VerifyInclusionOnly, VerifyInclusionOnlyDetail[0], VerifyInclusionOnlyDetail[1],
 		VerifyDoesNotCheckOut("receipt"), VerifyCantRead("not JSON"), VerifyNotHonest, VerifyNotRunEarlier, VerifyNotRunNoReceipt,
@@ -329,6 +329,15 @@ func siteText() []string {
 	walk(reflect.ValueOf(Checker))
 	out = append(out, Site.TamperNote(1843, "proof.siblings[0]", "3", "2", "inclusion"),
 		Site.CheckerSourceRecorded("3 October 2026"),
+		Site.CheckerSourceRun("regtest", "1 October 2026", "v31.1.0"), Site.CheckerSourceRun("regtest", "1 October 2026", ""),
+		Site.RecordedTitle("Finding 79ec3cb71656", "1 Oct 2026", "Act 5"), Site.RecordedRunTitle("1 Oct 2026"),
+		Site.RecordedDescription("regtest", "1 Oct 2026", "351 Checked · 1 Data withheld"),
+		Site.RecordedRanWith("scripts/demo-regtest.sh --act5", "regtest", "1 Oct 2026", "v31.1.0"),
+		Site.RecordedRanWith("", "regtest", "1 Oct 2026", ""),
+		Site.RecordedFileAbout("withholder.log"), Site.RecordedEvidenceAbout("79ec3cb71656"),
+		Site.RecordedPartIntro("Act 5", 201, 201, []string{"withholder"}), Site.RecordedPartIntro("Act 5", 200, 210, []string{"a", "b"}),
+		Site.RecordedDepth("withholder", 351, 201), Site.RecordedOpenPart("Act 5"),
+		Site.RecordedRange("", 0, 351, 2), Site.RecordedRange("Act 5", 201, 201, 1),
 		CheckerBuildLine("05de74dd2f8698efdb163ab6ed00f3efa09e27fc", "Go 1.26.4", false),
 		CheckerBuildLine("05de74dd2f8698efdb163ab6ed00f3efa09e27fc", "Go 1.26.4", true),
 		CheckerBuildLine("", "Go 1.26.4", false))
@@ -414,5 +423,31 @@ func TestSiteHonestyRules(t *testing.T) {
 				t.Errorf("%d words: %q", n, sentence)
 			}
 		}
+	}
+}
+
+// TestRecordedWording pins the recorded run's banner, which the task of
+// labelling a recording rests on, and the lines built from a run's facts.
+func TestRecordedWording(t *testing.T) {
+	lead, body := Site.RecordedBanner("regtest", "1 Oct 2026")
+	if got := lead + " " + body; got != "Recorded run, not live. The dashboard as it stood after our regtest run on 1 Oct 2026." {
+		t.Errorf("banner = %q", got)
+	}
+	for _, tt := range []struct{ got, want string }{
+		{Site.RecordedTitle("Overview", "1 Oct 2026", ""), "Recorded: Overview · Run of 1 Oct 2026"},
+		{Site.RecordedPartIntro("Act 5", 201, 201, []string{"withholder"}), "Act 5 ran canary check again on block 201 alone, with only withholder pinned."},
+		{Site.RecordedDepth("withholder", 351, 201), "Server withholder's signed tip was 351, so block 201 sat 150 blocks deep."},
+		{Site.RecordedRange("Act 5", 201, 201, 1), "Act 5, block 201, 1 server"},
+		{Site.RecordedRange("", 0, 351, 2), "Blocks 0 to 351, 2 servers"},
+		{Site.CheckerSourceRun("regtest", "1 October 2026", "v31.1.0"), "The sample comes from our recorded regtest run on 1 October 2026, against Bitcoin Core v31.1.0."},
+		{Site.RecordedFileAbout("honest.log"), "The log of the honest indexer."},
+		{Site.RecordedFileAbout("unknown.bin"), ""},
+	} {
+		if tt.got != tt.want {
+			t.Errorf("got  %q\nwant %q", tt.got, tt.want)
+		}
+	}
+	if RecordedNetworkBadge("regtest") != RecordedRegtestBadge || strings.Contains(RecordedRegtestBadge, "computer") {
+		t.Error("a recorded page's regtest badge names a computer the reader never used")
 	}
 }

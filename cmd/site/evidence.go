@@ -28,6 +28,10 @@ type checkerView struct {
 	// The words that depend on where the sample comes from.
 	TryLabel, DownloadLabel, Source, TamperNote string
 
+	// RunURL is the recorded run the sample comes from, or "" when no
+	// recorded run on the site names it.
+	RunURL string
+
 	// Module is the browser checker, or nil when the site was built without
 	// it.
 	Module *moduleView
@@ -74,10 +78,10 @@ func (s *site) writeEvidence() error {
 		return fmt.Errorf("site: evidence %s: %w", name, err)
 	}
 	tname := strings.TrimSuffix(name, ".json") + "-tampered.json"
-	if err := s.write("evidence/"+name, file); err != nil {
+	if err := s.writeOnce("evidence/"+name, file); err != nil {
 		return err
 	}
-	if err := s.write("evidence/"+tname, tampered); err != nil {
+	if err := s.writeOnce("evidence/"+tname, tampered); err != nil {
 		return err
 	}
 	view.RealName, view.RealURL = name, "/evidence/"+name
@@ -88,10 +92,11 @@ func (s *site) writeEvidence() error {
 }
 
 // sample returns the evidence file the checker offers, its published name,
-// and the words that say where it comes from. A file given with -evidence
-// comes from the recorded run, dated by the time canary check wrote it.
-// Without one, the sample is the formats document's example, named for what
-// it is.
+// and the words that say where it comes from. A real file comes from a
+// recorded run. When a run on the site names it, the page names that run's
+// network, day and Bitcoin Core release, and links the run. Otherwise it is
+// dated by the time canary check wrote it. Without a real file, the sample
+// is the formats document's example, named for what it is.
 func (s *site) sample() ([]byte, string, checkerView, error) {
 	if s.cfg.Evidence == "" {
 		doc, err := os.ReadFile(filepath.Join(s.cfg.Docs, filepath.FromSlash(formatsDoc)))
@@ -129,12 +134,18 @@ func (s *site) sample() ([]byte, string, checkerView, error) {
 		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: context.written_at %q is not an RFC 3339 time, and the page dates the recorded run from it",
 			s.cfg.Evidence, ev.Context.WrittenAt)
 	}
-	return file, filepath.Base(s.cfg.Evidence), checkerView{
+	name := filepath.Base(s.cfg.Evidence)
+	view := checkerView{
 		Recorded:      true,
 		TryLabel:      wording.Site.CheckerTryReal,
 		DownloadLabel: wording.Site.CheckerDownloadReal,
 		Source:        wording.Site.CheckerSourceRecorded(when.UTC().Format("2 January 2006")),
-	}, nil
+	}
+	if r := s.runFor(name); r != nil {
+		view.Source = wording.Site.CheckerSourceRun(r.Network, r.Date.Format("2 January 2006"), r.Core)
+		view.RunURL = r.URL
+	}
+	return file, name, view, nil
 }
 
 // docExample returns the first JSON block under "### Example" in the doc

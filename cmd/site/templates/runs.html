@@ -1,8 +1,36 @@
+{{/* The runs index. With no run recorded it says so and points at the
+     commands. With runs, it lists each one, newest first: what it checked,
+     what it found, and the SHA-256 of the state file its pages render. */}}
 {{define "content"}}
 <section class="page-intro" aria-labelledby="runs-h">
   <h1 id="runs-h" class="page-title">{{.Meta.Title}}</h1>
-  <p class="lede">{{.Text.RunsEmpty}}</p>
-  <p>{{.Text.RunsAbout}}</p>
-  <p class="error-links"><a class="btn" href="/#run">{{.Text.RunsAction}}</a></p>
+  {{if .Main.Runs}}<p class="lede">{{.Text.RunsAbout}}</p>
+  {{else}}<p class="lede">{{.Text.RunsEmpty}}</p>
+  <p>{{.Text.RunsAboutEmpty}}</p>
+  <p class="error-links"><a class="btn" href="/#run">{{.Text.RunsAction}}</a></p>{{end}}
 </section>
+{{with .Main.Runs}}<ol class="run-list">{{range .}}
+  <li class="run-card">
+    <article aria-labelledby="run-{{.Slug}}-h">
+      <div class="run-card-head">
+        <h2 id="run-{{.Slug}}-h"><a href="{{.URL}}">{{.Title}}</a></h2>
+        <p class="run-ran">{{.RanWith}}</p>
+        <p class="status-line">{{.StatusLine}}</p>
+      </div>
+      <ul class="run-checks">{{range .Checks}}
+        <li>
+          <a class="run-check-label" href="{{.URL}}">{{.Label}}</a>
+          <ul class="run-counts">{{range .Counts}}
+            <li>{{template "stateBadge" .State}}<span class="count-n">{{.Count}}</span></li>{{end}}
+          </ul>
+        </li>{{end}}
+      </ul>
+      {{with .Findings}}<ul class="run-findings">{{range .}}
+        <li><a href="{{.URL}}">{{.Sentence}}</a> <span class="muted">Block {{.Height}}.</span></li>{{end}}
+      </ul>{{end}}
+      <p class="run-sha"><span>{{$.Text.RunsStateHash}}</span> <code class="rec-sha">{{.StateSHA}}</code></p>
+      <p class="run-open"><a class="btn" href="{{.URL}}">{{$.Text.RunsOpen}}</a></p>
+    </article>
+  </li>{{end}}
+</ol>{{end}}
 {{end}}

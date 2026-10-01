@@ -23,10 +23,13 @@ var assetFS embed.FS
 // on its own copy of the layout and partials.
 var pageNames = []string{"overview", "blocks", "block", "findings", "finding", "error"}
 
-var pages = mustParsePages()
+var pages = mustParsePages(funcs)
 
-func mustParsePages() map[string]*template.Template {
-	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/partials.html"))
+// mustParsePages parses every page template on its own copy of the layout
+// and partials, with the given functions. A recorded run parses its own set,
+// with its own link function.
+func mustParsePages(fm template.FuncMap) map[string]*template.Template {
+	base := template.Must(template.New("base").Funcs(fm).ParseFS(templateFS, "templates/layout.html", "templates/partials.html"))
 	out := map[string]*template.Template{}
 	for _, name := range pageNames {
 		t := template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html"))

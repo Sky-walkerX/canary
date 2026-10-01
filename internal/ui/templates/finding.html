@@ -1,5 +1,5 @@
 {{define "content"}}{{with .Main}}
-<nav class="crumbs" aria-label="Breadcrumb"><a href="/findings">All findings</a></nav>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="{{link "/findings"}}">All findings</a></nav>
 <div class="page-head">
   <h1>{{.Row.Sentence}}</h1>
   <p class="state-line">
@@ -9,7 +9,7 @@
 </div>
 
 <dl class="facts">
-  <div><dt>Block</dt><dd>{{if .Row.BlockKnown}}<a href="/blocks/{{.Row.Block.Hash}}">{{.Row.Block.Height}}</a>{{else}}{{.Row.Block.Height}} <span class="muted">{{.Row.BlockNote}}</span>{{end}}{{template "hashFull" .BlockHash}}</dd></div>
+  <div><dt>Block</dt><dd>{{if .Row.BlockKnown}}<a href="{{link (print "/blocks/" .Row.Block.Hash)}}">{{.Row.Block.Height}}</a>{{else}}{{.Row.Block.Height}} <span class="muted">{{.Row.BlockNote}}</span>{{end}}{{template "hashFull" .BlockHash}}</dd></div>
   {{with .Position}}<div><dt>Position in the list</dt><dd>{{.}}</dd></div>{{end}}
   {{with .Txid}}<div><dt>Left-out transaction</dt><dd>{{template "hashFull" .}}</dd></div>{{end}}
   {{range .Servers}}<div><dt>Server named</dt><dd><span class="server-name">{{.Label}}</span>{{with .Pubkey}}{{template "hashFull" .}}{{end}}</dd></div>{{end}}
@@ -41,7 +41,7 @@
 {{with .Evidence}}
 <section class="section" aria-labelledby="ev-h">
   <h2 id="ev-h">Evidence file</h2>
-  <p class="download-line"><a class="download" href="/evidence/{{.Name}}" download>{{template "icon" "download"}}<span>Download {{.Name}}</span></a></p>
+  <p class="download-line"><a class="download" href="{{link (print "/evidence/" .Name)}}" download>{{template "icon" "download"}}<span>Download {{.Name}}</span></a></p>
   <p class="section-note">{{.Note}}</p>
   {{template "command" (copyOf .VerifyCommand "Copy the canary verify command")}}
 </section>

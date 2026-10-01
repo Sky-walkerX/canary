@@ -56,7 +56,7 @@ func TestSpriteAndAssetsExported(t *testing.T) {
 		t.Errorf("Sprite() is not the inlinable glyph sprite")
 	}
 	a := Assets()
-	for _, name := range []string{"tokens.css", "ui.css", "app.js", "fonts/atkinson-hyperlegible-next-latin.woff2",
+	for _, name := range []string{"tokens.css", "ui.css", "app.js", "live.js", "fonts/atkinson-hyperlegible-next-latin.woff2",
 		"fonts/atkinson-hyperlegible-mono-latin.woff2", "fonts/OFL-atkinson-hyperlegible-next.txt"} {
 		if _, err := fs.Stat(a, name); err != nil {
 			t.Errorf("Assets() lacks %s: %v", name, err)

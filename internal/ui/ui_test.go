@@ -181,6 +181,7 @@ func TestEveryRoute(t *testing.T) {
 		{"/assets/tokens.css", 200, "text/css"},
 		{"/assets/ui.css", 200, "text/css"},
 		{"/assets/app.js", 200, "text/javascript"},
+		{"/assets/live.js", 200, "text/javascript"},
 		{"/assets/glyphs.svg", 200, "image/svg+xml"},
 		{"/assets/favicon.svg", 200, "image/svg+xml"},
 		{"/assets/fonts/atkinson-hyperlegible-next-latin.woff2", 200, "font/woff2"},

@@ -28,6 +28,10 @@
   .site-header-row .nav a { font-size: var(--text-s); }
 }
 
+/* A page below a link, such as a recorded run below the runs index, marks
+   that link more quietly than the page it names. */
+.site-header .nav a[aria-current="true"] { border-bottom-color: var(--rule-strong); }
+
 .nobr { white-space: nowrap; }
 
 /* Titles sit on a perch, as the wordmark does. The run-on past the last
@@ -624,6 +628,149 @@
 
 .page-intro { display: grid; gap: var(--space-4); max-width: 60ch; padding-top: var(--space-4); }
 .page-intro .error-links { margin-top: var(--space-2); }
+
+/* The runs index: one entry per run, on a heavy rule, as the home page's
+   steps are. */
+.run-list { margin: var(--space-7) 0 0; padding: 0; list-style: none; }
+.run-card + .run-card { margin-top: var(--space-7); }
+.run-card article {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--ink);
+}
+.run-card-head { display: grid; gap: var(--space-2); }
+.run-card-head h2 { font-size: var(--text-2xl); }
+.run-card-head .status-line { padding: 0; }
+.run-ran { max-width: 64ch; }
+.run-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--rule-width) solid var(--rule);
+}
+.run-checks > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+  padding-block: var(--space-3);
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+.run-check-label { font-weight: 700; }
+.run-findings { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.run-findings a { font-weight: 700; }
+.run-open .btn { text-decoration: none; font-size: var(--text-m); min-height: 44px; padding-inline: var(--space-4); }
+.run-sha { display: grid; gap: 2px; max-width: none; font-size: var(--text-s); color: var(--ink-muted); }
+
+/* Recorded run pages. The site shows the dashboard as it stood after a
+   run, framed so it can't pass for a live one: a banner in the dashboard's
+   sample-data colours that stays in view and has no close button, then the
+   dashboard's own header, then its page. */
+.rec-banner {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: var(--radius-m);
+}
+.rec-banner p { max-width: none; font-weight: 600; }
+.rec-banner strong { font-weight: 800; }
+.rec-banner a { color: var(--bg); font-weight: 700; white-space: nowrap; }
+.rec-banner a:focus-visible { outline-color: var(--bg); }
+
+.rec-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  max-width: none;
+  margin-top: var(--space-5);
+  font-size: var(--text-s);
+  font-weight: 600;
+}
+.rec-sep { color: var(--ink-muted); }
+
+/* The dashboard's header, as canary ui drew it, minus its live parts. */
+.rec-head {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+.rec-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+}
+.rec-bar .nav ul { gap: var(--space-1) var(--space-5); }
+.rec-bar .net-badge { justify-self: auto; }
+.rec-head .status-line { padding: 0; }
+.rec-source { max-width: none; font-size: var(--text-s); color: var(--ink-muted); }
+.rec-source a { color: var(--ink); }
+.rec-sha {
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.rec-part-intro { max-width: 68ch; font-weight: 600; }
+.rec-page { margin-top: var(--space-6); }
+
+/* Act 5 and any later check in the same run, on the run's overview. */
+.rec-part {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--ink);
+}
+.section.rec-part > h2 { margin-bottom: 0; }
+.rec-part-lede { font-size: var(--text-l); max-width: 60ch; }
+.rec-counts,
+.run-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rec-counts li,
+.run-counts li { display: inline-flex; align-items: baseline; gap: var(--space-2); }
+.rec-counts .count-n,
+.run-counts .count-n { font-size: var(--text-m); }
+.rec-plain { font-weight: 700; }
+
+.rec-files { display: grid; gap: var(--space-4); }
+.section.rec-files > h2 { margin-bottom: 0; }
+.rec-files-intro { display: grid; gap: var(--space-2); }
+.rec-files-table th,
+.rec-files-table td { vertical-align: top; }
+.rec-files-table tbody th { font-weight: 400; white-space: nowrap; }
+.rec-files-table tbody th code { font-size: var(--text-s); }
+.rec-files-table td:last-child { min-width: 22ch; }
+.rec-clone { color: var(--ink-muted); font-size: var(--text-s); }
+.rec-files .command pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 719px) {
+  .rec-files-table tbody th { white-space: normal; overflow-wrap: anywhere; }
+}
+
+@media print {
+  .rec-banner { position: static; }
+}
 
 /* Footer */
 

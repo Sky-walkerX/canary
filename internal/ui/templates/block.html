@@ -1,5 +1,5 @@
 {{define "content"}}{{with .Main}}
-<nav class="crumbs" aria-label="Breadcrumb"><a href="/blocks">All blocks</a></nav>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="{{link "/blocks"}}">All blocks</a></nav>
 <div class="page-head">
   <h1>Block {{.Height}}</h1>
   <p class="state-line">{{template "stateBadge" .State}}</p>
@@ -65,8 +65,8 @@
 
 {{if or .Prev .Next}}
 <nav class="pager" aria-label="Nearby blocks">
-  {{with .Prev}}<a rel="prev" href="/blocks/{{.Hash}}"><span class="pager-dir">Previous</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
-  {{with .Next}}<a rel="next" class="pager-next" href="/blocks/{{.Hash}}"><span class="pager-dir">Next</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
+  {{with .Prev}}<a rel="prev" href="{{link (print "/blocks/" .Hash)}}"><span class="pager-dir">Previous</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
+  {{with .Next}}<a rel="next" class="pager-next" href="{{link (print "/blocks/" .Hash)}}"><span class="pager-dir">Next</span><span class="pager-block">Block {{.Height}}</span></a>{{end}}
 </nav>
 {{end}}
 {{end}}{{end}}

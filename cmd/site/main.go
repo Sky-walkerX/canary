@@ -17,12 +17,21 @@
 // The home page's checker loads canary.wasm, which make wasm builds. A
 // preview build without it gets a page that says it has no checker, and the
 // generator says to run make wasm. A build with -noindex=false refuses to
-// run without it. Until a run is recorded, the checker's sample is the
-// formats document's example evidence file, and the page says so.
+// run without it.
 //
-// A build with -evidence, or with -noindex=false, publishes commands that a
-// fresh clone must be able to run. So it refuses an evidence file outside the
-// repository's evidence directory, and a repository without ./cmd/canary.
+// The checker's sample is the evidence file committed in the repository's
+// evidence directory, from the recorded run, unless -evidence names another.
+// Only a repository with no committed evidence file falls back to the
+// formats document's example, and the page then says so.
+//
+// Each directory under -runs, such as docs/runs/2026-10-01, is a recorded
+// run. The site renders its state files with the dashboard's own templates,
+// under a banner that says it is a recording, and publishes its files.
+//
+// A build with an evidence file, a recorded run or -noindex=false publishes
+// commands that a fresh clone must be able to run. So it refuses an evidence
+// file outside the repository's evidence directory, and a repository without
+// ./cmd/canary.
 package main
 
 import (
@@ -50,7 +59,8 @@ type config struct {
 	Out      string // output directory, cleared first
 	Docs     string // the docs directory; its parent is the repository root
 	Headers  string // the _headers source file
-	Evidence string // optional: the real evidence file for the checker
+	Evidence string // the real evidence file for the checker; empty means the committed one, if any
+	Runs     string // the directory of recorded runs; empty means none
 	Wasm     string // the directory make wasm writes canary.wasm and wasm_exec.js to
 	Repo     string // the repository's address, the one outside link
 	BaseURL  string // optional: the site's own address, for canonical and og:url
@@ -72,7 +82,8 @@ func main() {
 	flag.StringVar(&cfg.Out, "out", filepath.Join("site", "dist"), "output directory; cleared before each build")
 	flag.StringVar(&cfg.Docs, "docs", "docs", "docs directory, inside the repository")
 	flag.StringVar(&cfg.Headers, "headers", filepath.Join("site", "_headers"), "Cloudflare Pages _headers source")
-	flag.StringVar(&cfg.Evidence, "evidence", "", "the real evidence file, committed in the repository's evidence directory, to publish with a tampered copy (optional; needs ./cmd/canary)")
+	flag.StringVar(&cfg.Evidence, "evidence", "", "the real evidence file to publish with a tampered copy, in the repository's evidence directory (default: the one committed there; needs ./cmd/canary)")
+	flag.StringVar(&cfg.Runs, "runs", filepath.Join("docs", "runs"), "the directory of recorded runs, one directory per run; empty for none")
 	flag.StringVar(&cfg.Wasm, "wasm", filepath.Join("bin", "wasm"), "the directory where make wasm wrote canary.wasm and wasm_exec.js")
 	flag.StringVar(&cfg.Repo, "repo", defaultRepo, "repository address for source links")
 	flag.StringVar(&cfg.BaseURL, "base-url", "", "the site's own address, such as https://canary.pages.dev (optional)")
@@ -94,6 +105,8 @@ type site struct {
 	assetDir string  // "/assets/<hash>"
 	module   *module // the browser checker, or nil when the build has none
 	checker  checkerView
+	runs     []*recordedRun    // the recorded runs, newest first
+	once     map[string][]byte // files writeOnce wrote, by path
 }
 
 func build(cfg config) error {
@@ -101,6 +114,13 @@ func build(cfg config) error {
 	cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
 	if cfg.Repo == "" {
 		return errors.New("site: build: no repository address")
+	}
+	if cfg.Evidence == "" {
+		ev, err := defaultEvidence(repoRoot(cfg.Docs))
+		if err != nil {
+			return err
+		}
+		cfg.Evidence = ev
 	}
 	if err := checkPublishable(cfg); err != nil {
 		return err
@@ -117,12 +137,30 @@ func build(cfg config) error {
 		return err
 	}
 	s := &site{cfg: cfg, parts: parts, pages: pages}
-	for _, step := range []func() error{s.readModule, s.writeAssets, s.writeIcons, s.writeEvidence, s.writePages, s.writeHeaders} {
+	for _, step := range []func() error{s.readModule, s.readRuns, s.writeAssets, s.writeIcons, s.writeEvidence, s.writeRuns, s.writePages, s.writeHeaders} {
 		if err := step(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// defaultEvidence returns the evidence file committed in the repository's
+// evidence directory, the one the recorded run wrote. It returns "" when
+// none is committed, and the build falls back to the formats document's
+// example. With more than one, the builder must choose with -evidence.
+func defaultEvidence(root string) (string, error) {
+	files, err := filepath.Glob(filepath.Join(root, "evidence", "omission-*.json"))
+	if err != nil {
+		return "", fmt.Errorf("site: evidence: %w", err)
+	}
+	switch len(files) {
+	case 0:
+		return "", nil
+	case 1:
+		return files[0], nil
+	}
+	return "", fmt.Errorf("site: evidence: %d files match evidence/omission-*.json. Name the one to publish with -evidence", len(files))
 }
 
 // repoRoot is the repository the build reads from: the docs directory's
@@ -145,9 +183,8 @@ func checkPublishable(cfg config) error {
 		return nil
 	}
 	root := repoRoot(cfg.Docs)
-	cmd := filepath.Join(root, "cmd", "canary")
-	if files, _ := filepath.Glob(filepath.Join(cmd, "*.go")); len(files) == 0 {
-		return fmt.Errorf("site: release build: %s holds no Go files, and the page tells readers to go build ./cmd/canary", cmd)
+	if err := requireCanaryCmd(root); err != nil {
+		return err
 	}
 	if !cfg.NoIndex {
 		if err := checkModuleBuilt(cfg.Wasm); err != nil {
@@ -224,6 +261,24 @@ func prepareOut(out string) error {
 	return nil
 }
 
+// writeOnce writes a file that more than one part of the site may publish,
+// such as an evidence file that is both the checker's sample and a recorded
+// run's. A second write of the same bytes does nothing; different bytes
+// stop the build.
+func (s *site) writeOnce(rel string, b []byte) error {
+	if prev, ok := s.once[rel]; ok {
+		if !bytes.Equal(prev, b) {
+			return fmt.Errorf("site: write %s: two different files want this address", rel)
+		}
+		return nil
+	}
+	if s.once == nil {
+		s.once = map[string][]byte{}
+	}
+	s.once[rel] = b
+	return s.write(rel, b)
+}
+
 func (s *site) write(rel string, b []byte) error {
 	p := filepath.Join(s.cfg.Out, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -250,6 +305,10 @@ func (s *site) writeAssets() error {
 		switch {
 		case p == "glyphs.svg" || p == "favicon.svg":
 			// The sprite is inlined in each page, and the favicon sits at the root.
+			return nil
+		case p == "live.js":
+			// The dashboard's update check polls a server the site does not
+			// have. A recorded run must never look live, so it never ships.
 			return nil
 		case p == "fonts/SOURCE.txt":
 			// The download record names the fonts' origin, which the site never
@@ -348,7 +407,8 @@ type page struct {
 
 type navItem struct {
 	Href, Label string
-	Current     bool
+	Current     bool // the link names this page
+	Section     bool // this page sits below the link, as a run sits below the runs index
 }
 
 func (s *site) page(meta wording.SitePage, pathname string, main any) page {
@@ -360,6 +420,7 @@ func (s *site) page(meta wording.SitePage, pathname string, main any) page {
 	}
 	for i := range items {
 		items[i].Current = items[i].Href == pathname
+		items[i].Section = !items[i].Current && strings.HasPrefix(pathname, items[i].Href)
 	}
 	title := meta.Title
 	if pathname != "/" {
@@ -447,7 +508,7 @@ func (s *site) writePages() error {
 			return err
 		}
 	}
-	if err := s.render("runs", "runs/index.html", s.page(wording.Site.Runs, "/runs/", nil)); err != nil {
+	if err := s.render("runs", "runs/index.html", s.page(wording.Site.Runs, "/runs/", s.runsView())); err != nil {
 		return err
 	}
 	// The 404 page is served at any address, so it has no canonical one.

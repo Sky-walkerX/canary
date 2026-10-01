@@ -37,9 +37,10 @@ on 5 Oct.
 It lives outside the repo. The scored feature roadmap, with the v1 cut line and the v2
 themes, is `docs/roadmap/2026-09-30-feature-roadmap.md`.
 
-**Every part of the v1 detection loop is built and tested, on a synthetic regtest chain
-only.** `internal/core/coretest` builds that chain in Go and serves it the way Core's REST
-interface does. Nothing has run against a real Bitcoin Core node yet.
+**Every part of the v1 detection loop is built and tested, and on 1 Oct it ran end to end
+on a real Bitcoin Core v31.1.0 node in regtest mode.** The tests still use a synthetic
+chain, which `internal/core/coretest` builds in Go and serves the way Core's REST
+interface does.
 
 | Part | State on 1 Oct |
 |---|---|
@@ -51,21 +52,27 @@ interface does. Nothing has run against a real Bitcoin Core node yet.
 | `evidence`: `canary-evidence/1` files and offline verify | Built and tested |
 | `cmd/canary`: `check`, `verify`, `status`, `ui` | Built and tested. `check --expect` is the v1 tripwire, tweak check only |
 | `internal/ui`, the local dashboard (`canary ui`) | Built and tested. `go run -tags uidev ./cmd/canary-uidev` shows it on sample data |
-| `cmd/site`, the public site generator | Built and tested. It does not copy the browser checker into `site/dist` yet, although the Makefile comment says it does |
-| `cmd/verify-wasm`, the browser checker | Built and tested. `make wasm` gives 8.66 MB raw, 2.66 MB at gzip -9 |
+| `cmd/site`, the public site generator | Built and tested. It copies the browser checker into the site's hashed asset folder. With `-evidence` it publishes that file and a copy with one proof hash flipped, which fails at the inclusion step |
+| `cmd/verify-wasm`, the browser checker | Built and tested. `make wasm` gives 8,676,080 bytes raw (8.68 MB), 2.66 MB at gzip -9. Run in Node, it gives "Checks out." for the committed evidence file and makes no network call |
 | End-to-end gate, `TestGate` in `cmd/canary/gate_test.go` | Passes. Two reference indexers on a 209-block synthetic chain, one withholding a taproot payment. `canary check` names the server, block and txid; the evidence file verifies in a process the operating system cuts off from the network (run on macOS; the Linux amd64 and arm64 version builds and vets but has not run yet); six one-byte tamperings each fail at their step; the dashboard shows the finding |
-| A run on a real Bitcoin Core regtest node | Not done. `scripts/demo-regtest.sh` is being written, and `bitcoind` is not installed |
-| The committed real evidence file and its CI test | Not done. It comes from that run |
-| Recorded-run page, video, public deploy | Not done |
+| A run on a real Bitcoin Core regtest node | Done on 1 Oct: `scripts/demo-regtest.sh --act5` on Core v31.1.0. Block 351 held five taproot payments. The withholder, key `db614560…`, left `ad56b9bb…e21e` out of its served list while signing it into its record. `canary check` over blocks 0 to 351, both servers pinned and the payment declared, gave 351 Checked · 1 Data withheld and named the withholder. Act 5: block 201 checked with the withholder alone reads Can't be checked, `gap_unfilled`, no accusation. Records came over HTTP; nothing went to Nostr relays. Output, state files and logs are in `docs/runs/2026-10-01` |
+| The committed real evidence file and its CI test | Done. `evidence/omission-regtest-351-ad56b9bb-db614560.json`, 2,722 bytes, SHA-256 `aea26b9b…9710`. `TestCommittedEvidenceChecksOut` in `evidence/committed_test.go` verifies every committed `omission-*.json`. CI passed on `2679bc4`, the commit that added it |
+| Recorded-run page and README screenshots | In progress in a sibling worktree. The README already points at `docs/media/dashboard-overview.png` and `docs/media/site-checker-real.png`. The site's Recorded runs page still says no run is published |
+| Video, public deploy | Not done. The site builds and serves locally; deploying it needs `npx wrangler login` first |
 
 Tests on 1 Oct: `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again
-with `-race`. That is 394 top-level tests plus one fuzz test's seeds, and 769 passing cases
+with `-race`. That is 403 top-level tests plus one fuzz test's seeds, and 782 passing cases
 with subtests. Recount before quoting; other tracks merge into `main`. Everything up to
-`05de74d` is pushed, and CI passed on it. The repo still has no `LICENSE`.
+`2679bc4` is pushed, and CI passed on it. The MIT `LICENSE` is committed.
 
-**Next task:** run `scripts/demo-regtest.sh` once `bitcoind` is installed. Then commit the
-real evidence file it writes, with a CI test that verifies it. Then build the recorded-run
-page from that run.
+**Next tasks:**
+
+1. Deploy a preview of the site once `npx wrangler login` is done. Keep it noindex until
+   submission.
+2. Record the video, following `docs/submission/video-script.md`. Its setup repeats the
+   1 Oct run's steps, so heights and counts match; txids, keys and the file name do not.
+3. Submit on Monday 5 Oct, following `docs/submission/checklist.md`. Publish on Devfolio
+   by 17:00 IST.
 
 Where things are:
 
@@ -74,6 +81,9 @@ Where things are:
 - Reader docs: `docs/how-canary-works.md`, `docs/faq.md`, `docs/glossary.md`
 - Decision history: `docs/decisions.md`
 - Research and citations: `docs/research/prior-art.md`, re-verified 30 Sep
+- The recorded run of 1 Oct: `docs/runs/2026-10-01`, with its evidence file in `evidence/`
+- The submission pack (Devfolio fields, video script, final-day checklist):
+  `docs/submission/`
 - The 8 Sep plans in `docs/superpowers/plans/` are superseded for v1 by the 30 Sep plan.
   Their status and known defects are in `docs/decisions.md`
 
@@ -154,10 +164,13 @@ Each rule says what not to do and why. The positive target follows where it help
 - **Don't claim Nostr gives timestamping.** It gives publication. `created_at` is
   self-asserted and can be backdated. Each record is tied to a block by its hash, and
   order comes from the chain.
+- **Don't claim relay publication, a deployed site or a video that has not happened.** The
+  1 Oct run fetched every record over HTTP from its server and published nothing to Nostr
+  relays. Check the current-state table before writing about any of the three.
 - **Don't say v1 "runs only on regtest".** Say "v1 is built and tested on regtest only",
   because `canary check` also accepts mainnet and prints a notice there. It refuses
-  signet (decided 1 Oct). Until a real Core run lands, also say the tests use a synthetic
-  chain.
+  signet (decided 1 Oct). When you describe the tests, say they use a synthetic chain;
+  the one real Core run is the recorded run of 1 Oct.
 - **Don't claim v1 tests two independent implementations.** Its reference indexer reuses
   `canonical`, and the docs must say so.
 - **Don't make a claim the roadmap rejects,** such as amounts, a score, "provably
@@ -251,6 +264,7 @@ Each has its full reason, and its history, in [docs/decisions.md](docs/decisions
 | `dust_threshold_sat` is declared, never an input to proof | Entries carry no amounts, and no state depends on the threshold |
 | The v1 tripwire is the payments you declare with `--expect` | Scheduled probes at random times and amounts are v2 (roadmap F25) |
 | Run every indexer locally; construct edge cases on regtest | Never depend on a public server being alive; public signet cannot be mined on demand |
+| The committed evidence file lives in `evidence/`, beside the Go package; the run record lives in `docs/runs/2026-10-01` (1 Oct) | `TestCommittedEvidenceChecksOut` reads every `omission-*.json` beside the package, so a format change that breaks the judge path fails CI. The README, the site and the video name `evidence/<file>`, and `cmd/site -evidence` refuses a file outside that directory. The run's command output, state files and indexer logs sit in `docs/runs/2026-10-01`, with local paths removed |
 | UI: Go `html/template`, the Safety Lamp identity | Coal `#17160F` on limestone `#F5F3EC`, dark `#121210`. Canary yellow `#F4E13A` is the brand, never a state colour; yellow-family text is `#5E5700`. States show symbol, word and colour, at 4.5:1 or better. Atkinson Hyperlegible Next and Mono, self-hosted. One wording table, `copy.go`. The ban list is in decisions.md |
 
 ## External facts worth not re-deriving

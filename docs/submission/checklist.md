@@ -26,8 +26,10 @@ the morning.
       are known. If it is lost, ask hackathon@bitshala.org.
 - [ ] The recorded run is done, with the screen captured, following
       [the video script](video-script.md#setting-up-the-run).
-- [ ] That run's evidence file is committed under `evidence/`, with the CI test that
-      verifies it.
+- [x] A real run's evidence file is committed under `evidence/`, with the CI test that
+      verifies it. Done on 1 Oct: `evidence/omission-regtest-351-ad56b9bb-db614560.json`, from the run in
+      `docs/runs/2026-10-01`. If the video shows a later run, commit its file beside
+      this one.
 - [ ] The Devfolio draft is saved, with the fields from [devfolio.md](devfolio.md).
 - [ ] Wrangler is logged in to Cloudflare, and the Pages project exists. Its address is
       [site URL].
@@ -58,8 +60,10 @@ the morning.
       go list ./... | wc -l
       ```
 
-- [ ] Put the real run's numbers in the README: blocks checked, the time `canary check`
-      took, and the evidence file's name and SHA-256.
+- [ ] The evidence file names in the README and in [devfolio.md](devfolio.md#numbers)
+      match the files in `evidence/`, and devfolio.md's SHA-256 matches. For the 1 Oct
+      file it is `aea26b9bf54926af62eefe09b7fb7bd64540025b052001f52a41f77cac1b9710`.
+      The 1 Oct run did not time `canary check`, so quote no time for it.
 
       ```sh
       ls evidence/*.json
@@ -69,7 +73,7 @@ the morning.
 - [ ] The committed evidence file still checks out.
 
       ```sh
-      go run ./cmd/canary verify evidence/[evidence file name, from the run]
+      go run ./cmd/canary verify evidence/omission-regtest-351-ad56b9bb-db614560.json
       ```
 
 - [ ] Read every hit of a last wording check over the reader-facing pages. "Trustless"
@@ -100,7 +104,7 @@ the morning.
 - [ ] The evidence file in the video matches the committed one.
 
       ```sh
-      shasum -a 256 evidence/[evidence file name, from the run]
+      shasum -a 256 evidence/*.json
       ```
 
 - [ ] Upload to YouTube as Public or Unlisted, never Private. Paste the chapters and the
@@ -177,7 +181,7 @@ Devfolio. Come back to the site after 17:00, and stop site work at 21:00.
       ```sh
       make wasm
       go run ./cmd/site -noindex=false \
-        -evidence evidence/[evidence file name, from the run] \
+        -evidence evidence/omission-regtest-351-ad56b9bb-db614560.json \
         -base-url [site URL]
       ```
 
@@ -204,8 +208,8 @@ Devfolio. Come back to the site after 17:00, and stop site work at 21:00.
 - [ ] Open the draft and paste each field from [devfolio.md](devfolio.md).
 - [ ] Replace every value in [brackets] in the pasted text. Then search the Devfolio
       preview for "[" and "from the run". Neither may remain.
-- [ ] Delete every line whose event did not happen: the real-node run, the committed
-      evidence file, the site link.
+- [ ] Delete every line whose event did not happen, such as the site link if the site
+      is not live.
 - [ ] Add the video link, the repository link and, if the site is live, its link.
 - [ ] Select Cypherpunk. Add Freedom Stack only if the handbook allows a second track,
       with the Freedom Stack paragraph.

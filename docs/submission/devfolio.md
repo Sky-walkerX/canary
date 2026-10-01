@@ -6,11 +6,12 @@ note is the text to paste.
 
 Before you paste:
 
-- Replace every value in [brackets]. Each one comes from the real run, the video upload
-  or the site deploy.
+- Replace the two values still in [brackets]: the video link and the site address. The
+  recorded run of 1 Oct filled every other bracket, from the files in
+  [docs/runs/2026-10-01](../runs/2026-10-01/) and the committed evidence file.
 - Some lines describe things that have not happened yet. Their note says which line to
-  delete if it still has not happened. Never leave in a claim about a real-node run, a
-  recorded run, relay publication or a deployed site that did not happen.
+  delete if it still has not happened. Never leave in a claim about a video, relay
+  publication or a deployed site that did not happen.
 - Recount the tests on 5 Oct, with the command in the
   [final-day checklist](checklist.md#before-1200-ist). The numbers below were measured on
   1 Oct.
@@ -50,10 +51,11 @@ Cypherpunk
 the recorded run only. Never use the sample-data dashboard, because its data comes from
 no run.*
 
-1. The terminal where `canary check` names the withholding server, block [block height,
-   from the run].
-2. The browser checker showing "Checks out." for the evidence file from the run.
-3. The local dashboard's Overview for the same run.
+1. The terminal where `canary check` names the withholding server, block 351. The text
+   is in [docs/runs/2026-10-01/check.txt](../runs/2026-10-01/check.txt).
+2. The browser checker showing "Checks out." for the evidence file from the run:
+   `docs/media/site-checker-real.png`.
+3. The local dashboard's Overview for the same run: `docs/media/dashboard-overview.png`.
 
 ## The problem it solves
 
@@ -195,8 +197,8 @@ and the docs list that as a limit.
 ## What works, and what doesn't yet
 
 *For the description field, or after the problem field if the form has no description.
-Delete the second bullet if the real-node run did not happen, and the third if no
-evidence file from it is committed.*
+The second and third bullets come from the recorded run of 1 Oct, in
+[docs/runs/2026-10-01](../runs/2026-10-01/).*
 
 What works:
 
@@ -205,11 +207,18 @@ What works:
   `canary status`, a local dashboard and a browser checker. One end-to-end test runs it
   on a synthetic regtest chain. `canary check` names the withholding server, the block
   and the txid, from that server's own signatures.
-- On [date, from the run], a run on Bitcoin Core [version, from the run] in regtest mode
-  named the withholding server at block [block height, from the run], txid
-  [txid, from the run].
-- That run's evidence file is committed at `evidence/[file name, from the run]`. It
-  checks out with `canary verify` with the network off, and in the browser checker.
+- On 1 October 2026, a run on Bitcoin Core v31.1.0 in regtest mode named the
+  withholding server at block 351, txid
+  `ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e`. The server had
+  left that payment out of the list it served, while its signed record for the block
+  still included it. `canary check` over blocks 0 to 351 reported 351 Checked and
+  1 Data withheld. A last check covered block 201 alone, with only the withholder. That
+  block sat 150 blocks deep, past the 144-block window, and nothing could fill its gap.
+  It read Can't be checked, which is neither a pass nor an accusation.
+- That run's evidence file is committed at
+  `evidence/omission-regtest-351-ad56b9bb-db614560.json`, and a CI test keeps it
+  checking out. It checks out with `canary verify`, which needs no network, and with the
+  browser checker's WebAssembly build.
 - A one-byte change to an evidence file fails the check, at the step that covers that
   byte.
 
@@ -222,7 +231,10 @@ What doesn't yet:
 - Version 1 is built and tested on regtest only, against its own reference index server.
   That server reuses Canary's code for computing entries, so v1 does not test two
   independent implementations. No deployed server speaks Canary's API yet.
-- No relays yet. `canary check` fetches signed records from each server over HTTP.
+- No relays yet. `canary check` fetches signed records from each server over HTTP. The
+  recorded run published nothing to Nostr relays.
+- The recorded run used one Bitcoin Core node on one computer, feeding both servers and
+  the checker.
 - No wallet in the loop. A finding reaches you only when you run `canary check`.
 - When two servers disagree, Canary names both and cannot say which one lied. That
   finding, and a few others, have no evidence file in v1: you know, but cannot yet prove
@@ -232,9 +244,10 @@ What doesn't yet:
 
 *Measured on 1 Oct 2026 unless marked. Recount the tests before pasting.*
 
-- **Tests:** 399 top-level tests, 773 passing cases with subtests, in 19 Go packages.
-  None fail, with or without the race detector, on Go 1.26.4.
-- **Code:** about 16,200 lines of Go, plus about 16,500 lines of tests.
+- **Tests:** 403 top-level tests, 782 passing cases with subtests, in 19 Go packages.
+  None fail, with or without the race detector, on Go 1.26.4. One of them verifies the
+  committed evidence file.
+- **Code:** about 16,300 lines of Go, plus about 17,000 lines of tests.
 - **End to end:** one test runs the whole v1 demo in one process, on a 209-block
   synthetic chain with two reference index servers. `canary check` takes about 0.2 s
   there.
@@ -252,9 +265,11 @@ What doesn't yet:
 - **Wire size:** a full list is `4 + 66n` bytes. A pruned entry costs 33 bytes as a
   hash, or 1 byte if it is left out.
 - **Retention window:** 144 blocks, about one day at 10 minutes per block.
-- **From the real run:** [blocks checked, from the run] blocks checked in
-  [canary check time, from the run]. Evidence file of [size, from the run] bytes, SHA-256
-  [hash, from the run].
+- **From the real run, 1 Oct 2026:** 352 blocks checked, 0 to 351, against two servers:
+  351 Checked and 1 Data withheld. Block 351 holds five entries. The withholder's receipt
+  covers the 269-byte list it served. The evidence file is 2,722 bytes, SHA-256
+  `aea26b9bf54926af62eefe09b7fb7bd64540025b052001f52a41f77cac1b9710`. The run did not
+  time `canary check`.
 
 ## AI assistance
 

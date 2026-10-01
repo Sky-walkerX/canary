@@ -27,6 +27,92 @@ Repo: `github.com/Sky-walkerX/canary`. It stays **private** until submission, be
 publishing early hands the idea to competitors. It goes public on 5 Oct. The MIT
 `LICENSE` is already committed.
 
+## Resume here (end of the 1 Oct 2026 session)
+
+**Where it stands.** v1 is code-complete. It ran end to end on a real Bitcoin Core v31.1.0
+regtest node, and the committed evidence file verifies from a fresh clone. Everything is
+on `main` at `0c07d47`, pushed, with CI green. The repo is still **private**.
+
+- `go test ./... -count=1 -timeout 300s`: 19 packages, 444 top-level tests, 879 passing
+  cases, with and without `-race`, on Go 1.26.4. CI uses Go 1.24 on ubuntu-latest.
+- Three whole-repo reviews ran on 1 Oct: security, honesty of claims, and fresh-clone
+  robustness. Every blocker and major finding is fixed. The decisions those fixes
+  produced are in "Decisions in force" below, including https or local-only transport
+  and the signed-tip rule.
+
+**What is left. Steps 1–4 and 6 are the developer's.**
+
+1. Create the Devfolio project draft. The team is registered but had no project page on
+   30 Sep. Paste the text from `docs/submission/devfolio.md`.
+2. Find the 7 Sep Bitshala handbook email, or ask hackathon@bitshala.org. It settles the
+   video length (a competitor reports 3–5 minutes) and whether a second track
+   (Freedom Stack) is allowed.
+3. Run `npx wrangler login`. Claude then deploys a noindex preview of the site to
+   Cloudflare Pages: `make wasm`, then `go run ./cmd/site`, then the `wrangler` commands
+   in `docs/submission/checklist.md` (create the `canary` project once, then
+   `npx wrangler pages deploy site/dist --project-name=canary`).
+4. Record the video from `docs/submission/video-script.md`, about 4 minutes. Its setup
+   repeats `scripts/demo-regtest.sh --act5`.
+5. Optional, Claude: publish the run's signed records to two public Nostr relays. This
+   posts publicly under a demo key, so ask the developer first. Until it is done, no
+   doc may say the records are on a relay.
+6. **Monday 5 Oct.** Follow `docs/submission/checklist.md`:
+   - freeze at noon IST;
+   - put the video link at the top of the README;
+   - make the repo public and tag `v0.1.0`;
+   - build the site with `-noindex=false` and deploy it;
+   - fill in Devfolio and **press Publish by 17:00 IST**.
+
+**Environment on this machine.**
+
+- Bitcoin Core v31.1.0 is installed with Homebrew (`/opt/homebrew/bin/bitcoind`).
+- `scripts/demo-regtest.sh --act5 <empty dir>` reruns the whole demo in about two minutes
+  on a throwaway datadir. Write to a scratch directory; `demo-out/` is gitignored.
+- Two git worktrees sit beside the repo for parallel tracks, both at `main`:
+  - `../canary-ui` on branch `track/ui` (dashboard, site, wording);
+  - `../canary-docs` on branch `track/docs` (docs).
+
+  Merge each into `main` with `--no-ff`, run the full tests, then push. Fast-forward
+  both branches to `main` afterwards.
+- Preview locally:
+  - the site: `make wasm && go run ./cmd/site`, then serve `site/dist`;
+  - the dashboard on the recorded run:
+    `go run ./cmd/canary ui --state docs/runs/2026-10-01/state.json`, served at
+    `127.0.0.1:7352`.
+
+  Port 7353 is the reference indexer's default, so don't use it for previews. Background
+  commands in Claude Code stop after two hours.
+- How the work ran: each step is a Workflow with a builder, an adversarial reviewer and
+  a fixer. Agents never commit; the main session reviews, commits with the trailer below,
+  merges and pushes. Agents must never start a server in the foreground: one stalled a
+  whole run on 1 Oct.
+- The approved plan is local to the developer's machine, at
+  `~/.claude/plans/pasted-content-id-0f6e-refactor-all-compiled-engelbart.md`.
+
+**Known and deferred.** None of these blocks v1. Each is named in the formats doc's
+"What these formats do not cover" or in `docs/decisions.md`:
+
+- **Output-side withholding** is not checked: filters, UTXO lists, `outputs_short`. The
+  fix is the v2 leaf with output keys.
+- **The hash-only variant** under a pruning policy reads Checked, gap filled.
+- **With one server,** a record that leaves your entry out reads Checked (`own_record`).
+  Only a second honest server or a declared payment catches it.
+- **A withholder can sign a tip above Core's,** turning an omission into Can't be checked.
+  A declared payment still names it.
+- **Resource costs a server can still impose:** a slow server can stretch a run. On
+  mainnet-sized blocks, evidence files grow with the square of the entry count.
+- **Core-dependent behaviour:**
+  - the tripwire can misread a server that is ahead of Core;
+  - `fits()` downloads the whole block to count transactions, so a pruned Core makes
+    `check` stop. Reading the count from `/rest/headers` would fix it.
+- **Small items:**
+  - evidence file names can collide on the 8-hex txid prefix;
+  - `canary-uidev` leaves its temp directory behind;
+  - act 3b ("Servers disagree") needs a record-omitting indexer switch that is not
+    built, so the video script marks it optional;
+  - signet needs a network-ID flag after v1;
+  - nothing is published to Nostr relays yet.
+
 ## Current state on 2026-10-01
 
 **The design is approved and implementation is under way.** The approval gate passed on
@@ -59,11 +145,8 @@ interface does.
 | Recorded-run pages and README screenshots | Done. `go run ./cmd/site` reads `docs/runs` and builds pages for the 1 Oct run from its state files. The screenshots in `docs/media` come from that run |
 | Video, public deploy | Not done. The site builds and serves locally; deploying it needs `npx wrangler login` first |
 
-Tests on 1 Oct, at `d52477d`: `go test ./... -count=1` passed in all 19 packages on Go
-1.26.4, and again with `-race`. That is 413 top-level tests, one of them a fuzz test with
-four seeds, and 791 passing cases with subtests. Recount before quoting; other tracks
-merge into `main`. Everything up to `d52477d` is pushed, and CI passed on every push of
-1 Oct.
+Tests: see "Resume here" above for the latest count, taken at `0c07d47`. Recount before
+quoting, because other tracks merge into `main`.
 
 **Next tasks:**
 

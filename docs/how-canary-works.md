@@ -137,7 +137,10 @@ Three details the chart leaves out:
 
 - An entry sent as nothing outside the window is allowed. The server's excuse is then its
   own signed tip, so Canary checks that tip against your Core node. A tip that Core
-  contradicts reads Data withheld, as a false chain claim.
+  contradicts, with a different block at that height more than 6 blocks below Core's tip,
+  reads Data withheld, as a false chain claim. A tip above your node's tip is not a lie
+  Canary can prove, because your node may simply be behind, so the block reads Can't be
+  checked (`tip_unconfirmed`) unless another source fills the gap.
 - An unsigned list that fails to decode reads Can't be checked, because nothing the server
   signed shows those bytes. A signed list that fails, or any list of the wrong length,
   reads Data withheld.
@@ -201,7 +204,8 @@ row where A still sends a hash also carries that warning.
 | Position 3 sent as a hash, and B not configured | Checked, gap filled | `hash_retained` | No accusation. Canary cannot tell pruning from hiding here |
 | A's signed tip is 360, so the depth is 155; your node confirms that tip; B supplies e3 | Checked, gap filled | `filled_from_server` | No accusation |
 | As above, and B not configured | Can't be checked | `gap_unfilled` | No accusation, and not a pass either |
-| A's signed tip is 360, but your node's tip is 212 | Data withheld | `false_chain_claim` | No. Checking it needs a node, and v1 has no evidence format for it |
+| A's signed tip is 360, but your node's tip is 212, and B not configured | Can't be checked | `tip_unconfirmed` | No accusation. Your node may be behind, so the tip is unconfirmed, not false |
+| A's signed tip is 360, but your node, at 380, holds a different block at height 360 | Data withheld | `false_chain_claim` | No. Checking it needs a node, and v1 has no evidence format for it |
 | All five sent in full, and B signed the same root | Checked | `records_agree` | No finding |
 | All five sent in full, and B not configured | Checked | `own_record` | No finding. Nothing checks that A's record is complete |
 | A signed `n` = 4 without e3, and served that list | Servers disagree | `records_differ` | Both records are signed. Neither says which server lied |

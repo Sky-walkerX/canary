@@ -8,8 +8,13 @@ The story order is fixed. The loss comes first, then the cause, then Canary, the
 anyone can repeat, then the limits. The video ends on a block Canary could not check,
 because that state shows how the design treats what it cannot know.
 
-Every value in [brackets marked "from the run"] comes from the real run. Fill them in
-while editing, from the terminal output on screen. Never type one in from memory.
+The values quoted below come from the recorded run of 1 Oct 2026, whose output is in
+[docs/runs/2026-10-01](../runs/2026-10-01/). The setup repeats that run's steps. So every
+take gives the same block heights, 201 and 351, the same five entries in block 351 and
+the same counts lines. Txids, block hashes, keys and the evidence file's name change on
+every run, and the withheld entry's position can change too. If a take differs from the
+values here, the screen wins. Take the new values from the terminal while editing, never
+from memory.
 
 ## Rules for the recording
 
@@ -67,8 +72,8 @@ A silent-payments light wallet can't tell "nobody paid you" from "the server lef
 payment out." Canary checks the tweak list a server sends against the record the same
 server signed, and names the server when they contradict each other.
 
-Recorded on regtest on [date, from the run]. Version 1 is built and tested on regtest
-only. Canary makes tweak sourcing accountable, not trustless.
+Recorded on a local regtest node. Version 1 is built and tested on regtest only. Canary
+makes tweak sourcing accountable, not trustless.
 
 Code, evidence file and docs: https://github.com/Sky-walkerX/canary
 Built by one developer with Claude, Anthropic's AI assistant.
@@ -76,14 +81,13 @@ Built by one developer with Claude, Anthropic's AI assistant.
 
 ## Setting up the run
 
-These commands follow `scripts/demo-regtest.sh` step for step, with the same ports. The
-script stops every process when it finishes, so the video uses these commands by hand to
-keep both servers running between shots. The README must then say the video shows a
-manual run of the script's steps.
+These commands follow `scripts/demo-regtest.sh --act5` step for step, with the same
+ports. The script stops every process when it finishes, so the video uses these commands
+by hand to keep both servers running between shots. The README must then say the video
+shows a manual run of the script's steps.
 
-Neither the script nor these commands had run against a real Bitcoin Core node by
-1 Oct, because Bitcoin Core was not installed on the build machine. Do a full dry run
-before the take you keep.
+On 1 Oct the script ran end to end on Bitcoin Core v31.1.0. These commands copy its
+steps, but do a full dry run of them before the take you keep.
 
 You need Bitcoin Core v30 or later, Go and curl. Run everything from the repository root,
 in zsh or bash.
@@ -109,22 +113,46 @@ bitcoind -regtest -datadir="$RUN/bitcoin" -rest=1 -txindex=1 -fallbackfee=0.0001
 cli -rpcwait getblockcount
 ```
 
-**Mine, pay a taproot address, and confirm the payment.** Any Core-wallet payment to a
-taproot address is eligible, so no silent-payments wallet is needed.
+**Mine, and make act 5's early payment.** Any Core-wallet payment to a taproot address
+is eligible, so no silent-payments wallet is needed. The early payment confirms in block
+201. The 149 blocks after it, plus the main payment's block, leave it 150 blocks below the
+tip, past the 144-block window.
 
 ```sh
 cli createwallet demo
 MINER=$(cli -rpcwallet=demo getnewaddress "" bech32)
 cli generatetoaddress 200 "$MINER" > /dev/null
+EARLY_TXID=$(cli -rpcwallet=demo sendtoaddress "$(cli -rpcwallet=demo getnewaddress "" bech32m)" 1.0)
+cli generatetoaddress 1 "$MINER" > /dev/null
+EARLY_HEIGHT=$(cli getblockcount)
+cli generatetoaddress 149 "$MINER" > /dev/null
+echo "early payment $EARLY_TXID in block $EARLY_HEIGHT"
+```
+
+**Pay a taproot address beside four other taproot payments, and confirm it.** The
+payment confirms in block 351, which then holds five entries.
+
+```sh
+for amount in 0.2 0.3; do
+  cli -rpcwallet=demo sendtoaddress "$(cli -rpcwallet=demo getnewaddress "" bech32m)" "$amount" > /dev/null
+done
 PAYEE=$(cli -rpcwallet=demo getnewaddress "" bech32m)
 TXID=$(cli -rpcwallet=demo sendtoaddress "$PAYEE" 1.0)
+for amount in 0.4 0.5; do
+  cli -rpcwallet=demo sendtoaddress "$(cli -rpcwallet=demo getnewaddress "" bech32m)" "$amount" > /dev/null
+done
 cli generatetoaddress 1 "$MINER" > /dev/null
 BLOCK=$(cli getbestblockhash)
 HEIGHT=$(cli getblockcount)
 echo "payment $TXID in block $HEIGHT, hash $BLOCK"
 ```
 
-**Start the two index servers.** One is honest. The other withholds the payment.
+In the 1 Oct run, the early payment was
+`b3d748316d7d1d7fcc64837a2d4ca459015bd8f7519f1c1ad73db4499c21cdb9` in block 201. The
+main payment was `ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e` in
+block 351, hash `72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a`.
+
+**Start the two index servers.** One is honest. The other withholds both payments.
 
 ```sh
 canary-indexer --gen-key "$RUN/keys/honest.key"
@@ -133,7 +161,8 @@ canary-indexer --core-rest "$REST" --addr 127.0.0.1:28481 \
   --key-file "$RUN/keys/honest.key" --poll 1s > "$RUN/logs/honest.log" 2>&1 &
 HONEST_PID=$!
 canary-indexer --core-rest "$REST" --addr 127.0.0.1:28482 \
-  --key-file "$RUN/keys/withholder.key" --poll 1s --withhold-txid "$TXID" \
+  --key-file "$RUN/keys/withholder.key" --poll 1s \
+  --withhold-txid "$TXID" --withhold-txid "$EARLY_TXID" \
   > "$RUN/logs/withholder.log" 2>&1 &
 WITHHOLDER_PID=$!
 until curl -fs http://127.0.0.1:28481/info | grep -q "$BLOCK"; do sleep 1; done
@@ -144,7 +173,8 @@ WITHHOLDER_PUB=$(pub "$RUN/logs/withholder.log")
 ```
 
 Each server prints its pubkey when it starts. `canary check` pins those keys by flag and
-never learns a key from the server.
+never learns a key from the server. In the 1 Oct run the withholder's key began
+`db614560`, and the honest server's began `3d27ad61`.
 
 **Save the run's values for other terminals.** The file holds public values only. Run
 `source ~/canary-run/env.sh` in every other terminal or pane you film.
@@ -152,6 +182,7 @@ never learns a key from the server.
 ```sh
 cat > "$RUN/env.sh" <<EOF
 export RUN="$RUN" REST="$REST" TXID="$TXID" BLOCK="$BLOCK" HEIGHT="$HEIGHT"
+export EARLY_TXID="$EARLY_TXID" EARLY_HEIGHT="$EARLY_HEIGHT"
 export MINER="$MINER" HONEST_PUB="$HONEST_PUB" WITHHOLDER_PUB="$WITHHOLDER_PUB"
 export PATH="$RUN/bin:\$PATH"
 cli() { bitcoin-cli -regtest -datadir="\$RUN/bitcoin" -rpcport=28443 "\$@"; }
@@ -189,17 +220,19 @@ curl -s -D - -o "$RUN/withheld.bin" "http://127.0.0.1:28482/tweaks/$BLOCK"
 xxd "$RUN/withheld.bin"
 ```
 
-The headers show `200 OK` and `X-Canary-Receipt`. The body is [xxd output, from the
-run]. With only the payment in the block, expect a count of 1, as `01000000`, then one
-slot of kind `03`.
+The headers show `200 OK` and `X-Canary-Receipt`. The body is 269 bytes. It starts with
+the count, five, as `05000000`. Four slots of kind `01` carry a full entry, 66 bytes
+each. The payment's slot is the single byte `03`. In the 1 Oct run the payment sat at
+position 0, so `03` came straight after the count. Positions follow transaction order in
+the block, so a new take can put it elsewhere.
 
-**Say.** "On the left, my own Bitcoin node. A payment, confirmed in block
-[block height, from the run]. On the right, what a server sent for that block. Status
-200, no error. The first four bytes count the entries. The last byte, zero three, means
-this slot is empty."
+**Say.** "On the left, my own Bitcoin node. A payment, confirmed in block 351. On the
+right, what a server sent for that block. Status 200, no error. The first four bytes
+count five entries. Four slots hold an entry. One is a single byte, zero three. That
+slot is empty."
 
-**Caption.** Left: Core shows the payment in block [block height, from the run]. Right:
-the server's list for that block. 200 OK, and the payment's slot is empty.
+**Caption.** Left: Core shows the payment in block 351. Right: the server's list for
+that block. 200 OK, five slots, and the payment's slot is empty.
 
 ### Shot 3, 0:30 to 0:44. What an honest server sends
 
@@ -212,8 +245,8 @@ curl -s "http://127.0.0.1:28481/tweaks/$BLOCK" | xxd
 **Say.** "A second server sends the full entry: the transaction ID and its tweak. Without
 that tweak, a wallet never finds the payment. It just shows a smaller balance."
 
-**Caption.** Honest server: kind 01, then the txid in internal byte order and the
-33-byte tweak. Withholder: kind 03, nothing.
+**Caption.** Honest server: five slots of kind 01, each a txid in internal byte order and
+a 33-byte tweak. Withholder: the payment's slot is kind 03, empty.
 
 ## Act 2. The cause, 0:44 to 1:24
 
@@ -258,7 +291,7 @@ you were paid.
 cli getblockchaininfo | grep -E '"(chain|blocks)"'
 ```
 
-It shows `"chain": "regtest"` and [block count, from the run].
+It shows `"chain": "regtest"` and `"blocks": 351`.
 
 **Say.** "All of this runs on regtest, a private Bitcoin network on this laptop. Blocks
 come on command, and anyone with Bitcoin Core can repeat the run. But it's not a public
@@ -297,10 +330,12 @@ pinned by flag. --expect declares the payment I made.
 echo $?
 ```
 
-The summary reads [counts line, from the run], then "withholder left out an entry it had
-signed for: block [block height, from the run], txid [short txid, from the run]." The
-next line names the evidence file and says "You can prove this to others." The exit code
-is 1, which means a finding.
+The output starts "Checking blocks 0–351 against 2 servers." The summary reads
+`351 Checked · 1 Data withheld`, then "withholder left out an entry it had signed for:
+block 351, txid ad56b9bb…e21e." The next line names the evidence file,
+`omission-regtest-351-ad56b9bb-db614560.json` in the 1 Oct run, and says "You can prove
+this to others." The exit code is 1, which means a finding. A new take prints its own
+txid and file name, and the caption uses what the screen shows.
 
 **Say.** "The withholder's record includes my payment's entry. Its list leaves that slot
 empty, while the block is still new. Servers may prune old entries, but must keep a hash
@@ -308,8 +343,8 @@ of each one for 144 blocks, about a day. So this isn't pruning. Canary fills the
 recomputes the root, and it matches. It names the server, the block and the
 transaction."
 
-**Caption.** Data withheld. withholder left out an entry it had signed for: block
-[block height, from the run], txid [short txid, from the run].
+**Caption.** Data withheld. withholder left out an entry it had signed for: block 351,
+txid ad56b9bb…e21e.
 
 ### Shot 9, 2:06 to 2:18. Coverage
 
@@ -364,22 +399,30 @@ Add 25 seconds to every time from here on if you kept act 3b.
 and the site, and serve the site on this computer:
 
 ```sh
-cp "$RUN"/evidence/omission-regtest-*.json evidence/
+EV=$(ls "$RUN"/evidence/omission-regtest-*.json)
+NAME=$(basename "$EV")
+cp "$EV" evidence/
 make wasm
-go run ./cmd/site -evidence evidence/[evidence file name, from the run]
+go run ./cmd/site -evidence "evidence/$NAME"
 python3 -m http.server 8080 --bind 127.0.0.1 --directory site/dist
 ```
 
 The last command serves the site until you press Ctrl-C, so give it its own terminal and
-stop it after shot 13. The site build also writes a tampered copy, with one byte changed,
-to `site/dist/evidence/`, under the same name with `-tampered` before `.json`. The page's
-note names the byte.
+stop it after shot 13. Set `EV` and `NAME` the same way in the terminal you film for shot
+12. The site build also writes a tampered copy, with one byte changed, to
+`site/dist/evidence/`, under the same name with `-tampered` before `.json`. It flips one
+hex digit of the first proof hash, and the page's note names the byte.
+
+In the 1 Oct run, `NAME` was `omission-regtest-351-ad56b9bb-db614560.json`, which is
+already committed. A new take adds its own file beside it, and
+`TestCommittedEvidenceChecksOut` checks every committed file.
 
 ### Shot 11, 2:18 to 2:42. The browser checker
 
 **Screen.** http://127.0.0.1:8080/ in the browser. Click "Choose an evidence file" and
 pick the file from `$RUN/evidence`. The result reads "Checks out." with its eight steps.
-Then click "Try a tampered copy". It reads "Does not check out", at [step, from the run].
+Then click "Try a tampered copy". It reads "Does not check out: inclusion failed.",
+because the changed proof hash no longer leads to the signed root.
 
 **Say.** "Anyone can check the evidence file Canary wrote. This page runs the same Go
 code in the browser, as WebAssembly, and the file never leaves it. Eight steps, from the
@@ -397,12 +440,13 @@ earlier:
 
 ```sh
 curl -sS --max-time 5 https://github.com
-canary verify evidence/[evidence file name, from the run]
-canary verify site/dist/evidence/[evidence file name without .json, from the run]-tampered.json
+canary verify "evidence/$NAME"
+canary verify "site/dist/evidence/${NAME%.json}-tampered.json"
 ```
 
-The first file prints "Checks out." The tampered copy prints "Does not check out:
-[step, from the run] failed."
+The first file prints "Checks out." and exits 0. The tampered copy prints "Does not check
+out: inclusion failed." and exits 1. Both match what the 1 Oct file and its tampered copy
+print.
 
 **Say.** "Same file, in a terminal, with Wi-Fi off. No node, no server, no internet.
 Checks out. The tampered copy doesn't. And a file that fails doesn't make the server
@@ -431,26 +475,26 @@ public networks and relays. Canary looks for hiding only, never fake entries.
 
 ### Shot 14, 3:30 to 3:44. A block Canary can't check
 
-**Screen.** Mine 150 blocks, wait for the withholding server to catch up, and check it
-alone, with no second server and no declared payment. Mining and waiting can be cut
-between takes.
+**Screen.** Check block 201 alone against the withholding server, with no second server
+and no declared payment. The withholder also left the early payment out of block 201.
+Its signed tip puts that block 150 blocks deep, past the window.
 
 ```sh
-cli generatetoaddress 150 "$MINER" > /dev/null
-TIP=$(cli getbestblockhash)
-until curl -fs http://127.0.0.1:28482/info | grep -q "$TIP"; do sleep 1; done
 canary check \
   --indexer http://127.0.0.1:28482=withholder --pubkey withholder="$WITHHOLDER_PUB" \
-  --core-rest "$REST" \
+  --core-rest "$REST" --from "$EARLY_HEIGHT" --to "$EARLY_HEIGHT" \
   --state "$RUN/limit-state.json" --evidence-dir "$RUN/limit-evidence"
 ```
 
-The counts line should read [counts line, from the run], with block
-[block height, from the run] as Can't be checked, reason `gap_unfilled`. To show the
-range, open `canary ui --state "$RUN/limit-state.json"` and the Blocks page.
+In the 1 Oct run it printed "Checking blocks 201–201 against 1 server." and the counts
+line `1 Can't be checked`. It found nothing and exited 0. The state file gives the
+reason, `gap_unfilled`. To show it, open `canary ui --state "$RUN/limit-state.json"` and
+the Blocks page.
 
-**Say.** "One last run. The same server, 150 blocks later, alone. Now the gap could be
-honest pruning, and nothing fills it. Can't be checked. Not a pass. Not an accusation."
+**Say.** "One last run. The same server, alone, on an older block. It also left an
+earlier payment out of block 201, which now sits 150 blocks deep. Past the window, an
+empty slot could be honest pruning, and nothing here fills it. Can't be checked. Not a
+pass. Not an accusation."
 
 **Caption.** Can't be checked means Canary could not recompute the root. It is neither a
 pass nor an accusation.
@@ -479,10 +523,13 @@ rm -rf "$RUN/keys"
 Check that the committed evidence file is the one the video shows:
 
 ```sh
-shasum -a 256 evidence/[evidence file name, from the run] "$RUN"/evidence/[evidence file name, from the run]
+shasum -a 256 "evidence/$NAME" "$EV"
 ```
 
-The two hashes must match. Commit only that one file from the run. Then check the
+The two hashes must match. Commit only that one file from the run. For the 1 Oct file
+the hash is `aea26b9bf54926af62eefe09b7fb7bd64540025b052001f52a41f77cac1b9710`. If the
+video shows a new run, its file sits beside the 1 Oct file. Then the README must say the
+video shows a later run of the same steps, with its own txids and keys. Then check the
 runtime: at least 3:00, and no more than 4:30.
 
 ## If something fails
@@ -493,7 +540,8 @@ runtime: at least 3:00, and no more than 4:30.
 | Nothing is recorded by 13:00 IST on 5 Oct | Record the terminal only, in one take, and narrate over it |
 | `--expect` fails, for example because Core can't find the transaction | Drop `--expect` from shot 7. The honest server's list still supplies the withheld entry, so act 3 still names the server. Drop "and declared my payment" from the narration |
 | The record-omitting switch was never built | Skip act 3b. The FAQ covers that branch in words |
-| Block [block height, from the run] does not read Can't be checked in shot 14 | Name the state and what it means over the limits table, without showing it, and say on screen that it was not staged |
+| Block 201 does not read Can't be checked in shot 14 | Name the state and what it means over the limits table, without showing it, and say on screen that it was not staged |
+| Bitcoin Core will not start on the day | Narrate over the 1 Oct run from its files: its output in `docs/runs/2026-10-01`, `canary ui` on its state file and `canary verify` on the committed evidence file. Say on screen that this replays the run of 1 Oct from its files, and drop act 1's live `curl` |
 | A result on screen differs from this script | Narrate what the screen shows. The screen wins over the script |
 
 ## Words to keep, and words to avoid

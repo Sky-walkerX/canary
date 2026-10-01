@@ -1,0 +1,7 @@
+{{define "content"}}
+<section class="error-panel" aria-labelledby="error-title">
+  <h1 id="error-title" class="page-title">{{.Meta.Title}}</h1>
+  <p class="error-body">{{.Text.NotFoundBody}}</p>
+  <p class="error-links"><a class="btn" href="/">{{.Text.NotFoundHome}}</a><a class="btn" href="/how-it-works/">{{.Text.NavHowItWorks}}</a></p>
+</section>
+{{end}}

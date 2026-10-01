@@ -1,0 +1,25 @@
+# Response headers for Canary's public site on Cloudflare Pages.
+# go run ./cmd/site copies this file to site/dist/_headers. With -noindex,
+# the default until submission, it also asks search engines to skip every path.
+#
+# The site loads nothing from another origin. The checker runs WebAssembly in
+# this origin, which needs 'wasm-unsafe-eval' and, for its worker, worker-src.
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+/*.wasm
+  Content-Type: application/wasm
+
+# Everything under /assets/ sits in a directory named by the hash of its
+# contents, so a changed file gets a new address and the old one never changes.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+

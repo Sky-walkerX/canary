@@ -1,0 +1,59 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+{{if .NoIndex}}<meta name="robots" content="noindex">
+{{end}}<title>{{.Title}}</title>
+<meta name="description" content="{{.Meta.Description}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Canary">
+<meta property="og:title" content="{{.Meta.Title}}">
+<meta property="og:description" content="{{.Meta.Description}}">
+{{with .Canonical}}<meta property="og:url" content="{{.}}">
+<link rel="canonical" href="{{.}}">
+{{end}}<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#F5F3EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="{{.Assets}}/fonts/atkinson-hyperlegible-next-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{.Assets}}/tokens.css">
+<link rel="stylesheet" href="{{.Assets}}/ui.css">
+<link rel="stylesheet" href="{{.Assets}}/site.css">
+<script src="{{.Assets}}/app.js"></script>
+</head>
+<body class="site">
+{{.Sprite}}
+<a class="skip-link" href="#main">{{.Text.SkipLink}}</a>
+<header class="site-header">
+  <div class="wrap header-row site-header-row">
+    {{template "wordmark"}}
+    <nav class="nav" aria-label="{{.Text.NavLabel}}">
+      <ul>{{range .Nav}}
+        <li><a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+      </ul>
+    </nav>
+    {{template "themeToggle"}}
+  </div>
+</header>
+<main id="main" class="wrap" tabindex="-1">
+{{template "content" .}}
+</main>
+<footer class="site-footer">
+  <div class="wrap site-footer-row">
+    <p class="footer-framing">{{.Framing}}</p>
+    <ul class="footer-links">
+      <li><a class="ext" href="{{.Repo}}" rel="noreferrer">{{.Text.FooterSource}}{{template "icon" "external"}}</a></li>
+      <li><a class="ext" href="{{.License}}" rel="noreferrer">{{.Text.FooterLicense}}{{template "icon" "external"}}</a></li>
+      <li>{{.Text.FooterNoRequests}}</li>
+    </ul>
+  </div>
+</footer>
+<p class="sr-only" role="status" data-copy-status></p>
+</body>
+</html>
+{{end}}

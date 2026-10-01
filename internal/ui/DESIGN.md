@@ -1,6 +1,6 @@
 ---
 name: Canary, Safety Lamp
-description: The design system for Canary's local dashboard and, later, its public site.
+description: The design system for Canary's local dashboard and its public site.
 colors:
   limestone: "#F5F3EC"
   limestone-surface: "#ECE9DF"
@@ -172,6 +172,36 @@ fully rounded: no pills.
 - **Update bar.** A fixed, non-modal `role="status"` bar in canary yellow. It stays until
   the reader reloads or dismisses it.
 - **Focus.** A 2px ink ring with a canary halo on every focusable element.
+- **Favicon.** The wordmark's first letter, a C, on its perch in canary yellow, on a coal
+  square. `favicon.go` draws it from one set of numbers, as the SVG and as the PNG
+  fallbacks, and a test keeps `assets/favicon.svg` equal to it. There is no bird.
+- **Finding headlines.** A server label is a name the user chose, often lower case, so a
+  heading introduces it: "Server withholder left out an entry it had signed for."
+  `canary status` keeps the bare label, as the formats document pins.
+
+## The public site
+
+`cmd/site` renders the public site to `site/dist` with this design system. It takes the
+partials from `Partials()`, the files from `Assets()` and every word from
+`wording.Site`, and adds its own stylesheet, `cmd/site/assets/site.css`, for layouts the
+dashboard has no use for.
+
+- **Titles sit on the perch.** Each page title carries the wordmark's perch line under
+  it: coal in light mode, canary yellow in dark. The home page's claim carries a 4px one
+  across the column.
+- **The checker bar.** The evidence checker opens with a canary-yellow bar, the same voice
+  as the update bar: Canary speaking about a file you hand it. It is the one large use
+  of yellow on the site.
+- **Bands.** Home page sections put the heading in a left column on wide screens, with a
+  1px rule above each band.
+- **Drawings.** The docs' Mermaid diagrams become HTML drawings in
+  `cmd/site/templates/diagrams.html`: boxes with 1.5px ink borders, dashed for what comes
+  after v1, and `canary check` in canary yellow, because it is Canary. The decision chart
+  is a numbered list whose exits are state badges. A test fails when a diagram in the
+  docs gains a label its drawing lacks.
+- **Doc tables.** A table cell holding exactly a state label shows the state badge.
+- **No outside requests.** Pages load only their own files, under the CSP in
+  `site/_headers`: no inline styles or scripts, and no link out except the repository.
 
 ## Do's and Don'ts
 

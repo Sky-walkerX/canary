@@ -1,0 +1,17 @@
+{{define "content"}}{{with .Main}}
+<article class="doc{{if .TOC}} has-toc{{end}}">
+  <header class="doc-head">
+    <h1 class="page-title">{{keepWords .Title}}</h1>
+  </header>
+  {{if .TOC}}<nav class="toc" aria-labelledby="toc-h">
+    <h2 id="toc-h" class="toc-title">{{$.Text.OnThisPage}}</h2>
+    <ol>{{range .TOC}}
+      <li><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}
+    </ol>
+  </nav>{{end}}
+  <div class="doc-body">
+{{.Body}}
+    <p class="doc-source">{{$.Text.DocSource}}: <a href="{{.Source}}" rel="noreferrer"><code>{{.SourcePath}}</code></a></p>
+  </div>
+</article>
+{{end}}{{end}}

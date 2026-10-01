@@ -19,7 +19,7 @@
 {{with .Chrome.Watermark}}<aside class="watermark" aria-label="Sample data">{{.}}</aside>{{end}}
 <header class="site-header">
   <div class="wrap header-row">
-    <a class="wordmark" href="/">Canary</a>
+    {{template "wordmark"}}
     <nav class="nav" aria-label="Main">
       <ul>
         <li><a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a></li>
@@ -29,10 +29,7 @@
       </ul>
     </nav>
     {{with .Chrome.NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
-    <button type="button" class="btn theme-toggle" data-theme-toggle hidden
-      data-label-auto="Theme: automatic" data-label-light="Theme: light" data-label-dark="Theme: dark">
-      {{template "icon" "theme"}}<span data-theme-label>Theme: automatic</span>
-    </button>
+    {{template "themeToggle"}}
   </div>
   {{if .Chrome.StatusLine}}<div class="wrap"><p class="status-line">{{.Chrome.StatusLine}}</p></div>{{end}}
 </header>

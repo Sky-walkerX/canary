@@ -40,3 +40,9 @@ nsec*
 
 # UI screenshots from design reviews
 /.ui-screens/
+
+# Browser automation logs and page snapshots from design reviews
+/.playwright-mcp/
+
+# Public site output, built by go run ./cmd/site
+/site/dist/

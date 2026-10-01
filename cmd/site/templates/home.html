@@ -1,0 +1,108 @@
+{{define "content"}}{{with .Main}}
+<section class="hero" aria-labelledby="claim">
+  <h1 id="claim" class="hero-claim">{{keepWords $.Text.Claim}}</h1>
+  <p class="hero-lede">{{$.Text.Lede}}</p>
+  <p class="hero-conditions">{{$.Text.Conditions}}</p>
+</section>
+
+{{/* The evidence checker. Its script, added later, wires these hooks:
+     [data-checker-file] and the two [data-checker-try] buttons, which it
+     enables; data-evidence and data-tampered, the files the buttons load;
+     [data-checker-result], where the report goes; [data-checker-pending],
+     which it hides; and [data-checker-live], which it reveals. The live
+     elements say the browser runs the check, so they stay hidden until the
+     script does. Until then the page says the checker is not built yet, and
+     the downloads work without a script. */}}
+<section id="checker" class="checker" aria-labelledby="checker-h" data-checker{{with .Checker.RealURL}} data-evidence="{{.}}"{{end}}{{with .Checker.TamperedURL}} data-tampered="{{.}}"{{end}}>
+  <div class="checker-bar">
+    <h2 id="checker-h" class="checker-title">{{$.Text.CheckerTitle}}</h2>
+    <p class="checker-privacy"><span data-checker-live hidden>{{$.Text.CheckerPrivacy}}</span> {{$.Text.FooterNoRequests}}</p>
+  </div>
+  <div class="checker-main">
+    <p class="checker-intro">{{$.Text.CheckerIntro}} <span data-checker-live hidden>{{$.Text.CheckerInBrowser}}</span></p>
+    <label class="drop">
+      <span class="drop-label">{{template "icon" "download"}}<span>{{$.Text.CheckerChoose}}</span></span>
+      <input class="drop-input" type="file" accept=".json,application/json" data-checker-file disabled>
+    </label>
+    <div class="checker-tries">
+      <button type="button" class="btn" data-checker-try="real" disabled>{{$.Text.CheckerTryReal}}</button>
+      <button type="button" class="btn" data-checker-try="tampered" aria-describedby="tamper-note" disabled>{{$.Text.CheckerTryTampered}}</button>
+    </div>
+    {{if .Checker.HasEvidence}}<p id="tamper-note" class="tamper-note">{{.Checker.TamperNote}}</p>
+    <ul class="checker-downloads">
+      <li><a class="download" href="{{.Checker.RealURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadReal}}</span></a></li>
+      <li><a class="download" href="{{.Checker.TamperedURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadTampered}}</span></a></li>
+    </ul>{{else}}<p id="tamper-note" class="tamper-note">{{$.Text.CheckerNoEvidence}}</p>{{end}}
+  </div>
+  <div class="checker-result" data-checker-result aria-live="polite">
+    <p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{if .Checker.HasEvidence}}{{$.Text.CheckerPending}}{{else}}{{$.Text.CheckerPendingNoEvidence}}{{end}}</span></p>
+    <p class="checker-steps-intro">{{$.Text.CheckerStepsIntro}}</p>
+    <ol class="checker-steps">{{range .Steps}}
+      <li>{{.}}</li>{{end}}
+    </ol>
+  </div>
+  <noscript><p class="checker-noscript">{{if .Checker.HasEvidence}}{{$.Text.CheckerNoScript}}{{else}}{{$.Text.CheckerNoScriptNoEvidence}}{{end}} <code>canary verify {{$.Text.RunFilePlaceholder}}</code></p></noscript>
+</section>
+
+<section class="band" aria-labelledby="problem-h">
+  <h2 id="problem-h" class="band-head">{{$.Text.ProblemTitle}}</h2>
+  <div class="band-body">
+    {{range $.Text.Problem}}<p>{{.}}</p>
+    {{end}}<blockquote class="pull"><p>{{$.Text.Quote}}</p></blockquote>
+  </div>
+</section>
+
+<section class="band" id="how" aria-labelledby="how-h">
+  <h2 id="how-h" class="band-head">{{$.Text.HowTitle}}</h2>
+  <div class="band-body">
+    <p>{{$.Text.HowIntro}}</p>
+    <ol class="how-steps">{{range $i, $s := $.Text.HowSteps}}
+      <li><span class="how-n" aria-hidden="true">{{inc $i}}</span><p>{{$s}}</p></li>{{end}}
+    </ol>
+    <p class="states-intro">{{$.Text.StatesIntro}}</p>
+    <ul class="state-grid">{{range .States}}
+      <li>{{template "stateBadge" .}}<p>{{.Meaning}}</p></li>{{end}}
+    </ul>
+    <p class="lower-bound">{{$.Text.LowerBound}}</p>
+    <p class="more"><a href="/how-it-works/">{{$.Text.HowLink}}</a></p>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="proves-h">
+  <h2 id="proves-h" class="band-head">{{$.Text.ProvesTitle}}</h2>
+  <div class="band-body">
+    <p>{{$.Text.ProvesIntro}}</p>
+    <dl class="facts proves">{{range $.Text.Proves}}
+      <div><dt>{{.Label}}</dt><dd>{{.Text}}</dd></div>{{end}}
+    </dl>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="limits-h">
+  <h2 id="limits-h" class="band-head">{{$.Text.LimitsTitle}}</h2>
+  <div class="band-body">
+    <p>{{$.Text.LimitsIntro}}</p>
+    <div class="table-wrap table-stack limits" role="region" aria-labelledby="limits-h" tabindex="0">
+      <table role="table">
+        <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">{{$.Text.LimitsClaimHead}}</th><th scope="col" role="columnheader">{{$.Text.LimitsStopHead}}</th></tr></thead>
+        <tbody role="rowgroup">{{range $.Text.Limits}}
+          <tr role="row"><th scope="row" role="rowheader" class="stack-head">{{.Label}}</th><td role="cell">{{.Text}}</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+    <p class="more"><a href="/how-it-works/#what-canary-proves-and-what-it-does-not">{{$.Text.LimitsLink}}</a></p>
+  </div>
+</section>
+
+<section class="band" id="run" aria-labelledby="run-h">
+  <h2 id="run-h" class="band-head">{{$.Text.RunTitle}}</h2>
+  <div class="band-body">
+    <p>{{if .Checker.HasEvidence}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
+    <ol class="run-steps">{{range .Commands}}
+      <li>{{if .Placeholder}}<div class="command"><pre><code>{{.Value}}<var>{{.Placeholder}}</var></code></pre></div>
+        <p class="run-placeholder">{{$.Text.RunPlaceholderNote}}</p>{{else}}{{template "command" (copyOf .Value .Label)}}{{end}}</li>{{end}}
+    </ol>
+    <p class="run-note">{{$.Text.RunNeeds}} {{if .Checker.HasEvidence}}{{$.Text.RunAfter}}{{else}}{{$.Text.RunAfterNoEvidence}}{{end}}</p>
+  </div>
+</section>
+{{end}}{{end}}

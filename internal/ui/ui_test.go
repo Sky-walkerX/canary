@@ -601,7 +601,7 @@ func TestOverviewContent(t *testing.T) {
 	fx := newFixture(t, exampleState(t), nil)
 	_, body := fx.get("/")
 	for _, s := range []string{
-		"withholder left out an entry it had signed for.",
+		"Server withholder left out an entry it had signed for.",
 		"Block 205. You can prove this to others.",
 		"Last check 2026-10-03 14:02 IST (6 min ago) · blocks 0–212 · regtest · canary 0.1.0 (abc1234)",
 		wording.RegtestBadge,
@@ -689,7 +689,7 @@ func TestFindingPage(t *testing.T) {
 	})
 	_, body := fx.get("/findings/" + exampleFinding)
 	for _, s := range []string{
-		"withholder left out an entry it had signed for.",
+		"Server withholder left out an entry it had signed for.",
 		wording.Reason("absent_in_window"),
 		wording.FindingShows("withheld", "absent_in_window", true, true),
 		wording.FindingDoesNotShow("withheld", "absent_in_window"),
@@ -1066,7 +1066,7 @@ func TestFindingOutsideResults(t *testing.T) {
 	// Blocks are keyed by hash: the old finding at the same height is not
 	// block 205's finding, so the verdict still names the one withholder.
 	_, body := fx.get("/")
-	if !strings.Contains(verdictSection(t, body), "withholder left out an entry it had signed for.") {
+	if !strings.Contains(verdictSection(t, body), "Server withholder left out an entry it had signed for.") {
 		t.Error("a finding for another block at the same height changed the verdict")
 	}
 }
@@ -1123,6 +1123,23 @@ func TestToneGlyphsAreNotStateGlyphs(t *testing.T) {
 	for _, g := range []string{"tone-good", "tone-bad", "tone-neutral"} {
 		if !strings.Contains(string(sprite), `<symbol id="g-`+g+`"`) {
 			t.Errorf("the sprite has no %s glyph", g)
+		}
+	}
+}
+
+// TestHeadlinesIntroduceTheServerLabel keeps a lower-case label from opening a
+// heading bare. The overview, the findings list and the finding page all say
+// "Server withholder left out…", never "withholder left out…".
+func TestHeadlinesIntroduceTheServerLabel(t *testing.T) {
+	fx := newFixture(t, exampleState(t), nil)
+	want := wording.FindingHeadline("withheld", "absent_in_window", []string{"withholder"})
+	for _, p := range []string{"/", "/findings", "/findings/" + exampleFinding} {
+		_, body := fx.get(p)
+		if !strings.Contains(body, want) {
+			t.Errorf("%s lacks the headline %q", p, want)
+		}
+		if strings.Contains(body, ">withholder left out") {
+			t.Errorf("%s opens a heading with the bare label", p)
 		}
 	}
 }

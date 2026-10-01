@@ -1,11 +1,11 @@
 # Canary
 
 **A silent-payments light wallet cannot tell "nobody paid you" from "the server left
-your payment out."** Canary is designed to check the tweak list a server sends against a
-list that the same server signed and published for that block. When what the server sent
-contradicts what it signed, Canary names the server and the block. Version 1 is due on
-5 Oct 2026 and is still being built; the [status table](#status-30-september-2026) says
-which parts work today.
+your payment out."** Canary checks the tweak list a server sends against a list that the
+same server signed and published for that block. When what the server sent contradicts
+what it signed, Canary names the server and the block. Version 1 is due on 5 Oct 2026. Its
+detection loop is built and tested on a synthetic regtest chain, and the
+[status table](#status-1-october-2026) says what has not run yet.
 
 Canary does not make tweak sourcing trustless. It makes it *accountable*, under the two
 conditions in the [security claim](#security-claim).
@@ -16,36 +16,99 @@ checks with a worked example. The [FAQ](docs/faq.md) answers the usual objection
 
 ---
 
-## Status (30 September 2026)
+## Status (1 October 2026)
 
 Canary is being built for [BOSS Battle](https://bitshala.org) (Bitshala), 7 Sep – 5 Oct
 2026, Cypherpunk track. Version 1 is due on 5 Oct 2026 at 23:59 IST. One developer builds
 it, working with Claude, Anthropic's AI assistant. Work continues after 5 Oct; the
 [feature roadmap](docs/roadmap/2026-09-30-feature-roadmap.md) lists what comes next.
 
+Every part of the v1 detection loop is built and tested. So far it has run only on a
+synthetic regtest chain, which the tests build in Go and serve the way Bitcoin Core's REST
+interface does. Nothing has run against a real Bitcoin Core node yet.
+
 | Part | State | What it does |
 |---|---|---|
 | `canonical` | Built and tested | Computes a block's complete tweak list from the block and the outputs it spends |
 | `commit` | Built and tested | Hashes that list into a Merkle root bound to the network, the block hash and the entry count, with inclusion proofs |
-| `feed` | Built and tested | Turns a commitment into a signed Nostr event and back, and fetches events from relays by block hash |
+| `feed` | Built and tested | Turns a commitment into a signed Nostr event and back. Its relay client is tested against a fake relay, and the v1 checker does not use it |
 | `policy` | Built and tested | Holds a server's declared filtering rules, and reads them from blindbit-oracle's `/info` |
-| `internal/testvector` | Built and tested | Defines the test-vector file format; one vector, an empty block, exists so far |
-| `wire` | Partly built | The tweak-list format a server sends is built and tested. Signed receipts are being built for v1 |
-| Reference indexer | Being built for v1 | A small server that publishes commitments and can be told to withhold one transaction |
-| `canary check`, `verify`, `status`, `ui` | Being built for v1 | The command-line checker and its local results page |
-| Evidence files | Being built for v1 | A file that anyone can check offline |
-| Tripwire | Being built for v1 | Checks whether a server reports a payment you know exists |
-| Dashboard and public site | Being built for v1 | Shows results; the site hosts a checker for evidence files |
+| `internal/testvector` | Built and tested | Defines the test-vector file format. One vector, an empty block, exists so far |
+| `wire` | Built and tested | The tweak-list format a server sends, and the signed receipt that travels with it. The receipt carries the server's tip, which the 144-block retention rule reads |
+| Reference indexer, `cmd/canary-indexer` | Built and tested | Signs one record per block and serves it with the tweak list and a receipt. `--withhold-txid` makes it leave one transaction out of what it serves, while its record still includes it |
+| `ladder` | Built and tested | Gives each block a state and a reason code. It fills gaps before it recomputes the root |
+| `evidence` | Built and tested | Writes and checks `canary-evidence/1` files. Checking a file needs no network |
+| `canary check`, `verify`, `status`, `ui` | Built and tested | The command-line checker. `check --expect` is the tripwire. It checks one payment you declare, by its tweak only |
+| Local dashboard | Built and tested | `canary ui` serves the results on 127.0.0.1 and makes no outside requests |
+| Public site generator, `cmd/site` | Built and tested | Writes the public site as static files, on the dashboard's design system |
+| Browser checker, `cmd/verify-wasm` | Built and tested | Runs the same evidence check in a browser. The module is 8.66 MB, or 2.66 MB with gzip. The site generator does not copy it into the site yet |
+| A run on a real Bitcoin Core regtest node | Not done | `scripts/demo-regtest.sh` is being written. Bitcoin Core is not installed on the build machine yet |
+| The real evidence file | Not done | It will come from that run, with a CI test that verifies it |
+| Recorded-run page, video, public site | Not done | The recorded-run page needs the real run. The site is not deployed |
 
-On the evening of 30 Sep, `go test ./...` passed in all 7 packages on Go 1.26.4: 80
-top-level tests, none failing. GitHub Actions runs `go vet` and `go test` on every push,
-and every run so far has passed. The last CI run was on 9 Sep. The `policy`, `feed`,
-`internal/testvector` and `wire` code has not been pushed yet, so it has been tested
-locally only.
+One end-to-end test, `TestGate` in `cmd/canary`, runs the v1 demo in one process. It goes
+through the same code that the `canary` command and the reference indexer run. A synthetic
+chain of 209 blocks feeds two reference indexers. One of them leaves a taproot payment out
+of what it serves, while its signed record still includes it. The test checks four things,
+and all four pass:
+
+- `canary check` names the withholding server, the block and the txid, from that server's
+  own signatures. Every block reads Checked for the honest server.
+- The evidence file verifies while every network connection is refused.
+- A one-byte change fails the check at the step that covers that byte. The test changes
+  the record signature, the accused key, the block height, a proof hash, the receipt and
+  the served list, one at a time.
+- The dashboard shows the finding under the server's name.
+
+On 1 Oct, `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again with
+`-race`. That is 361 top-level tests and one fuzz test's seed inputs, none failing, and
+706 passing cases once subtests are counted. GitHub Actions runs `go vet` and `go test` on
+every push. The run for the latest commit, on 1 Oct, passed.
 
 Version 1 is built and tested on regtest only, a private local test network. `canary
-check` will accept other networks, but prints a notice that v1 was not tested on them.
-Nothing has been run against signet or mainnet servers.
+check` accepts regtest and mainnet, and on mainnet it prints a notice that v1 is tested on
+regtest only. It refuses signet. Bitcoin Core reports only the name "signet", and a custom
+signet takes its network magic from its challenge, so the name does not say which signet
+it is. Nothing has been run against signet or mainnet servers.
+
+## Try it now
+
+These commands work on today's code. They need Go 1.24.1 or later, and none of them needs
+Bitcoin Core, a relay or a wallet. Run them from the repository root.
+
+**Watch the end-to-end test.**
+
+```
+go test ./cmd/canary -run TestGate -v -count=1
+```
+
+It builds the synthetic chain, starts the two indexers and runs `canary check` against
+them. Then it runs `status`, `verify` and `ui` on the files that check wrote. The last log
+line gives the block count and how long each step took.
+
+**See the dashboard, on sample data.**
+
+```
+go run -tags uidev ./cmd/canary-uidev
+```
+
+Then open http://127.0.0.1:7353/, and stop it with Ctrl-C. The data is made up and comes
+from no run. Every page carries a "SAMPLE DATA" watermark that says so. Only a build with
+the `uidev` tag carries sample data, so the `canary` command cannot show it.
+
+**Build the public site.**
+
+```
+make wasm
+go run ./cmd/site
+```
+
+`make wasm` builds the browser checker into `bin/wasm` and prints its size. `go run
+./cmd/site` writes the site to `site/dist`, marked noindex. The generator does not copy
+the browser checker into `site/dist` yet, so the checker on the built site cannot load.
+
+No real evidence file is committed yet, so there is nothing real to verify offline. It
+will come from the run on a real Bitcoin Core node.
 
 ## The problem
 
@@ -100,12 +163,13 @@ SPCOMMIT hashes each block's unfiltered tweak list and chains the hashes block t
 It signs only the chain head, which the operator posts to Nostr every 6 hours as a kind-1
 note. As of 30 Sep we found no wallet that checks it.
 
-Canary adds three things. None of them is finished yet; the [status table](#status-30-september-2026)
-says what exists.
+Canary adds three things. All three are built and tested on a synthetic regtest chain, and
+none has run against a real node yet; the [status table](#status-1-october-2026) has the
+details.
 
 - **A check at the client, one block at a time.** Each block gets its own signed Nostr
   event, found by block hash. A client can check one block without recomputing a chain.
-  The event format is built (`commit`, `feed`); the client check is being built.
+  In v1, `canary check` fetches these events over HTTP from each server, not from relays.
 - **Filtered responses leave explicit, signed gaps.** A server may leave entries out
   under a policy it declared in advance. Each entry it leaves out is a marked gap in a
   list whose length and Merkle root the server signed. So the client knows exactly which
@@ -244,8 +308,14 @@ never from `created_at`.
   entry that is missing from the server's own signed list, but that is a side effect,
   not a defence against this attack.
 - **Version 1 is built and tested on regtest only**, against its own reference indexer.
-  That indexer uses the same `canonical` package as the checker, so v1 does not test two
+  So far the tests run it on a synthetic chain, not on a real Bitcoin Core node. The
+  indexer uses the same `canonical` package as the checker, so v1 does not test two
   independent implementations against each other.
+- **Version 1 uses no relays.** `canary check` fetches each server's signed records over
+  HTTP from that server. A finding against one server rests on that server's own
+  signatures, and the cross-check between servers needs a second server. Publishing
+  records to relays, which the security claim's second condition relies on, comes after
+  v1.
 - **It does not make scanning faster.** Frigate made scanning faster. Canary is about
   whether the data is complete, which is a separate question.
 - **It is not a wallet**, not a new Bitcoin Core filter type, and not a succinct proof of
@@ -282,7 +352,8 @@ What each assumption buys:
 
 This is [Certificate Transparency](https://www.rfc-editor.org/rfc/rfc6962)'s split-view
 problem: a server showing different people different data. Certificate Transparency
-answers it with gossip between clients. Canary answers it with public Nostr relays. The
+answers it with gossip between clients. Canary's design answers it with public Nostr
+relays, which v1 does not use yet. The
 full comparison with earlier work, including
 [Delving Bitcoin thread 891](https://delvingbitcoin.org/t/silent-payments-light-client-protocol/891),
 is in [`docs/research/prior-art.md`](docs/research/prior-art.md).
@@ -296,6 +367,7 @@ relay.
 make help    # list the targets
 make test    # go test ./...
 make vet     # go vet ./...
+make wasm    # build the browser checker into bin/wasm and print its size
 ```
 
 ## Repository layout
@@ -305,8 +377,22 @@ canonical/               the complete tweak list for one block
 commit/                  Merkle root, commitment and inclusion proofs
 feed/                    commitments as signed Nostr events, and a relay client
 policy/                  a server's declared filtering rules
-wire/                    the tweak-list format a server sends
+wire/                    the tweak-list format a server sends, and its signed receipt
+ladder/                  one block's state and reason, with gaps filled first
+evidence/                canary-evidence/1 files, written and checked offline
+cmd/canary/              check, verify, status and ui, and the end-to-end gate test
+cmd/canary-indexer/      the reference indexer, with --withhold-txid
+cmd/canary-uidev/        the dashboard on sample data, built only with -tags uidev
+cmd/site/                the public site generator
+cmd/verify-wasm/         the browser checker, built by make wasm
+internal/core/           a client for Bitcoin Core's REST interface
+internal/core/coretest/  a synthetic regtest chain, served like Core's REST interface
+internal/indexer/        the reference indexer's records, receipts and HTTP routes
+internal/state/          the state file that check writes and ui reads
 internal/testvector/     the test-vector file format and its runner
+internal/ui/             the local dashboard and the design system the site shares
+internal/ui/wording/     every user-facing sentence, shared by the CLI, dashboard and browser
+site/                    the site's HTTP headers; the build goes to site/dist
 testdata/                BIP-352 upstream vectors and Canary's own vectors
 docs/*.md                how it works, the FAQ, the glossary and the decision log
 docs/design/             the design document and the frozen v1 formats

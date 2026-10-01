@@ -8,21 +8,23 @@ import (
 	bip352 "github.com/setavenger/go-bip352"
 )
 
-// txidInternal returns the txid in INTERNAL byte order — the bytes as they
-// appear in the transaction serialization. This is what §3.2 pins for the
-// leaf preimage. chainhash.Hash already stores this order.
+// txidInternal returns the txid in internal byte order, the bytes as they
+// appear in a serialized transaction. The leaf hash preimage uses this order.
+// chainhash.Hash already stores it.
 func txidInternal(h chainhash.Hash) [32]byte {
 	var out [32]byte
 	copy(out[:], h[:])
 	return out
 }
 
-// txidDisplay returns the txid in display order — the reversed form printed by
-// block explorers and returned by Core's REST API.
+// txidDisplay returns the txid in display order, the reversed form that block
+// explorers print and Core's REST API returns.
 //
-// bip352.Vin.Txid must be in THIS order: the library documents it as "the
+// bip352.Vin.Txid must be in this order. The library documents it as "the
 // normal human-readable format", and ComputeInputHash and FindSmallestOutpoint
-// both depend on it. Every crossing between the two orders happens here (§6.4).
+// both depend on it. Every conversion between the two orders in this package
+// happens in this file, because mixed orders give different roots for the same
+// data.
 func txidDisplay(h chainhash.Hash) [32]byte {
 	var out [32]byte
 	for i := 0; i < 32; i++ {
@@ -46,7 +48,7 @@ func vinsForTx(tx *wire.MsgTx, pv PrevoutSource) ([]*bip352.Vin, error) {
 		}
 
 		vins = append(vins, &bip352.Vin{
-			Txid:         txidDisplay(in.PreviousOutPoint.Hash), // display order — library contract
+			Txid:         txidDisplay(in.PreviousOutPoint.Hash), // display order, as the library requires
 			Vout:         in.PreviousOutPoint.Index,
 			Amount:       uint64(prev.Value),
 			ScriptPubKey: prev.PkScript,

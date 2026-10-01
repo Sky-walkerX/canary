@@ -63,7 +63,7 @@ func TestSetReturnsTransactionIndexOrder(t *testing.T) {
 		t.Fatalf("got %d leaves, want 3", len(leaves))
 	}
 
-	// Order must follow block position, and each TxID must be the INTERNAL
+	// Order must follow block position, and each TxID must be the internal
 	// byte order of the transaction's own hash.
 	for i, tx := range txs {
 		want := txidInternal(tx.TxHash())
@@ -122,7 +122,7 @@ func TestSetPropagatesMissingPrevout(t *testing.T) {
 	blk := blockWith(t, []*wire.MsgTx{tx})
 
 	// The prevout map is deliberately empty. A missing prevout must be an
-	// error, never a silently skipped transaction — silence here is the attack.
+	// error, never a silently skipped transaction. Silence here is the attack.
 	if _, err := Set(Network(0xdab5bffa), blk, mapPrevouts{}); err == nil {
 		t.Error("a missing prevout must surface as an error, not a dropped transaction")
 	}

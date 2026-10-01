@@ -9,14 +9,16 @@ import (
 )
 
 // isTaprootOutput reports whether pkScript is a BIP-341 v1 witness program:
-// OP_1 <32 bytes>. §2.2 rule 1 uses this WITHOUT the optional unspent clause —
-// that clause is exactly the cut-through policy §2.1 refuses to bake in.
+// OP_1 <32 bytes>. Eligibility rule 1 uses it without BIP-352's optional
+// "unspent" clause. That clause is cut-through, a server policy, and the
+// canonical set leaves every policy out.
 func isTaprootOutput(pkScript []byte) bool {
 	return len(pkScript) == 34 && pkScript[0] == 0x51 && pkScript[1] == 0x20
 }
 
 // isSegWitVersionAbove1 reports whether pkScript is a witness program of
-// version 2..16. Spending one excludes the whole transaction (§2.2 rule 3).
+// version 2 to 16. Spending one excludes the whole transaction (eligibility
+// rule 3).
 func isSegWitVersionAbove1(pkScript []byte) bool {
 	if len(pkScript) < 4 || len(pkScript) > 42 {
 		return false
@@ -34,14 +36,14 @@ func isSegWitVersionAbove1(pkScript []byte) bool {
 // the start of an empty witness for this vin.
 //
 // go-bip352 v0.1.8 reads vin.Witness[len(vin.Witness)-1] on the P2WPKH and
-// P2SH-P2WPKH paths without checking the witness is non-empty, panicking with
-// "index out of range [-1]". Its P2TR path guards, and its P2PKH path reads only
-// the scriptSig, so those two are safe.
+// P2SH-P2WPKH paths without checking that the witness is non-empty, and panics
+// with "index out of range [-1]". Its P2TR path checks, and its P2PKH path
+// reads only the scriptSig, so those two are safe.
 //
-// A block and its prevouts arrive from a source §1.2 treats as hostile, so this
-// is reachable input, not a theoretical case. Filtering is the honest fix rather
-// than recover(): a witness-spending prevout with no witness yields no public
-// key, which is precisely the Unknown the library would return if it checked.
+// A block and its spent outputs can come from a hostile source, so this input
+// is reachable. Filtering is the honest fix, not recover(). A witness spend
+// with no witness yields no public key, which is the Unknown the library would
+// return if it checked.
 func dereferencesEmptyWitness(v *bip352.Vin) bool {
 	if len(v.Witness) > 0 {
 		return false
@@ -62,9 +64,10 @@ func dereferencesEmptyWitness(v *bip352.Vin) bool {
 // tweakForTx decides eligibility and, when eligible, derives the 33-byte tweak.
 //
 // eligible == false with err == nil means the transaction is legitimately
-// outside T_base. A non-nil error means we could not decide — the caller must
-// surface it rather than silently dropping the transaction, because a dropped
-// transaction is indistinguishable from the attack this project detects.
+// outside the canonical set. A non-nil error means tweakForTx could not
+// decide. The caller must return that error and never drop the transaction
+// silently, because a dropped transaction looks exactly like the withholding
+// Canary detects.
 func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool, err error) {
 	if len(tx.TxIn) == 0 {
 		return tweak, false, nil
@@ -91,7 +94,7 @@ func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool
 		return tweak, false, err
 	}
 
-	// Rule 3: no input spending a SegWit v>1 output. This runs over every input,
+	// Rule 3: no input spends a SegWit v>1 output. This runs over every input,
 	// before any filtering, because one such input excludes the transaction.
 	for _, v := range vins {
 		if isSegWitVersionAbove1(v.ScriptPubKey) {
@@ -121,9 +124,9 @@ func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool
 		return tweak, false, nil
 	}
 
-	// Sum the input public keys. ExtractPubKey returns 33 bytes for
-	// P2WPKH/P2PKH/P2SH and 32 x-only bytes for P2TR, and signals failure with
-	// TypeUTXO == Unknown rather than an error (verified against v0.1.8).
+	// Sum the input public keys. ExtractPubKey returns 33 bytes for P2WPKH,
+	// P2PKH and P2SH, and 32 x-only bytes for P2TR. It signals failure with
+	// TypeUTXO == Unknown, not an error (checked by running v0.1.8).
 	keys := make([][33]byte, 0, len(eligibleVins))
 	for _, v := range eligibleVins {
 		pk, typ := bip352.ExtractPubKey(v)
@@ -152,17 +155,17 @@ func tweakForTx(tx *wire.MsgTx, pv PrevoutSource) (tweak [33]byte, eligible bool
 	}
 
 	// Rule 4b: input_hash must be a valid scalar. outpoint_L is the smallest
-	// outpoint "used in the transaction" (BIP-352), so this takes EVERY input,
-	// not just the ones contributing a key. Passing only the eligible vins
-	// silently changes the tweak on any transaction with a mixed input set, and
-	// two upstream vectors catch exactly that.
+	// outpoint "used in the transaction" (BIP-352), so this takes every input,
+	// not only the ones that contribute a key. Passing only the eligible vins
+	// silently changes the tweak of any transaction with mixed inputs, and two
+	// upstream vectors catch exactly that.
 	inputHash, err := bip352.ComputeInputHash(vins, sum)
 	if err != nil {
 		return tweak, false, nil
 	}
 
-	// The served tweak is A_tweaked = input_hash · A_sum — the public component
-	// a light client scans with (BIP-352 light-client scenario).
+	// The served tweak is input_hash · A_sum, the public value a light client
+	// scans with (BIP-352's light-client scenario).
 	t, err := bip352.TweakPubkey(sum, inputHash)
 	if err != nil {
 		return tweak, false, nil

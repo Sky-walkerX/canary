@@ -80,7 +80,7 @@ func TestNotEligibleWithoutTaprootOutput(t *testing.T) {
 		t.Fatalf("tweakForTx: %v", err)
 	}
 	if ok {
-		t.Error("no BIP-341 taproot output means not eligible (§2.2 rule 1)")
+		t.Error("no BIP-341 taproot output means not eligible (eligibility rule 1)")
 	}
 }
 
@@ -92,7 +92,7 @@ func TestNotEligibleWhenSpendingSegWitV2(t *testing.T) {
 		t.Fatalf("tweakForTx: %v", err)
 	}
 	if ok {
-		t.Error("spending a SegWit v>1 output excludes the whole transaction (§2.2 rule 3)")
+		t.Error("spending a SegWit v>1 output excludes the whole transaction (eligibility rule 3)")
 	}
 }
 
@@ -105,7 +105,7 @@ func TestNotEligibleWithNoEligibleInputs(t *testing.T) {
 		t.Fatalf("tweakForTx: %v", err)
 	}
 	if ok {
-		t.Error("no input from Inputs For Shared Secret Derivation means not eligible (§2.2 rule 2)")
+		t.Error("no input from Inputs For Shared Secret Derivation means not eligible (eligibility rule 2)")
 	}
 }
 
@@ -139,9 +139,9 @@ func TestTweakIsDeterministic(t *testing.T) {
 
 // go-bip352 v0.1.8 reads vin.Witness[len(vin.Witness)-1] for P2WPKH and
 // P2SH-P2WPKH without checking the witness is non-empty, so a prevout of either
-// shape with no witness panics with "index out of range [-1]". Prevouts reach us
-// from a source §1.2 treats as hostile, so a crafted pair must not be able to
-// kill the scanner. Confirmed against the library before the guard was written.
+// shape with no witness panics with "index out of range [-1]". Spent outputs can
+// come from a hostile source, so a crafted pair must not be able to crash the
+// scanner. This was confirmed against the library before the guard was written.
 func TestP2WPKHPrevoutWithEmptyWitnessDoesNotPanic(t *testing.T) {
 	tx, pv := buildTx(t, p2wpkhScript(), nil, p2trScript(t, testXOnly))
 

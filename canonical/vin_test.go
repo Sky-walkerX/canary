@@ -8,7 +8,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
-// chainhash.Hash stores INTERNAL byte order; its String() reverses for display.
+// chainhash.Hash stores internal byte order, and its String() reverses it for display.
 func TestTxidByteOrderConversions(t *testing.T) {
 	var h chainhash.Hash
 	for i := range h {
@@ -30,7 +30,7 @@ func TestTxidByteOrderConversions(t *testing.T) {
 	}
 
 	if internal == display {
-		t.Error("a palindromic test vector proves nothing — pick asymmetric bytes")
+		t.Error("a palindromic test vector proves nothing, so pick asymmetric bytes")
 	}
 }
 

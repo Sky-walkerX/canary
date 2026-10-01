@@ -57,8 +57,8 @@ func loadVectors(t *testing.T) bipVectorFile {
 }
 
 // parseWitness hex-decodes a vector witness. bip352.ParseWitnessScript reads
-// data[0] with no length check, so an empty witness — 43 of the 62 vins in this
-// file — must never reach it.
+// data[0] with no length check, so an empty witness must never reach it. 43 of
+// the 62 vins in this file have one.
 func parseWitness(t *testing.T, s string) [][]byte {
 	t.Helper()
 	if s == "" {
@@ -79,12 +79,13 @@ func parseWitness(t *testing.T, s string) [][]byte {
 }
 
 // txFromVector rebuilds a spending transaction and its prevouts from a vector's
-// input list, then adds one taproot output so §2.2 rule 1 is satisfied and the
-// vector exercises the rules it was written for rather than tripping rule 1.
+// input list. It adds one taproot output so eligibility rule 1 holds, and the
+// vector exercises the rules it was written for instead of tripping rule 1.
 //
-// The vector txid is display order, matching bip352.Vin's contract. wire.OutPoint
-// holds internal order, so it is reversed going in — and vinsForTx reverses it
-// back on the way out. That round trip is Task 7's boundary under real data.
+// The vector txid is in display order, as bip352.Vin requires. wire.OutPoint
+// holds internal order, so the txid is reversed going in, and vinsForTx
+// reverses it back on the way out. That round trip tests the package's one
+// byte-order boundary with real data.
 func txFromVector(t *testing.T, vins []bipVin) (*wire.MsgTx, mapPrevouts) {
 	t.Helper()
 	tx := wire.NewMsgTx(2)
@@ -123,9 +124,9 @@ func txFromVector(t *testing.T, vins []bipVin) (*wire.MsgTx, mapPrevouts) {
 }
 
 // The authoritative check on the whole derivation. expected.tweak is
-// input_hash · A_sum — exactly the 33 bytes §3.2 commits to in a leaf — so this
-// compares our tweakForTx against the BIP's own published value rather than
-// against our own reasoning.
+// input_hash · A_sum, exactly the 33 bytes an entry carries. So this compares
+// tweakForTx against the BIP's own published value, not against our own
+// reasoning.
 func TestBIP352VectorsTweakMatchesUpstream(t *testing.T) {
 	file := loadVectors(t)
 
@@ -145,7 +146,7 @@ func TestBIP352VectorsTweakMatchesUpstream(t *testing.T) {
 
 			if r.Expected.Tweak == "" {
 				// "No valid inputs" and "input keys sum to the point at
-				// infinity" — §2.2 rule 2 and rule 4a, from the BIP's vectors.
+				// infinity": eligibility rules 2 and 4a, from the BIP's vectors.
 				if eligible {
 					t.Errorf("%s: expected no tweak, got %x", c.Comment, got)
 				}
@@ -208,9 +209,9 @@ func TestBIP352VectorsInputPubKeySumMatchesUpstream(t *testing.T) {
 				continue
 			}
 
-			// Our summation, not the library's: bip352.SumPublicKeys cannot
-			// represent a running sum that passes through infinity, and one
-			// upstream vector does exactly that.
+			// The package's own summation, not the library's.
+			// bip352.SumPublicKeys cannot represent a running sum that
+			// passes through infinity, and one upstream vector does that.
 			sum, err := sumPublicKeys(keys)
 			if err != nil {
 				t.Errorf("%s: sumPublicKeys: %v", c.Comment, err)
@@ -224,7 +225,7 @@ func TestBIP352VectorsInputPubKeySumMatchesUpstream(t *testing.T) {
 	}
 
 	if checked == 0 {
-		t.Fatal("no vector produced an input public key sum — the harness is not exercising anything")
+		t.Fatal("no vector produced an input public key sum, so the harness exercised nothing")
 	}
 	t.Logf("matched %d upstream input public key sums", checked)
 }

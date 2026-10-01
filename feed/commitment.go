@@ -1,4 +1,3 @@
-// Package feed carries commitments over Nostr. Spec §3.3, §3.4.
 package feed
 
 import (
@@ -11,14 +10,17 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-// KindCommitment is a regular kind (1000–9999), therefore append-only.
-// A replaceable kind here would void non-repudiation entirely (§3.3).
+// KindCommitment is the Nostr kind of a signed record. It is a regular kind, in
+// 1000 to 9999, so relays keep every event. A replaceable kind would let a
+// server overwrite a record it already published, and the original would
+// vanish.
 const KindCommitment = 1352
 
-// TagBlockHash is single-letter because relays index nothing else (§3.3).
+// TagBlockHash is a single letter because relays index no other tag names.
 const TagBlockHash = "b"
 
-// Commitment is one server's signed statement about one block.
+// Commitment is one server's signed record for one block. The design doc calls
+// a signed record a commitment.
 type Commitment struct {
 	Network     canonical.Network
 	BlockHash   [32]byte
@@ -26,12 +28,12 @@ type Commitment struct {
 	N           uint32
 	Root        [32]byte
 	PolicyRef   [32]byte // event id of the policy declaration in force
-	Author      [32]byte // Nostr pubkey — implicit signer
+	Author      [32]byte // Nostr pubkey of the signer
 }
 
-// displayHex renders a 32-byte hash in display order — reversed, the form a
-// block explorer prints. Tags carry this so a human reading a relay sees the
-// familiar string; the root preimage uses internal order (§3.2).
+// displayHex renders a 32-byte hash in display order: reversed, the form a
+// block explorer prints. Tags carry this form, so a person reading a relay sees
+// the familiar string. The root preimage uses internal order.
 func displayHex(h [32]byte) string {
 	var rev [32]byte
 	for i := 0; i < 32; i++ {
@@ -47,7 +49,7 @@ func parseDisplayHex(s string) ([32]byte, error) {
 		return out, err
 	}
 	if len(b) != 32 {
-		return out, fmt.Errorf("want 32 bytes, got %d", len(b))
+		return out, fmt.Errorf("got %d bytes, want 32", len(b))
 	}
 	for i := 0; i < 32; i++ {
 		out[i] = b[31-i]
@@ -58,21 +60,21 @@ func parseDisplayHex(s string) ([32]byte, error) {
 // ToEvent builds and signs the Nostr event carrying c.
 //
 // The block hash goes in the single-letter b tag because relays index no other
-// tag names. The rest are carried for readers, not filters (§3.3). The root is
-// carried both in the content and in a multi-letter "root" tag; FromEvent
-// checks the two agree, which is what makes the redundancy meaningful rather
-// than just extra bytes.
+// tag names. The other tags are for readers, not filters. The root appears both
+// in the content and in a multi-letter "root" tag. FromEvent checks that the
+// two agree, which is what makes the repetition worth its bytes.
 func (c Commitment) ToEvent(sk [32]byte) (nostr.Event, error) {
 	skHex := hex.EncodeToString(sk[:])
 	pub, err := nostr.GetPublicKey(skHex)
 	if err != nil {
-		return nostr.Event{}, fmt.Errorf("feed: derive pubkey: %w", err)
+		return nostr.Event{}, fmt.Errorf("feed: derive public key: %w", err)
 	}
 
 	ev := nostr.Event{
 		PubKey: pub,
-		// created_at is set because the protocol requires a value, never
-		// because we trust it. Ordering comes from the block hash (§3.5).
+		// created_at is set because Nostr requires a value, never because
+		// Canary trusts it. Order comes from the chain, through the block
+		// hash.
 		CreatedAt: nostr.Now(),
 		Kind:      KindCommitment,
 		Tags: nostr.Tags{
@@ -87,23 +89,24 @@ func (c Commitment) ToEvent(sk [32]byte) (nostr.Event, error) {
 	}
 
 	if err := ev.Sign(skHex); err != nil {
-		return nostr.Event{}, fmt.Errorf("feed: sign: %w", err)
+		return nostr.Event{}, fmt.Errorf("feed: sign event: %w", err)
 	}
 	return ev, nil
 }
 
+// Errors FromEvent wraps, so a caller can tell the cases apart with errors.Is.
 var (
-	ErrWrongKind    = errors.New("feed: event is not a commitment kind")
-	ErrBadSignature = errors.New("feed: event signature invalid")
-	ErrInconsistent = errors.New("feed: event tags contradict its content")
-	ErrMissingTag   = errors.New("feed: required tag missing")
+	ErrWrongKind    = errors.New("feed: check kind: not a signed-record kind")
+	ErrBadSignature = errors.New("feed: check signature: invalid")
+	ErrInconsistent = errors.New("feed: check root: tags contradict content")
+	ErrMissingTag   = errors.New("feed: read tags: required tag missing")
 )
 
-// FromEvent parses and verifies an event into a Commitment.
+// FromEvent verifies an event and parses it into a Commitment.
 //
-// Verification is not optional here. An unverified commitment proves nothing,
-// and every downstream verdict in §2.5 treats a commitment as a signed
-// statement the server cannot later revise.
+// Verification is not optional. An unverified record proves nothing, and every
+// later step of the comparison treats a record as a signed statement the
+// server cannot take back.
 func FromEvent(e nostr.Event) (Commitment, error) {
 	var c Commitment
 
@@ -123,7 +126,7 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 
 	author, err := hex.DecodeString(e.PubKey)
 	if err != nil || len(author) != 32 {
-		return c, fmt.Errorf("feed: bad author pubkey %q", e.PubKey)
+		return c, fmt.Errorf("feed: parse author: bad pubkey %q", e.PubKey)
 	}
 	copy(c.Author[:], author)
 
@@ -140,7 +143,7 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 		return c, err
 	}
 	if c.BlockHash, err = parseDisplayHex(bhStr); err != nil {
-		return c, fmt.Errorf("feed: bad block hash: %w", err)
+		return c, fmt.Errorf("feed: parse b tag: %w", err)
 	}
 
 	heightStr, err := get("height")
@@ -149,7 +152,7 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 	}
 	h, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
-		return c, fmt.Errorf("feed: bad height: %w", err)
+		return c, fmt.Errorf("feed: parse height tag: %w", err)
 	}
 	c.BlockHeight = uint32(h)
 
@@ -159,7 +162,7 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 	}
 	n, err := strconv.ParseUint(nStr, 10, 32)
 	if err != nil {
-		return c, fmt.Errorf("feed: bad n: %w", err)
+		return c, fmt.Errorf("feed: parse n tag: %w", err)
 	}
 	c.N = uint32(n)
 
@@ -169,7 +172,7 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 	}
 	netVal, err := strconv.ParseUint(netStr, 10, 32)
 	if err != nil {
-		return c, fmt.Errorf("feed: bad network: %w", err)
+		return c, fmt.Errorf("feed: parse network tag: %w", err)
 	}
 	c.Network = canonical.Network(netVal)
 
@@ -179,13 +182,13 @@ func FromEvent(e nostr.Event) (Commitment, error) {
 	}
 	pr, err := hex.DecodeString(prStr)
 	if err != nil || len(pr) != 32 {
-		return c, fmt.Errorf("feed: bad policy_ref")
+		return c, fmt.Errorf("feed: parse policy_ref tag: want 32 bytes of hex")
 	}
 	copy(c.PolicyRef[:], pr)
 
 	rootBytes, err := hex.DecodeString(e.Content)
 	if err != nil || len(rootBytes) != 32 {
-		return c, fmt.Errorf("feed: content is not a 32-byte root")
+		return c, fmt.Errorf("feed: parse content: want a 32-byte root in hex")
 	}
 	copy(c.Root[:], rootBytes)
 

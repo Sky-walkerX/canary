@@ -1,4 +1,3 @@
-// Package feed carries commitments over Nostr. Spec §3.3, §3.4.
 package feed
 
 import (
@@ -10,30 +9,31 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-// MaxHashesPerFilter caps how many block hashes ride in one filter. Relays
-// impose their own limits and reject or truncate oversized filters, so we
-// chunk rather than discover the ceiling in production.
+// MaxHashesPerFilter caps how many block hashes go in one filter. Relays set
+// their own limits and reject or truncate oversized filters, so Get splits the
+// list instead of finding the limit in production.
 const MaxHashesPerFilter = 500
 
-// Feed is the commitment transport. §6.3 froze this signature.
+// Feed fetches signed records from relays. Its signature is frozen, because
+// the checker and the indexer build against it in parallel.
 type Feed interface {
 	Subscribe(ctx context.Context, authors [][32]byte) (<-chan Commitment, error)
-	// Get is batched deliberately: NIP-01 offers no range query, so a range
-	// fetch is one filter over block hashes the client already knows (§3.3).
+	// Get takes a batch of block hashes on purpose. NIP-01 has no range query,
+	// so fetching a range means one filter over block hashes the client
+	// already knows.
 	Get(ctx context.Context, author [32]byte, blockHashes [][32]byte) ([]Commitment, error)
 }
 
-// querier is the slice of a relay connection we depend on, so tests can drive
-// a fake without a socket.
+// querier is the part of a relay connection Get uses, so tests can drive a fake
+// without a socket.
 type querier interface {
 	QuerySync(ctx context.Context, filter nostr.Filter) ([]*nostr.Event, error)
 }
 
-// subscriber is the slice of a relay connection Subscribe depends on. It is
-// deliberately an interface (not the concrete *nostr.Relay type Subscribe
-// used to assert against) so tests can drive Subscribe's real fan-out/fan-in
-// logic with a fake, without a socket. The signature — opts included — must
-// match *nostr.Relay's Subscribe method exactly, or *nostr.Relay stops
+// subscriber is the part of a relay connection Subscribe uses. It is an
+// interface, not the concrete *nostr.Relay, so tests can drive Subscribe's real
+// fan-out and fan-in with a fake and no socket. Its signature, opts included,
+// must match *nostr.Relay's Subscribe method exactly, or *nostr.Relay stops
 // satisfying it.
 type subscriber interface {
 	Subscribe(ctx context.Context, filters nostr.Filters, opts ...nostr.SubscriptionOption) (*nostr.Subscription, error)
@@ -43,19 +43,19 @@ type relayFeed struct {
 	queriers []querier
 }
 
-// NewRelayFeed connects to each URL. Several relays are used because a single
-// relay can drop, delay, or serve split views (§3.5).
+// NewRelayFeed connects to each URL. It uses several relays because one relay
+// can drop events, delay them or show different clients different views.
 func NewRelayFeed(ctx context.Context, urls []string) (Feed, error) {
 	f := &relayFeed{}
 	for _, u := range urls {
 		r, err := nostr.RelayConnect(ctx, u)
 		if err != nil {
-			return nil, fmt.Errorf("feed: connect %s: %w", u, err)
+			return nil, fmt.Errorf("feed: connect to relay %s: %w", u, err)
 		}
 		f.queriers = append(f.queriers, r)
 	}
 	if len(f.queriers) == 0 {
-		return nil, fmt.Errorf("feed: no relays configured")
+		return nil, fmt.Errorf("feed: connect to relays: none configured")
 	}
 	return f, nil
 }
@@ -83,14 +83,14 @@ func (f *relayFeed) Get(ctx context.Context, author [32]byte, blockHashes [][32]
 			Kinds:   []int{KindCommitment},
 			Authors: []string{authorHex},
 			Tags:    nostr.TagMap{TagBlockHash: values},
-			// No Since/Until. created_at is self-asserted (§3.5).
+			// No Since or Until: the author sets created_at and can backdate it.
 		}
 
 		for _, q := range f.queriers {
 			attempts++
 			evs, err := q.QuerySync(ctx, filter)
 			if err != nil {
-				continue // one relay failing is not the query failing
+				continue // one relay failing does not fail the query
 			}
 			succeeded++
 			for _, ev := range evs {
@@ -98,13 +98,12 @@ func (f *relayFeed) Get(ctx context.Context, author [32]byte, blockHashes [][32]
 				if err != nil {
 					continue // unverifiable events are dropped, never returned
 				}
-				// NIP-01 filters are advisory: a relay is not obligated to
-				// honor Authors/Tags, and a malicious or buggy one can
-				// legally return a genuine, validly-signed event from an
-				// unrequested author or for an unrequested block. Since
-				// attribution to a specific named indexer is the whole
-				// point, an off-target event is dropped silently here —
-				// noise to filter, not an error.
+				// NIP-01 filters are advisory. A relay need not honor
+				// Authors or Tags, so a malicious or buggy one can return a
+				// genuine, validly signed event from another author or for
+				// another block. Canary names one specific server, so an
+				// off-target event is dropped silently here. It is noise,
+				// not an error.
 				if c.Author != author {
 					continue
 				}
@@ -117,8 +116,8 @@ func (f *relayFeed) Get(ctx context.Context, author [32]byte, blockHashes [][32]
 	}
 
 	if attempts > 0 && succeeded == 0 {
-		return nil, fmt.Errorf("feed: no relay could be queried (%d relays, %d attempts, all failed)",
-			len(f.queriers), attempts)
+		return nil, fmt.Errorf("feed: query relays: all %d attempts failed across %d relays",
+			attempts, len(f.queriers))
 	}
 	return out, nil
 }
@@ -139,9 +138,9 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 	ch := make(chan Commitment, 64)
 	var wg sync.WaitGroup
 
-	// The client subscribes to all its configured indexers and never reveals
-	// which block it cares about — that is the privacy argument for using a
-	// relay rather than N direct connections (§3.4).
+	// The client subscribes to every configured server and never reveals which
+	// block it cares about. That is the privacy reason for one relay
+	// subscription instead of a connection to each server.
 	for _, q := range f.queriers {
 		r, ok := q.(subscriber)
 		if !ok {
@@ -149,7 +148,7 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 		}
 		sub, err := r.Subscribe(ctx, nostr.Filters{filter})
 		if err != nil {
-			return nil, fmt.Errorf("feed: subscribe: %w", err)
+			return nil, fmt.Errorf("feed: subscribe to relay: %w", err)
 		}
 		wg.Add(1)
 		go func() {
@@ -159,9 +158,9 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 				if err != nil {
 					continue
 				}
-				// See Get's identical guard: NIP-01 filters are advisory
-				// only, so a relay can legally forward a genuine event
-				// from an unrequested author. Drop it silently.
+				// The same guard as in Get. NIP-01 filters are advisory,
+				// so a relay may forward a genuine event from an author
+				// nobody asked for. Drop it silently.
 				if !wantAuthor[c.Author] {
 					continue
 				}
@@ -174,11 +173,11 @@ func (f *relayFeed) Subscribe(ctx context.Context, authors [][32]byte) (<-chan C
 		}()
 	}
 
-	// Close only after every forwarding goroutine above has returned, never
-	// on ctx.Done() directly: a goroutine still in flight when ctx is
-	// cancelled can otherwise win the race and send on an already-closed
-	// channel. sub.Events itself closes once ctx is cancelled (its context
-	// is a child of ctx), so this still completes and does not leak.
+	// Close only after every forwarding goroutine above has returned, never on
+	// ctx.Done() directly. Otherwise a goroutine still running when ctx is
+	// canceled can win the race and send on a closed channel. sub.Events
+	// closes once ctx is canceled, because its context is a child of ctx, so
+	// this still finishes and does not leak.
 	go func() {
 		wg.Wait()
 		close(ch)

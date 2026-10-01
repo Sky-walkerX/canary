@@ -658,7 +658,7 @@ Rules that go with the table:
 - Never use these words in any label: proven, safe, secure, trustless, seamless, timestamped. No exclamation marks.
 
 **Use cases.**
-- A user sees: "Can't be checked: blocks 212–214. Canary could not recompute the signed root for them. A payment in them would be missing from what your wallet shows. This does not mean anyone cheated."
+- A user sees: "Can't be checked: blocks 212–214. Canary could not recompute the signed root for them. A payment in them could be missing from what your wallet shows. This does not mean anyone cheated."
 - A user with two servers sees "Servers disagree about block 207. This does not show which is wrong." and keeps both servers.
 
 **Why it matters.** The coverage states are the product. If a user reads Servers disagree as Data withheld, they drop an honest server, and an attacker who can trigger that can knock out honest servers. If a user reads Checked as "safe", they are told more than Canary knows.
@@ -809,7 +809,7 @@ Claude builds everything in this section in a parallel session from Thursday, an
 
 Go draws the view as SVG, one shape per run of blocks.
 
-Whenever any block isn't Checked, a fixed sentence sits under the view: "12 blocks couldn't be checked. A payment in them would be missing from what your wallet shows." This is the line worth leading with. A balance computed over blocks you couldn't check is a lower bound, not a balance.
+Whenever any block isn't Checked, a fixed sentence sits under the view: "12 blocks couldn't be checked. A payment in them could be missing from what your wallet shows, so treat its balance as a lower bound." When some of those blocks read Data withheld or Servers disagree, which Canary did check, the sentence opens "12 blocks are not Checked." instead, with the same second sentence. It says a payment could be missing, never that one is. This is the line worth leading with. A balance computed over blocks you couldn't check is a lower bound, not a balance.
 
 The view shows no BTC amount:
 - v1 has no link to a wallet;

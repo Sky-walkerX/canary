@@ -19,14 +19,15 @@ type blindbitInfo struct {
 }
 
 // dustThresholdUnknown records that a dust filter is in force without claiming
-// to know its value. /info does not report the number, and §2.3 establishes
-// that the number was never verifiable anyway — the declaration's job is to
-// route effort and to create a contradiction rung 4 can check, not to be an
-// input to any verdict.
+// to know its value. /info does not report the number, and a client could never
+// verify it anyway, because entries carry no amount. The declaration routes
+// effort and gives an auditor holding the block something to check. No state
+// takes it as an input.
 const dustThresholdUnknown = 1
 
-// networkFromName maps blindbit's display name onto the 4-byte P2P magic, read
-// from chaincfg rather than written as a literal (§3.2).
+// networkFromName maps blindbit-oracle's network name to the 4-byte P2P magic.
+// It reads the magic from chaincfg and never writes a literal, because the root
+// binds this value.
 func networkFromName(name string) (canonical.Network, error) {
 	switch name {
 	case "main", "mainnet", "bitcoin":
@@ -36,16 +37,17 @@ func networkFromName(name string) (canonical.Network, error) {
 	case "regtest":
 		return canonical.Network(chaincfg.RegressionNetParams.Net), nil
 	default:
-		return 0, fmt.Errorf("policy: unrecognised network %q", name)
+		return 0, fmt.Errorf("policy: read network: unrecognized name %q", name)
 	}
 }
 
 // FromBlindBitInfo derives a Policy from blindbit-oracle's GET /info body.
 //
-// This is the tool-first bridge (§2.3): unsigned, not per-block, and revisable
-// retroactively by the server, therefore strictly weaker than the signed
-// per-block policy of the protocol layer. It is also what lets the differ run
-// against unmodified blindbit today, which is the whole point of §0's layering.
+// This bridges to servers as they exist today. The body is unsigned and not per
+// block, and the server can revise it after the fact. So it is weaker than the
+// signed, per-block policy the design plans for later. It is also what lets the
+// checker run against an unmodified blindbit-oracle today, with nobody's
+// cooperation.
 func FromBlindBitInfo(r io.Reader) (Policy, error) {
 	var info blindbitInfo
 	dec := json.NewDecoder(r)
@@ -60,11 +62,12 @@ func FromBlindBitInfo(r io.Reader) (Policy, error) {
 
 	p := Policy{
 		Network: net,
-		// /info carries no start height. Leaving it zero is honest: below a
-		// real start height absence is not evidence, and we do not know it.
+		// /info carries no start height. Zero is the honest value. Below a
+		// real start height an absence proves nothing, and the height is
+		// unknown here.
 		StartHeight: 0,
 		// Only the cut-through mode prunes spent transactions. The two full
-		// modes keep them, differing solely in dust handling (§2.3).
+		// modes keep them and differ only in dust handling.
 		PrunesSpent: info.TweaksCutThroughWithDustFilter,
 	}
 

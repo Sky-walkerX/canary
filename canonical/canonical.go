@@ -1,5 +1,3 @@
-// Package canonical computes T_base(block) — the policy-free BIP-352 tweak set
-// for a block. Spec §2.2.
 package canonical
 
 import (
@@ -8,13 +6,16 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-// Network is the P2P message-start magic, per §3.2. Read it from
-// chaincfg.Params.Net; never write a literal.
+// Network is the 4-byte P2P message-start magic, the value the root binds.
+// Read it from chaincfg.Params.Net and never write a literal, because a wrong
+// constant silently gives every root a different value.
 type Network uint32
 
-// Leaf is one entry of the canonical set, in transaction-index order.
+// Leaf is one entry of the canonical set: a txid and its tweak, 65 bytes.
+// The design doc calls an entry a leaf, because it is a leaf of the Merkle
+// tree.
 type Leaf struct {
-	TxID  [32]byte // INTERNAL byte order (§3.2)
+	TxID  [32]byte // internal byte order, as the leaf hash preimage requires
 	Tweak [33]byte // compressed SEC
 }
 
@@ -23,26 +24,32 @@ type PrevoutSource interface {
 	Prevout(op wire.OutPoint) (*wire.TxOut, error)
 }
 
-// Set returns the canonical leaves of blk in transaction-index order.
+// Set returns the canonical set of blk: its entries in transaction order.
 //
-// Pure: no chain state after the block, no thresholds, no configuration. That
-// is what makes it the thing servers commit to and clients recompute (§2.2).
+// Set is pure. It reads no chain state after the block, no thresholds and no
+// configuration. That is why servers can sign its result and anyone holding
+// the block and its spent outputs can recompute it.
 //
-// Ordering is block position, not lexicographic. Position i is a specific
-// transaction, which is what attribution needs (§2.2).
+// The order is block position, not a sort by tweak. Position i names one
+// transaction, which is what naming a withheld transaction needs.
+//
+// An error means Set could not decide for some transaction, for example
+// because a spent output was missing. Set never drops a transaction it could
+// not decide, because a silently dropped entry looks exactly like the
+// withholding Canary exists to catch.
 func Set(net Network, blk *wire.MsgBlock, pv PrevoutSource) ([]Leaf, error) {
 	leaves := make([]Leaf, 0, len(blk.Transactions))
 
 	for i, tx := range blk.Transactions {
 		tweak, eligible, err := tweakForTx(tx, pv)
 		if err != nil {
-			return nil, fmt.Errorf("tx %d (%s): %w", i, tx.TxHash(), err)
+			return nil, fmt.Errorf("canonical: tx %d (%s): %w", i, tx.TxHash(), err)
 		}
 		if !eligible {
 			continue
 		}
 		leaves = append(leaves, Leaf{
-			TxID:  txidInternal(tx.TxHash()), // INTERNAL byte order (§3.2)
+			TxID:  txidInternal(tx.TxHash()), // internal byte order
 			Tweak: tweak,
 		})
 	}

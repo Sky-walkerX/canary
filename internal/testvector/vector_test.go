@@ -15,14 +15,14 @@ import (
 )
 
 // Every committed vector must load and pass. This is the whole CI contract for
-// §7: hermetic, no node, no network.
+// the vectors: hermetic, no node, no network.
 func TestAllCommittedVectorsPass(t *testing.T) {
 	paths, err := filepath.Glob("../../testdata/vectors/*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(paths) == 0 {
-		t.Fatal("no vectors committed — the suite asserts nothing")
+		t.Fatal("no vectors committed, so the suite asserts nothing")
 	}
 
 	for _, p := range paths {
@@ -35,7 +35,7 @@ func TestAllCommittedVectorsPass(t *testing.T) {
 				t.Error("vector has no name")
 			}
 			if v.Rationale == "" {
-				t.Error("vector has no rationale — a vector nobody can explain is a vector nobody can fix")
+				t.Error("vector has no rationale, and a vector nobody can explain is a vector nobody can fix")
 			}
 			if err := v.Run(); err != nil {
 				t.Errorf("run: %v", err)
@@ -65,12 +65,12 @@ func TestLoadRejectsMalformed(t *testing.T) {
 	}
 }
 
-// TestLoadRejectsUnknownField is syntactically valid JSON — unlike
-// TestLoadRejectsMalformed's bare "{", which fails identically whether or not
+// TestLoadRejectsUnknownField uses syntactically valid JSON. The bare "{" in
+// TestLoadRejectsMalformed fails the same way whether or not
 // dec.DisallowUnknownFields() is wired up. The "nam" key below is not one of
-// Vector's json tags (the real field is "name"), so this fixture is rejected
-// only because of DisallowUnknownFields — remove that call and this test
-// starts failing, which is the regression it exists to catch.
+// Vector's JSON tags (the real field is "name"), so only DisallowUnknownFields
+// rejects this fixture. Remove that call and this test fails, which is the
+// regression it exists to catch.
 func TestLoadRejectsUnknownField(t *testing.T) {
 	const payload = `{
 		"name": "typo-fixture",
@@ -91,10 +91,10 @@ func TestLoadRejectsUnknownField(t *testing.T) {
 }
 
 // oneEligibleTxVector builds a self-contained, valid Vector with exactly one
-// eligible transaction (a P2WPKH-spend input paying a P2TR output — the same
-// pattern canonical's own tests use), computing Expected from the
-// implementation under test. Modeled on canonical/canonical_test.go's
-// blockWith/mk helpers, kept local here since those are unexported.
+// eligible transaction: a P2WPKH input paying a P2TR output, the pattern
+// canonical's own tests use. It computes Expected from the implementation
+// under test. It follows canonical/canonical_test.go's blockWith and mk
+// helpers, copied here because those are unexported.
 func oneEligibleTxVector(t *testing.T) Vector {
 	t.Helper()
 	net := canonical.Network(chaincfg.RegressionNetParams.Net)

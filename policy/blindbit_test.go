@@ -39,8 +39,8 @@ func TestFromBlindBitInfoFullIndexDeclaresNoSubtraction(t *testing.T) {
 	if p.DustThresholdSat != 0 {
 		t.Error("no dust filter flag means no declared threshold")
 	}
-	// A server declaring a full index that then shows a gap has contradicted
-	// itself — that is §2.3's first job for this struct.
+	// A server that declares a full index and then shows a gap contradicts
+	// itself. Catching that is the first job of this struct.
 }
 
 func TestFromBlindBitInfoCutThroughDeclaresPruning(t *testing.T) {
@@ -52,7 +52,7 @@ func TestFromBlindBitInfoCutThroughDeclaresPruning(t *testing.T) {
 		t.Errorf("network = %08x, want regtest magic dab5bffa", uint32(p.Network))
 	}
 	if !p.PrunesSpent {
-		t.Error("tweaks_cut_through_with_dust_filter prunes spent transactions (§2.3)")
+		t.Error("tweaks_cut_through_with_dust_filter prunes spent transactions")
 	}
 	if p.DustThresholdSat == 0 {
 		t.Error("a dust-filter flag must record that a threshold is in force")
@@ -62,7 +62,7 @@ func TestFromBlindBitInfoCutThroughDeclaresPruning(t *testing.T) {
 func TestFromBlindBitInfoRejectsUnknownNetwork(t *testing.T) {
 	_, err := FromBlindBitInfo(strings.NewReader(`{"network":"testnet4"}`))
 	if err == nil {
-		t.Error("an unrecognised network must be an error — §2.7 requires both servers on the same network")
+		t.Error("an unrecognized network must be an error, because comparison needs both servers on the same network")
 	}
 }
 

@@ -86,9 +86,9 @@ func TestEventIsSignedAndUsesTheRegularKind(t *testing.T) {
 		t.Errorf("kind = %d, want %d", ev.Kind, KindCommitment)
 	}
 	// Regular kinds are append-only. A replaceable kind would let a server
-	// overwrite a commitment it had already published (§3.3).
+	// overwrite a record it had already published.
 	if ev.Kind < 1000 || ev.Kind > 9999 {
-		t.Errorf("kind %d is outside the regular range 1000–9999 — replaceable kinds void non-repudiation", ev.Kind)
+		t.Errorf("kind %d is outside the regular range 1000 to 9999, and a replaceable kind lets a server overwrite its record", ev.Kind)
 	}
 
 	ok, err := ev.CheckSignature()
@@ -109,7 +109,7 @@ func TestBlockHashIsInASingleLetterIndexedTag(t *testing.T) {
 	}
 
 	if len(TagBlockHash) != 1 {
-		t.Fatalf("TagBlockHash %q must be a single letter — relays index nothing else (§3.3)", TagBlockHash)
+		t.Fatalf("TagBlockHash %q must be a single letter, because relays index no other tag names", TagBlockHash)
 	}
 
 	tag := ev.Tags.Find(TagBlockHash)
@@ -142,7 +142,7 @@ func TestFromEventRejectsBadSignature(t *testing.T) {
 	}
 	ev.Content = "00" // tamper after signing
 	if _, err := FromEvent(ev); err == nil {
-		t.Error("FromEvent must verify the signature — an unverified commitment proves nothing")
+		t.Error("FromEvent must verify the signature, because an unverified record proves nothing")
 	}
 }
 
@@ -156,8 +156,8 @@ func TestFromEventRejectsTagRootDisagreement(t *testing.T) {
 
 	// Rewrite the root tag so it disagrees with the content, then re-sign, so
 	// the signature is valid and only the internal inconsistency is wrong.
-	// §3.3 calls this redundancy deliberate; Step 3 adds the guard that makes
-	// it real. Requires "strings" in the test imports.
+	// The design repeats the root on purpose, and FromEvent's check is what
+	// makes the repetition catch anything.
 	for i, tg := range ev.Tags {
 		if tg[0] == "root" {
 			ev.Tags[i] = nostr.Tag{"root", strings.Repeat("00", 32)}

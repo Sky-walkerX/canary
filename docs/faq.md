@@ -63,8 +63,8 @@ hours. Its author writes that a client given a filtered response "cannot check t
 for completeness". We found no wallet that checks SPCOMMIT's commitments, as of 30 Sep
 2026.
 
-Canary signs one record per block, which a client fetches by block hash and checks each
-time it fetches that block. A filtered list keeps its signed length, and every entry left
+Each server signs one record per block under Canary's format. A client fetches that
+record by block hash and checks it each time it fetches that block. A filtered list keeps its signed length, and every entry left
 out is an explicit gap. A gap sent as nothing inside the
 [retention window](glossary.md#retention-window) names the server. Canary also reports
 coverage states, writes evidence files and supports tripwires.
@@ -118,8 +118,10 @@ less of it ([Canonical tweak sets](design/2026-09-06-canary-design.md#2-canonica
 
 ### Why would a withholding server commit honestly?
 
-It cannot take back a published record, because records use a regular Nostr kind, which
-a later event cannot replace. Each choice left to it meets a different check:
+Once its records are on relays, it cannot take one back, because records use a regular
+Nostr kind, which a later event cannot replace. v1 does not publish records to relays.
+There, the state file and the evidence files keep the copy Canary fetched from the server.
+Each choice left to the server meets a different check:
 
 - **It signs the full list, then sends nothing for your entry inside the retention
   window.** Its own receipt shows the gap. One server is enough, and the evidence file
@@ -159,18 +161,19 @@ payments you know exist, such as one you made yourself.
 
 ### Does this need a full node?
 
-Detecting a problem does not. A server that contradicts its own signatures is named
-without one. A gap inside the retention window needs no outside chain fact either,
-because the server signed both its tip and the block's height. A chain fact is needed
-only to reject a gap that the signed values place outside the window.
+v1 does. `canary check` reads block hashes, the chain tip and declared payments from your
+own Bitcoin Core node, and it will not run without one.
+
+The design's position is narrower: detection needs no node, and attribution does. A
+server that contradicts its own signatures is named without a node. A gap inside the
+retention window needs no outside chain fact either, because the server signed both its
+tip and the block's height. A chain fact is needed only to reject a gap that the signed
+values place outside the window.
 
 Working out which of two disagreeing servers lied needs the block and the outputs it
 spends, from a full node or a third-party service. That can wait, because signed records
 do not expire
 ([Detection needs no node](design/2026-09-06-canary-design.md#42-detection-needs-no-node-attribution-does-and-may-be-deferred)).
-
-v1's `canary check` still reads block hashes and declared payments from your own Bitcoin
-Core node.
 
 ### Which server lied when servers disagree?
 
@@ -198,6 +201,18 @@ Without a receipt, you know, and others can check only that the server signed fo
 entry. `canary verify` then prints "Inclusion only: you can be sure of this, you can't yet
 prove it to others." Some findings have no evidence file in v1 at all, such as a false
 chain claim or a missing declared payment. Each finding records which kind it is.
+
+Canary separates knowing from proving to others. You know whatever your own
+`canary check` saw. Someone else can confirm a finding only from signed data they can
+check themselves.
+
+| Finding | You know | Others can check |
+|---|---|---|
+| Data withheld: an entry sent as nothing inside the window, with a receipt | Yes | Yes. `canary verify` checks the evidence file offline |
+| The same, without a receipt | Yes | Inclusion only. The file shows that the server signed for the entry, not what it served |
+| Servers disagree | Two named servers signed different roots | Both signatures are checkable, but they do not show which server lied. v1 writes no evidence file for it |
+| Data withheld from a false chain claim, a missing declared payment, or a list of the wrong length | Yes | No. v1 has no evidence format for these |
+| A warning | That a server behaved oddly | Nothing. A warning is not an accusation |
 
 ### What does "Checked" mean?
 
@@ -252,7 +267,8 @@ blocks over short-lived Tor connections is the accepted answer to it
 No. Canary checks entries per transaction and never learns which ones pay you. It does
 not hide which blocks you ask about, though. The height range you check shows where your
 wallet starts. The design pulls every record a server publishes from relays, which would
-hide which blocks you care about, and v1 does not do that yet.
+hide which records you check, and v1 does not do that yet. Fetching tweak lists still
+shows a server which blocks you scan, even then.
 
 ### Is the v1 reference indexer an independent implementation?
 

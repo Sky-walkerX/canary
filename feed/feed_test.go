@@ -29,10 +29,10 @@ func (f *fakeRelay) QuerySync(ctx context.Context, filter nostr.Filter) ([]*nost
 }
 
 // maliciousRelay returns every canned event to every query, regardless of
-// what the filter actually asked for. NIP-01 filters are advisory only — a
-// relay is not obligated to honor Authors/Kinds/Tags — so a malicious (or
-// just buggy) relay can legally hand back a genuine, validly-signed event
-// the caller never asked about. This models that.
+// what the filter asked for. NIP-01 filters are advisory, and a relay need not
+// honor Authors, Kinds or Tags. So a malicious or buggy relay can return a
+// genuine, validly signed event the caller never asked about. This models
+// that relay.
 type maliciousRelay struct {
 	events []nostr.Event
 }
@@ -45,8 +45,8 @@ func (m *maliciousRelay) QuerySync(ctx context.Context, filter nostr.Filter) ([]
 	return out, nil
 }
 
-// alwaysFailQuerier models a relay that cannot be queried at all — e.g. a
-// total network outage — so every QuerySync call fails.
+// alwaysFailQuerier models a relay that cannot be queried at all, as in a
+// total network outage, so every QuerySync call fails.
 type alwaysFailQuerier struct{}
 
 func (alwaysFailQuerier) QuerySync(ctx context.Context, filter nostr.Filter) ([]*nostr.Event, error) {
@@ -55,9 +55,9 @@ func (alwaysFailQuerier) QuerySync(ctx context.Context, filter nostr.Filter) ([]
 
 // fakeSubscriber satisfies both querier and subscriber, exactly as
 // *nostr.Relay does, so it can sit in relayFeed.queriers and be exercised
-// through Subscribe's type assertion. It hands back a *nostr.Subscription
-// built directly around a caller-controlled channel — nostr.Subscription's
-// Events field is exported specifically so this works without a socket.
+// through Subscribe's type assertion. It returns a *nostr.Subscription built
+// around a channel the test controls. nostr.Subscription exports its Events
+// field, so this works without a socket.
 type fakeSubscriber struct {
 	events chan *nostr.Event
 }
@@ -102,7 +102,7 @@ func TestGetBatchesHashesIntoOneFilter(t *testing.T) {
 	// One filter, not three. Three round trips per block range is the thing
 	// batching exists to avoid.
 	if len(fr.seen) != 1 {
-		t.Errorf("issued %d filters, want 1 batched filter (§3.3)", len(fr.seen))
+		t.Errorf("issued %d filters, want 1 batched filter", len(fr.seen))
 	}
 	if n := len(fr.seen[0].Tags[TagBlockHash]); n != 3 {
 		t.Errorf("filter carried %d block hashes, want 3", n)
@@ -113,9 +113,9 @@ func TestGetBatchesHashesIntoOneFilter(t *testing.T) {
 	if len(fr.seen[0].Authors) != 1 {
 		t.Error("filter must pin the author")
 	}
-	// created_at is never a query bound (§3.5).
+	// created_at is never a query bound, because the author sets it.
 	if fr.seen[0].Since != nil || fr.seen[0].Until != nil {
-		t.Error("filter must not constrain created_at — it is self-asserted and backdatable")
+		t.Error("filter must not constrain created_at, which the author sets and can backdate")
 	}
 }
 
@@ -160,12 +160,11 @@ func TestGetSkipsEventsThatFailVerification(t *testing.T) {
 	}
 }
 
-// TestGetDropsEventsFromUnrequestedAuthor covers auth-scope-not-enforced: a
-// relay is free to return a genuine, validly-signed event from a pubkey the
-// caller never asked about, and Get must never surface it. Attribution to a
-// specific named indexer is the whole point of the project (§1.2) — a
-// caller asking Get(ctx, indexerX, blocks) must get back only commitments
-// actually signed by indexerX.
+// TestGetDropsEventsFromUnrequestedAuthor checks that Get enforces the author.
+// A relay may return a genuine, validly signed event from a pubkey the caller
+// never asked about, and Get must never return it. Canary names one specific
+// server, so a caller asking Get(ctx, serverX, blocks) must get back only
+// records that serverX signed.
 func TestGetDropsEventsFromUnrequestedAuthor(t *testing.T) {
 	signerSK, _ := testKey(t)
 	c := testCommitment()
@@ -191,10 +190,10 @@ func TestGetDropsEventsFromUnrequestedAuthor(t *testing.T) {
 	}
 }
 
-// TestGetDropsEventsForUnrequestedBlockHash covers input-scope-not-enforced:
-// a relay can return a genuine, validly-signed, correctly-authored event for
-// a block the caller never asked about in the current chunk, and Get must
-// drop it.
+// TestGetDropsEventsForUnrequestedBlockHash checks that Get enforces the block.
+// A relay can return a genuine, validly signed event from the right author for
+// a block the caller did not ask about in the current chunk, and Get must drop
+// it.
 func TestGetDropsEventsForUnrequestedBlockHash(t *testing.T) {
 	sk, _ := testKey(t)
 	c := testCommitment()
@@ -219,9 +218,9 @@ func TestGetDropsEventsForUnrequestedBlockHash(t *testing.T) {
 	}
 }
 
-// TestGetReturnsErrorWhenEveryRelayFails covers silent-failure: a total
-// outage across every relay and every chunk must be surfaced as an error,
-// distinguishable from "queried fine, nothing to report".
+// TestGetReturnsErrorWhenEveryRelayFails checks that a total outage is not
+// silent. When every relay fails for every chunk, Get must return an error,
+// which a caller can tell apart from "queried fine, nothing to report".
 func TestGetReturnsErrorWhenEveryRelayFails(t *testing.T) {
 	f := &relayFeed{queriers: []querier{alwaysFailQuerier{}, alwaysFailQuerier{}}}
 
@@ -235,10 +234,9 @@ func TestGetReturnsErrorWhenEveryRelayFails(t *testing.T) {
 	}
 }
 
-// TestGetToleratesPartialRelayFailure guards against overcorrecting finding
-// 3: one relay failing while another succeeds must still return a nil
-// error, per the original "one relay failing is not the query failing"
-// design intent.
+// TestGetToleratesPartialRelayFailure checks the other side of that rule. One
+// relay failing while another succeeds must still return a nil error, because
+// one relay failing does not fail the query.
 func TestGetToleratesPartialRelayFailure(t *testing.T) {
 	sk, _ := testKey(t)
 	c := testCommitment()
@@ -260,10 +258,9 @@ func TestGetToleratesPartialRelayFailure(t *testing.T) {
 }
 
 // TestSubscribeForwardsEvents is the basic regression test for Subscribe's
-// fan-out/fan-in path, now reachable via the subscriber interface instead of
-// a concrete *nostr.Relay. It also covers auth-scope-not-enforced for the
-// Subscribe path: a second event from an unrequested author must be
-// dropped, never forwarded.
+// fan-out and fan-in, reached through the subscriber interface. It also checks
+// that Subscribe enforces the author: a second event from an author nobody
+// asked for must be dropped, never forwarded.
 func TestSubscribeForwardsEvents(t *testing.T) {
 	sk, _ := testKey(t)
 	c := testCommitment()
@@ -325,13 +322,12 @@ func TestSubscribeForwardsEvents(t *testing.T) {
 	close(events)
 }
 
-// TestSubscribeClosesWithoutPanicUnderConcurrentCancel is the regression
-// test for the sync.WaitGroup-based fix to the send-on-closed-channel race:
-// a forwarding goroutine racing to deliver an event at the exact moment ctx
-// is cancelled must never see the returned channel already closed, and the
-// channel must still close promptly once every forwarder has exited. Run
-// under -race and repeated to build confidence the race window is actually
-// exercised, not just possible in theory.
+// TestSubscribeClosesWithoutPanicUnderConcurrentCancel is the regression test
+// for the send-on-closed-channel race that the sync.WaitGroup fixed. A
+// forwarding goroutine delivering an event at the moment ctx is canceled must
+// never find the returned channel closed. The channel must still close
+// promptly once every forwarder has exited. The test repeats under -race so
+// the race window is actually exercised.
 func TestSubscribeClosesWithoutPanicUnderConcurrentCancel(t *testing.T) {
 	sk, _ := testKey(t)
 	c := testCommitment()
@@ -393,6 +389,6 @@ func TestSubscribeClosesWithoutPanicUnderConcurrentCancel(t *testing.T) {
 			t.Fatalf("iteration %d: timed out waiting for channel to close", i)
 		}
 
-		cancel() // no-op if already cancelled; silences vet's lostcancel
+		cancel() // no-op if already canceled; silences vet's lostcancel
 	}
 }

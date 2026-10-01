@@ -16,6 +16,32 @@ filling gaps, and working out which of two servers lied.
 
 ---
 
+## 1 October 2026: plain-language pass over the design
+
+The design document was rewritten in plain language. No rule, number, byte layout or
+decision changed, with two exceptions that bring it in line with the
+[v1 formats](design/2026-09-30-v1-formats.md), which win where the two disagree:
+
+| Change | Why |
+|---|---|
+| **v1's outside chain fact is the user's Core node only.** The pinned `(height, hash)` stays in the design, for after v1 | The frozen v1 command line requires `--core-rest` and has no pin flag. The design had said v1 takes both |
+| **The v2 proxy refuses Compromised and Disputed blocks, and whether it refuses others is open.** The word "only" was dropped | The design's own proxy section lists two refusals still open for v2: Can't be checked blocks, and a missing record between two signed ones. "Only" settled a question that is still open |
+
+The history the design carried moved here:
+
+- The three-person ownership table and the four-week schedule are now under
+  [The original three-person split](#the-original-three-person-split). The design keeps
+  the two rules from them that still apply.
+- One earlier draft said Canary commits to tweaks because that is where omission is
+  silent. That was wrong. A server can hide a payment in the output data just as
+  silently, which is why v1 names output-side withholding as a limit.
+- Receipts were added while the design worked out the union across servers, which asked
+  what Canary can prove to others, not only what it can detect.
+- The design's other "an earlier draft said" passages were already recorded below. They
+  cover the retention hole, the order of filling and recomputing, the SPV claim, the
+  refusal rules, the storage figure, the inverted NUMS-H vector, and the evidence file
+  that proved inclusion only.
+
 ## 30 September 2026, evening: changes to the v1 formats
 
 The formats doc became the source of truth for byte layouts, reason codes, the state
@@ -183,6 +209,52 @@ three people. Their status on 30 Sep:
 
 The 30 Sep plan governs v1 scope. Read the defects listed above before reusing plan code.
 
+### The original three-person split
+
+The 8 Sep plan assumed three people, four weeks, signet and a blindbit-oracle fork. Since
+30 Sep one developer builds v1 with Claude, on regtest, with no proxy and no fork. The
+design's Ownership and Dependency order sections held this record until 1 Oct.
+
+| Owner | Scope |
+|---|---|
+| Naman, the protocol core | `canonical`, `commit`, `feed`. Then `tripwire` and `evidence` together, because the tripwire is what produces an evidence file with no node. Then the demo and the pitch |
+| The indexer owner | The indexer fork: the canonical set at index time, commitment publishing, receipts, and the deliberately malicious mode |
+| The sidecar owner | `canaryd`: the proxy, `ladder`, `policy`, `headers`, coverage and the CLI |
+
+The indexer and sidecar owners were placeholders, never filled with names. The malicious
+mode went to the indexer owner because it is a configuration flag on code that owner
+already knew. The protocol core went to whoever could unblock the other two fastest.
+
+The schedule was coarse on purpose. The detailed plan was the planning step's output.
+
+| Phase | Gate |
+|---|---|
+| **Days 1–2** | Signet, Core v30 and blindbit-oracle running for all three. **Interfaces frozen** |
+| **Week 1** | `canonical` agreeing with blindbit-oracle across ~1000 signet blocks. `commit`. A Nostr round trip. **Fund the signet UTXOs the signet demo needed** |
+| **Week 2** | Commitments published end to end. Commitment tracking and the self-consistency check. Coverage. The proxy passing `blindbitd` traffic |
+| **Week 3** | Tripwire, evidence and `canary verify`, the malicious mode, gap filling and attribution. The edge-case suite. If there was room, the BIP-325 signet solution check |
+| **Week 4** | Demo, hardening, documentation, pitch. **Feature freeze 1 October**, four days before the deadline |
+
+- **Interfaces froze on day 2, not at the end of week 1.** On a 28-day clock, the first
+  quarter could not go by before parallel work began. Days 1 and 2 had all three people
+  writing type definitions with no logic behind them. Everything after ran in parallel
+  against stubs.
+- **The week-1 gate mattered most.** Did `canonical` and blindbit-oracle produce the same
+  set across 1000 signet blocks? It was a cheap harness, the start of the differential
+  suite, and the earliest signal that `canonical` was wrong. It needed blindbit-oracle's
+  full-index option and no dust threshold, and it did not wait on the indexer track.
+- **Two demo tasks had a lead time longer than week 4.** Signet funding had to exist
+  before the faucet stopped existing, so it moved into week 1. Recording had to start as
+  soon as the end-to-end path worked, in week 3, so week 4 was editing, not first takes.
+  The v1 demo runs on regtest, so the first task no longer applies.
+- **Attribution had two forms.** The tripwire's node-free form landed in week 3 with the
+  tripwire. The general auditor form was the stretch component and had no week.
+- **The risk table** said to bring up Core v30 unpruned on signet on day 1, not in week 2,
+  because it gated everything the indexer track did.
+- **A day-1 check** was to confirm that blindbit-oracle accepts regtest. v1 uses its own
+  reference indexer, so only the check that Core's REST endpoints behave on regtest
+  remains.
+
 **The library APIs were checked by running them, before any plan was written.** A docs
 summary had already got one type wrong. The verified facts, such as the tagged-hash
 construction and the tweak call chain, are in CLAUDE.md under external facts.
@@ -243,9 +315,10 @@ Amendment 5 of 30 Sep changed four of these points, and each change is marked.
   is caught by the cross-server comparison instead of the per-block check. It answers the
   one strong objection. *Changed 30 Sep:* act 3b is the Servers disagree branch. The
   attacker signs a record for the smaller list, and a second, honest indexer's root
-  differs. v1 detects Servers disagree, and only staging the scene is optional. The scene
-  is no longer cut by default, as it was in the 2:45 plan. If the video runs long, it is
-  the first scene to go.
+  differs. v1 detects Servers disagree, and only staging the scene is optional.
+  *Open, for the user to settle:* the 8 Sep plan made act 3b the first cut if the video
+  ran long. The CLAUDE.md of 30 Sep said it is no longer the first cut, while the amended
+  design still makes it the first cut.
 - **The repo path takes a reader from the README to an accusation they checked
   themselves in under 60 seconds,** using a real file from a real run. *Changed 30 Sep:*
   publishing the events to public relays is a stretch goal for v1, so the event ids may

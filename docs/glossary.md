@@ -247,10 +247,10 @@ who signed it. A relay's copy adds only that the event was published, not when.
 
 ### Retention window
 
-The 144 most recent blocks below a server's signed tip, about one day at 10 minutes per
-block. Inside it, a server must keep at least the hash of every entry. So an entry sent as
-nothing is an omission, and Canary names the server as Data withheld. The window is a
-fixed rule of the protocol. No server can declare its own.
+A server's signed tip and the 143 blocks below it (depth 0 to 143), about one day at 10
+minutes per block. Inside it, a server must keep at least the hash of every entry. So an
+entry sent as nothing is an omission, and Canary names the server as Data withheld. The
+window is a fixed rule of the protocol. No server can declare its own.
 
 ```
 depth  = tip height − block height
@@ -330,7 +330,7 @@ In the design: tripwire, or expected payment. In the state file: `expected_payme
 ### Tweak
 
 A 33-byte public key computed for each eligible transaction: the sum of its input public
-keys, multiplied by a hash of those keys and its smallest outpoint. Computing it needs
+keys, multiplied by a hash of that sum and its smallest outpoint. Computing it needs
 the outputs the transaction spends, which a light wallet lacks, so the wallet asks a
 server. The wallet then combines each tweak with its [scan key](#scan-key) to find its
 own outputs.

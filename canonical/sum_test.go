@@ -28,7 +28,7 @@ func key(t *testing.T, s string) [33]byte {
 func TestSumPublicKeysRejectsPointAtInfinity(t *testing.T) {
 	_, err := sumPublicKeys([][33]byte{key(t, pHex), key(t, nHex)})
 	if !errors.Is(err, errPointAtInfinity) {
-		t.Errorf("P + (-P) must report the point at infinity (§2.2 rule 4a), got %v", err)
+		t.Errorf("P + (-P) must report the point at infinity (eligibility rule 4a), got %v", err)
 	}
 }
 
@@ -55,7 +55,7 @@ func TestSumPublicKeysSingleAndEmpty(t *testing.T) {
 		t.Errorf("sum of one key = %x, want %x", got, p)
 	}
 
-	// No keys is the identity, which is infinity — rule 4a, not a crash.
+	// No keys is the identity, which is infinity: rule 4a, not a crash.
 	if _, err := sumPublicKeys(nil); !errors.Is(err, errPointAtInfinity) {
 		t.Errorf("the empty sum is the point at infinity, got %v", err)
 	}

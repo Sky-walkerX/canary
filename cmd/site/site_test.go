@@ -219,7 +219,7 @@ func walkDist(t *testing.T, dist string, exts []string, fn func(rel, body string
 // TestNoExternalURLs keeps the site to its own origin. The one outside
 // address allowed is the repository, as a link.
 func TestNoExternalURLs(t *testing.T) {
-	dist := buildSite(t, both(withEvidence(t, exampleEvidence), withWasm(t, fakeWasm(goodWasm), fakeExec)))
+	dist := buildSite(t, both(withRuns(t), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	url := regexp.MustCompile(`(?i)(https?:)?//[a-z0-9.-]+\.[a-z]{2,}[^\s"'<>)]*`)
 	allowed := []string{testRepo, "http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink"}
 	n := 0
@@ -260,7 +260,7 @@ var (
 // TestInternalLinksResolve follows every same-site link and checks that its
 // file exists in dist and that its fragment names an element on that page.
 func TestInternalLinksResolve(t *testing.T) {
-	dist := buildSite(t, both(withEvidence(t, exampleEvidence), withWasm(t, fakeWasm(goodWasm), fakeExec)))
+	dist := buildSite(t, both(withRuns(t), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	ids := map[string]map[string]bool{}
 	pageIDs := func(rel string) map[string]bool {
 		if m, ok := ids[rel]; ok {
@@ -274,6 +274,7 @@ func TestInternalLinksResolve(t *testing.T) {
 		return m
 	}
 	links := 0
+	reached := map[string]bool{}
 	walkDist(t, dist, []string{".html"}, func(rel, body string) {
 		for _, m := range attrRe.FindAllStringSubmatch(body, -1) {
 			ref := strings.ReplaceAll(m[2], "&amp;", "&")
@@ -299,6 +300,7 @@ func TestInternalLinksResolve(t *testing.T) {
 				t.Errorf("%s links to %q, which is not in dist", rel, ref)
 				continue
 			}
+			reached[file] = true
 			if frag != "" && path.Ext(file) == ".html" && !pageIDs(file)[frag] {
 				t.Errorf("%s links to %q, and %s has no id %q", rel, ref, file, frag)
 			}
@@ -307,13 +309,24 @@ func TestInternalLinksResolve(t *testing.T) {
 	if links < 50 {
 		t.Errorf("followed only %d links", links)
 	}
+	// The recorded run is part of the walk: its pages, raw files and the
+	// evidence file its finding names.
+	for _, rel := range []string{"runs/2026-10-01/index.html", "runs/2026-10-01/act5/index.html",
+		"runs/2026-10-01/check.txt", "runs/2026-10-01/verify.txt", "runs/2026-10-01/status.txt",
+		"runs/2026-10-01/act5/check.txt", "runs/2026-10-01/act5/state.json",
+		"runs/2026-10-01/findings/79ec3cb71656/index.html",
+		"evidence/omission-regtest-351-ad56b9bb-db614560.json"} {
+		if !reached[rel] {
+			t.Errorf("no link leads to %s", rel)
+		}
+	}
 }
 
 // TestPagesFollowTheCSP keeps every page inside style-src 'self' and
 // script-src 'self': no inline styles, scripts or event handlers. A JSON
 // data block is not a script, never runs, and the CSP does not cover it.
 func TestPagesFollowTheCSP(t *testing.T) {
-	dist := buildSite(t, withWasm(t, fakeWasm(goodWasm), fakeExec))
+	dist := buildSite(t, both(withRuns(t), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	inline := regexp.MustCompile(`(?i)<style|\sstyle="|\son[a-z]+="|javascript:`)
 	inlineScript := regexp.MustCompile(`(?is)<script(\s[^>]*)?>([^<]*)</script>`)
 	script := regexp.MustCompile(`<script[^>]*src="([^"]+)"`)

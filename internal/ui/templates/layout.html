@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/ui.css">
 <script src="/assets/app.js"></script>
+<script src="/assets/live.js" defer></script>
 </head>
 <body data-etag="{{.Chrome.ETag}}" data-build="{{.Chrome.Build}}" data-findings="{{.Chrome.Findings}}">
 {{.Chrome.Sprite}}
@@ -20,14 +21,7 @@
 <header class="site-header">
   <div class="wrap header-row">
     {{template "wordmark"}}
-    <nav class="nav" aria-label="Main">
-      <ul>
-        <li><a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a></li>
-        <li><a href="/blocks"{{if eq .Nav "blocks"}} aria-current="page"{{end}}>Blocks</a></li>
-        <li><a href="/findings"{{if eq .Nav "findings"}} aria-current="page"{{end}}>Findings{{if .Chrome.HasState}} ({{.Chrome.FindingsCount}}){{end}}</a></li>
-        <li><a href="/#servers">Servers</a></li>
-      </ul>
-    </nav>
+    {{template "dashNav" .}}
     {{with .Chrome.NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
     {{template "themeToggle"}}
   </div>

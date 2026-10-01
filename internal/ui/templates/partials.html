@@ -12,6 +12,18 @@
   {{template "icon" "theme"}}<span data-theme-label>{{themeLabel "auto"}}</span>
 </button>{{end}}
 
+{{/* dashNav takes a page: the dashboard's own links, with the current one
+     marked. Each address goes through link, so a recorded run points them
+     at its own pages. */}}
+{{define "dashNav"}}<nav class="nav" aria-label="{{.Chrome.NavLabel}}">
+  <ul>
+    <li><a href="{{link "/"}}"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a></li>
+    <li><a href="{{link "/blocks"}}"{{if eq .Nav "blocks"}} aria-current="page"{{end}}>Blocks</a></li>
+    <li><a href="{{link "/findings"}}"{{if eq .Nav "findings"}} aria-current="page"{{end}}>Findings{{if .Chrome.HasState}} ({{.Chrome.FindingsCount}}){{end}}</a></li>
+    <li><a href="{{link "/#servers"}}">Servers</a></li>
+  </ul>
+</nav>{{end}}
+
 {{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="#i-{{.}}"></use></svg>{{end}}
 
 {{/* stateBadge takes a wording.StateText. */}}
@@ -44,7 +56,7 @@
 {{with .Command}}{{template "command" (copyOf . $.CommandLabel)}}{{end}}
 {{if or .HomeLink .BackLink}}<p class="error-links">
 {{with .BackLink}}<a class="btn" href="{{.}}">{{$.BackText}}</a>{{end}}
-{{if .HomeLink}}<a class="btn" href="/">Overview</a>{{end}}
+{{if .HomeLink}}<a class="btn" href="{{link "/"}}">Overview</a>{{end}}
 </p>{{end}}
 {{with .Tech}}<details class="tech"><summary>{{template "icon" "chevron"}}<span>Technical details</span></summary><pre><code>{{.}}</code></pre></details>{{end}}
 {{end}}
@@ -64,10 +76,10 @@
 {{/* findingItem takes a findingRow. A block the results hold no detail for
      has no page, so its height shows as plain text with a note. */}}
 {{define "findingItem"}}<li class="finding-item">
-<h3 class="finding-sentence"><a href="/findings/{{.ID}}">{{.Sentence}}</a></h3>
+<h3 class="finding-sentence"><a href="{{link (print "/findings/" .ID)}}">{{.Sentence}}</a></h3>
 <p class="finding-meta">
 {{if .Glyph}}<span class="badge s-{{.Glyph}}">{{template "glyph" .Glyph}}<span>{{.KindLabel}}</span></span>{{else}}<span class="badge badge-warning">{{template "icon" "info"}}<span>{{.KindLabel}}</span></span>{{end}}
-<span>Block {{if .BlockKnown}}<a href="/blocks/{{.Block.Hash}}">{{.Block.Height}}</a>.{{else}}{{.Block.Height}}. <span class="muted">{{.BlockNote}}</span>{{end}}</span>
+<span>Block {{if .BlockKnown}}<a href="{{link (print "/blocks/" .Block.Hash)}}">{{.Block.Height}}</a>.{{else}}{{.Block.Height}}. <span class="muted">{{.BlockNote}}</span>{{end}}</span>
 <span class="finding-provable">{{.Provable}}</span>
 </p>
 </li>{{end}}
@@ -80,7 +92,7 @@
 <tbody role="rowgroup">
 {{range .}}<tr role="row">
 <td role="cell" class="stack-head">{{template "hashShort" .Txid}}</td>
-<td role="cell" class="num" data-label="Block">{{with .Block}}<a href="/blocks/{{.Hash}}">{{.Height}}</a>{{else}}Unconfirmed{{end}}</td>
+<td role="cell" class="num" data-label="Block">{{with .Block}}<a href="{{link (print "/blocks/" .Hash)}}">{{.Height}}</a>{{else}}Unconfirmed{{end}}</td>
 <td role="cell" data-label="Result"><span class="badge tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Outcome}}</span></span><p class="cell-note">{{.OutcomeText}}</p></td>
 <td role="cell" data-label="Each server"><ul class="plain">{{range .Servers}}<li><span class="server-name">{{.Label}}</span> <span class="badge tone-{{.Tone}}">{{template "glyph" .Glyph}}<span>{{.Outcome}}</span></span></li>{{end}}</ul></td>
 </tr>{{end}}

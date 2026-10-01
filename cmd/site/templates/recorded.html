@@ -1,0 +1,67 @@
+{{/* One page of a recorded run: the dashboard's own page, rendered by
+     ui.RenderStatic from a committed state file, inside the site. The
+     banner opens every recorded page and has no close button, so no
+     recorded page reads as live. The header under it carries what canary
+     ui's header carried, with an absolute time and no age, and names the
+     state file the page comes from, with its SHA-256. */}}
+{{define "content"}}{{with .Main}}
+<div class="rec-banner" role="note">
+  <p><strong>{{.BannerLead}}</strong> {{.BannerBody}}</p>
+  <a href="{{.FilesURL}}">{{$.Text.RecordedFilesLink}}</a>
+</div>
+<p class="rec-crumbs" aria-label="{{$.Text.RecordedCrumbs}}"><a href="/runs/">{{$.Text.NavRuns}}</a><span class="rec-sep" aria-hidden="true">/</span>{{if .Part}}<a href="{{.RunURL}}">{{.RunTitle}}</a><span class="rec-sep" aria-hidden="true">/</span><span>{{.Part}}</span>{{else}}<span>{{.RunTitle}}</span>{{end}}</p>
+<div class="rec-head">
+  <div class="rec-bar">
+    {{.Nav}}
+    {{with .NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
+  </div>
+  <p class="status-line">{{.StatusLine}}</p>
+  <p class="rec-source">{{$.Text.RecordedSource}} <a href="{{.StateURL}}"><code>{{.StateRel}}</code></a>, SHA-256 <code class="rec-sha">{{.StateSHA}}</code></p>
+  {{with .PartIntro}}<p class="rec-part-intro">{{.}}</p>{{end}}
+</div>
+<div class="rec-page">
+{{.Content}}
+</div>
+{{range .Parts}}
+<section class="section rec-part" id="{{.ID}}" aria-labelledby="{{.ID}}-h">
+  <h2 id="{{.ID}}-h">{{.Label}}</h2>
+  <p class="rec-part-lede">{{.Intro}}</p>
+  <ul class="rec-counts">{{range .Counts}}
+    <li>{{template "stateBadge" .State}}<span class="count-n">{{.Count}}</span></li>{{end}}
+  </ul>
+  {{with .Depth}}<p>{{.}}</p>{{end}}
+  {{with .Reason}}<p>{{.}}</p>{{end}}
+  {{if .NoAccusation}}<p class="rec-plain">{{$.Text.RecordedNoAccusation}}</p>{{end}}
+  <p class="more"><a href="{{.URL}}">{{.Open}}</a></p>
+</section>
+{{end}}
+{{with .Files}}
+<section class="section rec-files" id="files" aria-labelledby="files-h">
+  <h2 id="files-h">{{$.Text.RecordedFilesTitle}}</h2>
+  <div class="rec-files-intro">
+    <p>{{.RanWith}} {{.Rendered}}</p>
+    <p>{{.Fetched}}</p>
+  </div>
+  <div class="table-wrap table-stack" role="region" aria-labelledby="files-h" tabindex="0">
+    <table role="table" class="rec-files-table">
+      <thead role="rowgroup"><tr role="row">
+        <th scope="col" role="columnheader">{{$.Text.RecordedFileHead}}</th>
+        <th scope="col" role="columnheader">{{$.Text.RecordedAboutHead}}</th>
+        <th scope="col" role="columnheader" class="num">{{$.Text.RecordedSizeHead}}</th>
+        <th scope="col" role="columnheader">{{$.Text.RecordedHashHead}}</th>
+      </tr></thead>
+      <tbody role="rowgroup">{{range .Rows}}
+        <tr role="row">
+          <th scope="row" role="rowheader" class="stack-head"><a href="{{.URL}}"><code>{{.Path}}</code></a></th>
+          <td role="cell" data-label="{{$.Text.RecordedAboutHead}}">{{.About}}</td>
+          <td role="cell" class="num" data-label="{{$.Text.RecordedSizeHead}}">{{.Size}}</td>
+          <td role="cell" data-label="{{$.Text.RecordedHashHead}}"><code class="rec-sha">{{.SHA256}}</code></td>
+        </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  <p class="rec-clone">{{$.Text.RecordedClone}}</p>
+  {{template "command" (copyOf .Hash $.Text.RecordedHashLabel)}}
+</section>
+{{end}}
+{{end}}{{end}}

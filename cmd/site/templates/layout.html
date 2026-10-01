@@ -36,7 +36,7 @@
     {{template "wordmark"}}
     <nav class="nav" aria-label="{{.Text.NavLabel}}">
       <ul>{{range .Nav}}
-        <li><a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+        <li><a href="{{.Href}}"{{if .Current}} aria-current="page"{{else if .Section}} aria-current="true"{{end}}>{{.Label}}</a></li>{{end}}
       </ul>
     </nav>
     {{template "themeToggle"}}

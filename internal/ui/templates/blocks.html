@@ -7,14 +7,15 @@
 
 <figure class="strip-figure section-tight">{{template "coverageStrip" .Strip}}</figure>
 
-<form class="goto" action="/blocks" method="get">
+{{/* A recording has no server to answer the lookup, so it has no form. */}}
+{{if not .Recorded}}<form class="goto" action="{{link "/blocks"}}" method="get">
   <label for="goto-height">Go to height</label>
   <div class="goto-row">
     <input id="goto-height" name="height" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="{{.Query}}"{{if .QueryMiss}} aria-invalid="true" aria-describedby="goto-error"{{end}}>
     <button type="submit" class="btn">Go</button>
   </div>
   {{if .QueryMiss}}<p id="goto-error" class="field-error">{{.QueryError}}</p>{{end}}
-</form>
+</form>{{end}}
 
 <section class="section" aria-labelledby="ranges-h">
   <h2 id="ranges-h">Ranges</h2>
@@ -27,7 +28,7 @@
         <td role="cell" class="num" data-label="Blocks">{{.Count}}</td>
         <td role="cell" data-label="State">{{template "stateBadge" .State}}</td>
         <td role="cell" class="why" data-label="Why">{{.Reason}}</td>
-        <td role="cell" class="links" data-label="Open a block">{{range $i, $l := .Links}}{{if $i}}{{if $row.Gap}}<span class="range-dots"> to </span>{{else}}, {{end}}{{end}}<a href="/blocks/{{$l.Hash}}">{{$l.Height}}</a>{{else}}<span class="muted">No detail</span>{{end}}</td>
+        <td role="cell" class="links" data-label="Open a block">{{range $i, $l := .Links}}{{if $i}}{{if $row.Gap}}<span class="range-dots"> to </span>{{else}}, {{end}}{{end}}<a href="{{link (print "/blocks/" $l.Hash)}}">{{$l.Height}}</a>{{else}}<span class="muted">No detail</span>{{end}}</td>
       </tr>{{end}}
       </tbody>
     </table>

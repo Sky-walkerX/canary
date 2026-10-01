@@ -36,7 +36,7 @@
       <input class="drop-input" type="file" accept=".json,application/json" data-checker-file disabled>
     </label>
     {{end}}<div class="checker-samples">
-      <p id="sample-source" class="sample-source">{{.Checker.Source}}</p>
+      <p id="sample-source" class="sample-source">{{.Checker.Source}}{{with .Checker.RunURL}} <a href="{{.}}">{{$.Text.CheckerSeeRun}}</a>{{end}}</p>
       {{if .Checker.Module}}<div class="checker-tries" data-checker-control hidden>
         <button type="button" class="btn" data-checker-try="real" aria-describedby="sample-source" disabled>{{.Checker.TryLabel}}</button>
         <button type="button" class="btn" data-checker-try="tampered" aria-describedby="tamper-note" disabled>{{$.Text.CheckerTryTampered}}</button>

@@ -11,7 +11,7 @@
 <section class="section" aria-labelledby="coverage">
   <div class="section-head">
     <h2 id="coverage">Coverage</h2>
-    <a href="/blocks">Range table</a>
+    <a href="{{link "/blocks"}}">Range table</a>
   </div>
   <figure class="strip-figure">{{template "coverageStrip" .Strip}}</figure>
 </section>
@@ -30,7 +30,7 @@
   <section aria-labelledby="findings-h">
     <div class="section-head">
       <h2 id="findings-h">Findings</h2>
-      {{if .MoreFindings}}<a href="/findings">All {{.TotalFindings}} findings</a>{{end}}
+      {{if .MoreFindings}}<a href="{{link "/findings"}}">All {{.TotalFindings}} findings</a>{{end}}
     </div>
     {{if .Findings}}<ul class="finding-list">{{range .Findings}}{{template "findingItem" .}}{{end}}</ul>
     {{else}}<p class="empty">{{.NoFindings}}</p>{{end}}

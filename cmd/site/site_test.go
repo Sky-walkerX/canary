@@ -156,7 +156,7 @@ func htmlText(s string) string {
 }
 
 func TestNoindexFlag(t *testing.T) {
-	dist := buildSite(t, func(c *config) { c.NoIndex = false })
+	dist := buildSite(t, both(withWasm(t, fakeWasm(goodWasm), fakeExec), func(c *config) { c.NoIndex = false }))
 	for name := range pagesWant {
 		if strings.Contains(read(t, dist, name), `name="robots"`) {
 			t.Errorf("%s keeps a robots meta tag with -noindex=false", name)
@@ -365,15 +365,34 @@ func TestAssetsAreFingerprinted(t *testing.T) {
 }
 
 var (
-	hiddenElem = regexp.MustCompile(`(?s)<(p|span|div|button|section)\b[^>]*\shidden\b[^>]*>.*?</(p|span|div|button|section)>`)
 	svgElem    = regexp.MustCompile(`(?s)<svg\b.*?</svg>`)
 	scriptElem = regexp.MustCompile(`(?s)<script\b.*?</script>`)
 )
 
+// hiddenElems match an element rendered hidden, one pattern per tag name, so
+// the match ends at that element's own closing tag. The site never nests an
+// element inside another of the same name within a hidden one, so the first
+// closing tag of that name is the element's own.
+var hiddenElems = func() []*regexp.Regexp {
+	var out []*regexp.Regexp
+	for _, tag := range []string{"section", "div", "label", "p", "span", "button"} {
+		out = append(out, regexp.MustCompile(`(?s)<`+tag+`\b[^>]*\shidden\b[^>]*>.*?</`+tag+`>`))
+	}
+	return out
+}()
+
+// withoutHidden returns the markup with every hidden element cut out.
+func withoutHidden(page string) string {
+	for _, re := range hiddenElems {
+		page = re.ReplaceAllString(page, " ")
+	}
+	return page
+}
+
 // visibleText is the text a reader sees before any script runs: the page
 // without its hidden elements, scripts, drawings and tags.
 func visibleText(page string) string {
-	page = hiddenElem.ReplaceAllString(page, " ")
+	page = withoutHidden(page)
 	page = scriptElem.ReplaceAllString(page, " ")
 	page = svgElem.ReplaceAllString(page, " ")
 	page = anyTag.ReplaceAllString(page, " ")

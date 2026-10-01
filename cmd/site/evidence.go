@@ -121,7 +121,9 @@ func (s *site) sample() ([]byte, string, checkerView, error) {
 			WrittenAt string `json:"written_at"`
 		} `json:"context"`
 	}
-	json.Unmarshal(file, &ev) // tamper and checkPair report a file that is not JSON.
+	if err := json.Unmarshal(file, &ev); err != nil {
+		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: not JSON: %w", s.cfg.Evidence, err)
+	}
 	when, err := time.Parse(time.RFC3339, ev.Context.WrittenAt)
 	if err != nil {
 		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: context.written_at %q is not an RFC 3339 time, and the page dates the recorded run from it",

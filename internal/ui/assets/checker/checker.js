@@ -12,9 +12,17 @@
 //   [data-checker-try]      buttons that check the files named by the
 //                           checker's data-evidence ("real") and data-tampered
 //                           ("tampered") attributes.
+//   [data-checker-control]  elements that hold the controls: the drop zone and
+//                           the row of buttons. The page renders them hidden,
+//                           and mount reveals them as its last step, once
+//                           every handler is wired. A script that fails to
+//                           load or throws before then leaves them hidden, so
+//                           the page never shows controls that can't work.
+//                           A browser without WebAssembly keeps them hidden.
 //   [data-checker-result]   where the report goes.
 //   [data-checker-pending]  the line that says the checker is loading, failed
-//                           to load, or can't run in this browser.
+//                           to load, or can't run in this browser. Until the
+//                           script mounts, it holds the page's own words.
 //   [data-checker-live]     sentences that say the check runs in this page.
 //                           They stay hidden until it can.
 //   [data-checker-build]    the line that names the commit and Go release
@@ -259,9 +267,10 @@
     const pendingText = pending.querySelector(':scope > span') || pending;
     let input = root.querySelector('[data-checker-file]');
     if (!input) {
-      const drop = el('label', { class: 'drop' });
+      const drop = el('label', { class: 'drop', 'data-checker-control': '' });
       input = el('input', { class: 'drop-input', type: 'file', accept: '.json,application/json', 'data-checker-file': '' });
       drop.append(el('span', { class: 'drop-label' }, text.choose), input);
+      setHidden(drop, true);
       root.insertBefore(drop, result);
     }
     let build = root.querySelector('[data-checker-build]');
@@ -647,10 +656,16 @@
       after.after(d);
     }
 
-    // The line changes now, though the download waits for the page to load.
-    // A browser without WebAssembly hears so at once.
-    if (wasmSupported()) setPending(text.loadingStart);
-    else load();
+    // Every handler is wired, so the controls can appear, disabled until
+    // the module is ready. The line changes now, though the download waits
+    // for the page to load. A browser without WebAssembly hears so at once,
+    // and its controls stay hidden, since they could never work there.
+    if (wasmSupported()) {
+      root.querySelectorAll('[data-checker-control]').forEach((e) => setHidden(e, false));
+      setPending(text.loadingStart);
+    } else {
+      load();
+    }
     return load;
   }
 

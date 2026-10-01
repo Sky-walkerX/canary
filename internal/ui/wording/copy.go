@@ -763,6 +763,15 @@ func PaymentOutcome(code string) (label, sentence string) {
 	return code, "This build of Canary does not know this outcome."
 }
 
+// PolicyNotDeclared describes the policy of a server whose /info answered as
+// canary-info/1 with no policy in it.
+const PolicyNotDeclared = "Not declared"
+
+// PolicyUnknown describes the policy of a server whose /info gave no
+// canary-info/1 answer. The server may still have served valid records and
+// lists, so its policy is unknown, not absent.
+const PolicyUnknown = "Unknown: its /info did not answer"
+
 // PolicyText describes a server's declared policy. v1 policies come from the
 // unsigned /info, so the text says so.
 func PolicyText(prunesSpent bool, dustSat uint64, signed bool) string {
@@ -1374,13 +1383,13 @@ func CheckSaved(path string) string {
 
 // ServerInfoFailed is a server's error when /info did not answer, or
 // answered internal or not_ready. The run goes on. The state file then has no
-// policy for the server, and the dashboard shows it as not declared.
+// policy for the server, and the dashboard shows it as PolicyUnknown.
 const ServerInfoFailed = "Its /info did not answer, so its policy is unknown."
 
 // ServerInfoUnusable is a server's error when /info answered with something
 // other than canary-info/1. The run goes on only when one of the server's
 // records verified under its pin. The state file then has no policy for the
-// server, and the dashboard shows it as not declared.
+// server, and the dashboard shows it as PolicyUnknown.
 const ServerInfoUnusable = "Its /info did not answer as canary-info/1, so its policy is unknown."
 
 // ServerRecordUnanswered is a server's error when a record request failed.

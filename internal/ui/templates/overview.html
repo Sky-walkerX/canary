@@ -56,7 +56,7 @@
         <td role="cell" data-label="Signs receipts">{{.Receipts}}</td>
         <td role="cell" data-label="Answered">{{.Reachable}}</td>
         <td role="cell" class="nowrap" data-label="Tip">{{with .Tip}}{{.}}{{else}}Unknown{{end}}</td>
-        <td role="cell" class="policy" data-label="Declared policy">{{with .Policy}}{{.}}{{else}}Not declared{{end}}</td>
+        <td role="cell" class="policy" data-label="Declared policy">{{.Policy}}</td>
         <td role="cell" data-label="Last error">{{with .Error}}{{.}}{{else}}None{{end}}</td>
       </tr>{{end}}
       </tbody>

@@ -433,7 +433,12 @@ func buildVerdict(f *state.File) (wording.Verdict, *wording.StateText) {
 	return v, badge
 }
 
+// buildServers fills the servers table. A server's reachable field says only
+// whether /info answered as canary-info/1. A server whose /info failed can
+// still serve valid records and lists, so the Answered column also counts
+// those, and its policy reads as unknown rather than not declared.
 func buildServers(f *state.File) []serverRow {
+	served := servedRecordOrList(f)
 	rows := make([]serverRow, len(f.Servers))
 	for i, s := range f.Servers {
 		row := serverRow{
@@ -442,7 +447,7 @@ func buildServers(f *state.File) []serverRow {
 			Pubkey:    optHash(s.Pubkey, "Copy "+s.Label+"'s public key"),
 			Records:   wording.YesNo(s.PublishesRecords),
 			Receipts:  wording.YesNo(s.SignsReceipts),
-			Reachable: wording.YesNo(s.Reachable),
+			Reachable: wording.YesNo(s.Reachable || s.PublishesRecords || s.SignsReceipts || served[s.Label]),
 		}
 		if s.Pubkey == nil {
 			row.NoPubkey = wording.NoPubkey
@@ -450,8 +455,13 @@ func buildServers(f *state.File) []serverRow {
 		if s.Tip != nil {
 			row.Tip = wording.TipText(s.Tip.Height, s.Tip.Signed)
 		}
-		if s.Policy != nil {
+		switch {
+		case s.Policy != nil:
 			row.Policy = wording.PolicyText(s.Policy.PrunesSpent, s.Policy.DustThresholdSat, s.Policy.Signed)
+		case s.Reachable:
+			row.Policy = wording.PolicyNotDeclared
+		default:
+			row.Policy = wording.PolicyUnknown
 		}
 		if s.Error != nil {
 			row.Error = *s.Error
@@ -459,6 +469,20 @@ func buildServers(f *state.File) []serverRow {
 		rows[i] = row
 	}
 	return rows
+}
+
+// servedRecordOrList returns the labels of the servers that served a record
+// or a list for some block in the file.
+func servedRecordOrList(f *state.File) map[string]bool {
+	served := make(map[string]bool)
+	for _, b := range f.Blocks {
+		for _, s := range b.Servers {
+			if s.RecordEventID != nil || s.Positions != nil {
+				served[s.Label] = true
+			}
+		}
+	}
+	return served
 }
 
 // Tones for results that are not block states.

@@ -1143,3 +1143,87 @@ func TestHeadlinesIntroduceTheServerLabel(t *testing.T) {
 		}
 	}
 }
+
+// serverRowHTML returns the servers-table row for one label, from the opening
+// <tr> to its </tr>.
+func serverRowHTML(t *testing.T, body, label string) string {
+	t.Helper()
+	at := strings.Index(body, `<span class="server-name">`+label+`</span>`)
+	if at < 0 {
+		t.Fatalf("no servers-table row for %s", label)
+	}
+	start := strings.LastIndex(body[:at], "<tr")
+	end := strings.Index(body[at:], "</tr>")
+	if start < 0 || end < 0 {
+		t.Fatalf("row for %s is not closed", label)
+	}
+	return body[start : at+end]
+}
+
+// TestServerPolicyAndAnswered keeps a failed /info from reading as a server
+// that declared nothing or answered nothing. A failed /info leaves the policy
+// unknown. Whether the server answered comes from its records and lists too,
+// not from /info alone. Only a server whose /info answered with no policy
+// reads Not declared.
+func TestServerPolicyAndAnswered(t *testing.T) {
+	f := exampleFile(t)
+	infoFailed := wording.ServerInfoFailed
+	open := f.Servers[0].Policy
+
+	// withholder: /info failed, but it signed records and receipts.
+	f.Servers[1].Reachable, f.Servers[1].Policy, f.Servers[1].Error = false, nil, &infoFailed
+	f.Servers = append(f.Servers,
+		// silent: /info failed and it served nothing.
+		state.Server{Label: "silent", URL: "http://127.0.0.1:8083", Pubkey: f.Servers[0].Pubkey, Error: &infoFailed},
+		// listonly: pinned as none and /info failed, but it served a list.
+		state.Server{Label: "listonly", URL: "http://127.0.0.1:8084", Error: &infoFailed},
+		// bare: /info answered as canary-info/1 with no policy in it.
+		state.Server{Label: "bare", URL: "http://127.0.0.1:8085", Pubkey: f.Servers[0].Pubkey, Reachable: true},
+	)
+	f.Blocks[0].Servers = append(f.Blocks[0].Servers, state.BlockServer{
+		Label: "listonly", State: state.Unverified, Reason: state.NoRecords,
+		Positions: &state.Positions{Full: 1},
+	})
+
+	policyOpen := wording.PolicyText(open.PrunesSpent, open.DustThresholdSat, open.Signed)
+	tests := []struct {
+		label, answered, policy string
+	}{
+		{"honest", "Yes", policyOpen},
+		{"withholder", "Yes", wording.PolicyUnknown},
+		{"silent", "No", wording.PolicyUnknown},
+		{"listonly", "Yes", wording.PolicyUnknown},
+		{"bare", "Yes", wording.PolicyNotDeclared},
+	}
+
+	// The view model, field by field.
+	rows := map[string]serverRow{}
+	for _, r := range buildServers(f) {
+		rows[r.Label] = r
+	}
+	for _, tt := range tests {
+		r := rows[tt.label]
+		if r.Reachable != tt.answered || r.Policy != tt.policy {
+			t.Errorf("%s: answered %q, policy %q; want %q, %q", tt.label, r.Reachable, r.Policy, tt.answered, tt.policy)
+		}
+	}
+
+	// The rendered table, cell by cell.
+	fx := newFixture(t, nil, nil)
+	fx.writeFile(f)
+	_, body := fx.get("/")
+	for _, tt := range tests {
+		row := serverRowHTML(t, body, tt.label)
+		for _, cell := range []string{
+			`data-label="Answered">` + tt.answered + `</td>`,
+			`data-label="Declared policy">` + tt.policy + `</td>`,
+		} {
+			if !strings.Contains(row, cell) {
+				t.Errorf("%s's row lacks %q", tt.label, cell)
+			}
+		}
+	}
+	if n := strings.Count(body, ">"+wording.PolicyNotDeclared+"<"); n != 1 {
+		t.Errorf("%d servers read %q, want only bare", n, wording.PolicyNotDeclared)
+	}
+}

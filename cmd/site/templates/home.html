@@ -5,16 +5,21 @@
   <p class="hero-conditions">{{$.Text.Conditions}}</p>
 </section>
 
-{{/* The evidence checker. Its script, added later, wires these hooks:
-     [data-checker-file] and the two [data-checker-try] buttons, which it
-     enables; data-evidence and data-tampered, the files the buttons load;
-     [data-checker-result], where the report goes; [data-checker-pending],
-     which it hides; and [data-checker-live], which it reveals. The live
-     elements say the browser runs the check, so they stay hidden until the
-     script does. Until then the page says the checker is not built yet, and
-     the downloads work without a script. */}}
-<section id="checker" class="checker" aria-labelledby="checker-h" data-checker{{with .Checker.RealURL}} data-evidence="{{.}}"{{end}}{{with .Checker.TamperedURL}} data-tampered="{{.}}"{{end}}>
-  <div class="checker-bar">
+{{/* The evidence checker. checker.js, loaded only when the build has the
+     module, wires these hooks: [data-checker-file] and the two
+     [data-checker-try] buttons, which it enables; data-evidence and
+     data-tampered, the files the buttons load; data-wasm-size and
+     data-wasm-build, the module's size and build line; the JSON block of
+     its words; [data-checker-result], where the report goes;
+     [data-checker-pending], the loading line it shows; and
+     [data-checker-live] and [data-checker-build], which it reveals once the
+     module is ready. The live elements say the browser runs the check, so
+     they stay hidden until it can. A build without the module keeps the
+     pending line in view, saying the page has no checker, and the
+     downloads work without a script. */}}
+<section id="checker" class="checker" aria-labelledby="checker-h" data-checker data-evidence="{{.Checker.RealURL}}" data-tampered="{{.Checker.TamperedURL}}"{{with .Checker.Module}} data-wasm-size="{{.Size}}" data-wasm-build="{{.Build}}"{{end}}>
+  {{with .Checker.Module}}<script type="application/json" data-checker-text>{{.Text}}</script>
+  {{end}}<div class="checker-bar">
     <h2 id="checker-h" class="checker-title">{{$.Text.CheckerTitle}}</h2>
     <p class="checker-privacy"><span data-checker-live hidden>{{$.Text.CheckerPrivacy}}</span> {{$.Text.FooterNoRequests}}</p>
   </div>
@@ -24,24 +29,28 @@
       <span class="drop-label">{{template "icon" "download"}}<span>{{$.Text.CheckerChoose}}</span></span>
       <input class="drop-input" type="file" accept=".json,application/json" data-checker-file disabled>
     </label>
-    <div class="checker-tries">
-      <button type="button" class="btn" data-checker-try="real" disabled>{{$.Text.CheckerTryReal}}</button>
-      <button type="button" class="btn" data-checker-try="tampered" aria-describedby="tamper-note" disabled>{{$.Text.CheckerTryTampered}}</button>
+    <div class="checker-samples">
+      <p id="sample-source" class="sample-source">{{.Checker.Source}}</p>
+      <div class="checker-tries">
+        <button type="button" class="btn" data-checker-try="real" aria-describedby="sample-source" disabled>{{.Checker.TryLabel}}</button>
+        <button type="button" class="btn" data-checker-try="tampered" aria-describedby="tamper-note" disabled>{{$.Text.CheckerTryTampered}}</button>
+      </div>
+      <p id="tamper-note" class="tamper-note">{{.Checker.TamperNote}}</p>
+      <ul class="checker-downloads">
+        <li><a class="download" href="{{.Checker.RealURL}}" download>{{template "icon" "download"}}<span>{{.Checker.DownloadLabel}}</span></a></li>
+        <li><a class="download" href="{{.Checker.TamperedURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadTampered}}</span></a></li>
+      </ul>
     </div>
-    {{if .Checker.HasEvidence}}<p id="tamper-note" class="tamper-note">{{.Checker.TamperNote}}</p>
-    <ul class="checker-downloads">
-      <li><a class="download" href="{{.Checker.RealURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadReal}}</span></a></li>
-      <li><a class="download" href="{{.Checker.TamperedURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadTampered}}</span></a></li>
-    </ul>{{else}}<p id="tamper-note" class="tamper-note">{{$.Text.CheckerNoEvidence}}</p>{{end}}
-  </div>
+    {{with .Checker.Module}}<p class="checker-build" data-checker-build hidden>{{.Build}}</p>
+  {{end}}</div>
   <div class="checker-result" data-checker-result aria-live="polite">
-    <p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{if .Checker.HasEvidence}}{{$.Text.CheckerPending}}{{else}}{{$.Text.CheckerPendingNoEvidence}}{{end}}</span></p>
+    {{with .Checker.Module}}<p class="checker-pending" data-checker-pending hidden>{{template "icon" "info"}}<span>{{.Text.LoadingStart}}</span></p>{{else}}<p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{$.Text.CheckerPending}}</span></p>{{end}}
     <p class="checker-steps-intro">{{$.Text.CheckerStepsIntro}}</p>
     <ol class="checker-steps">{{range .Steps}}
       <li>{{.}}</li>{{end}}
     </ol>
   </div>
-  <noscript><p class="checker-noscript">{{if .Checker.HasEvidence}}{{$.Text.CheckerNoScript}}{{else}}{{$.Text.CheckerNoScriptNoEvidence}}{{end}} <code>canary verify {{$.Text.RunFilePlaceholder}}</code></p></noscript>
+  <noscript><p class="checker-noscript">{{$.Text.CheckerNoScript}} <code>canary verify {{$.Text.RunFilePlaceholder}}</code></p></noscript>
 </section>
 
 <section class="band" aria-labelledby="problem-h">
@@ -97,12 +106,12 @@
 <section class="band" id="run" aria-labelledby="run-h">
   <h2 id="run-h" class="band-head">{{$.Text.RunTitle}}</h2>
   <div class="band-body">
-    <p>{{if .Checker.HasEvidence}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
+    <p>{{if .Checker.Recorded}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
     <ol class="run-steps">{{range .Commands}}
       <li>{{if .Placeholder}}<div class="command"><pre><code>{{.Value}}<var>{{.Placeholder}}</var></code></pre></div>
         <p class="run-placeholder">{{$.Text.RunPlaceholderNote}}</p>{{else}}{{template "command" (copyOf .Value .Label)}}{{end}}</li>{{end}}
     </ol>
-    <p class="run-note">{{$.Text.RunNeeds}} {{if .Checker.HasEvidence}}{{$.Text.RunAfter}}{{else}}{{$.Text.RunAfterNoEvidence}}{{end}}</p>
+    <p class="run-note">{{$.Text.RunNeeds}} {{if .Checker.Recorded}}{{$.Text.RunAfter}}{{else}}{{$.Text.RunAfterNoEvidence}}{{end}}</p>
   </div>
 </section>
 {{end}}{{end}}

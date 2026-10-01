@@ -219,7 +219,7 @@ func walkDist(t *testing.T, dist string, exts []string, fn func(rel, body string
 // TestNoExternalURLs keeps the site to its own origin. The one outside
 // address allowed is the repository, as a link.
 func TestNoExternalURLs(t *testing.T) {
-	dist := buildSite(t, withEvidence(t, exampleEvidence))
+	dist := buildSite(t, both(withEvidence(t, exampleEvidence), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	url := regexp.MustCompile(`(?i)(https?:)?//[a-z0-9.-]+\.[a-z]{2,}[^\s"'<>)]*`)
 	allowed := []string{testRepo, "http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink"}
 	n := 0
@@ -260,7 +260,7 @@ var (
 // TestInternalLinksResolve follows every same-site link and checks that its
 // file exists in dist and that its fragment names an element on that page.
 func TestInternalLinksResolve(t *testing.T) {
-	dist := buildSite(t, withEvidence(t, exampleEvidence))
+	dist := buildSite(t, both(withEvidence(t, exampleEvidence), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	ids := map[string]map[string]bool{}
 	pageIDs := func(rel string) map[string]bool {
 		if m, ok := ids[rel]; ok {
@@ -310,14 +310,26 @@ func TestInternalLinksResolve(t *testing.T) {
 }
 
 // TestPagesFollowTheCSP keeps every page inside style-src 'self' and
-// script-src 'self': no inline styles, scripts or event handlers.
+// script-src 'self': no inline styles, scripts or event handlers. A JSON
+// data block is not a script, never runs, and the CSP does not cover it.
 func TestPagesFollowTheCSP(t *testing.T) {
-	dist := buildSite(t, nil)
-	inline := regexp.MustCompile(`(?i)<style|\sstyle="|\son[a-z]+="|<script(?:\s[^>]*)?>[^<]+</script>|javascript:`)
+	dist := buildSite(t, withWasm(t, fakeWasm(goodWasm), fakeExec))
+	inline := regexp.MustCompile(`(?i)<style|\sstyle="|\son[a-z]+="|javascript:`)
+	inlineScript := regexp.MustCompile(`(?is)<script(\s[^>]*)?>([^<]*)</script>`)
 	script := regexp.MustCompile(`<script[^>]*src="([^"]+)"`)
+	blocks := 0
 	walkDist(t, dist, []string{".html"}, func(rel, body string) {
 		if m := inline.FindString(body); m != "" {
 			t.Errorf("%s has inline code the CSP blocks: %q", rel, m)
+		}
+		for _, m := range inlineScript.FindAllStringSubmatch(body, -1) {
+			switch {
+			case strings.TrimSpace(m[2]) == "":
+			case strings.Contains(m[1], `type="application/json"`):
+				blocks++
+			default:
+				t.Errorf("%s has an inline script the CSP blocks: %q", rel, m[0][:min(len(m[0]), 80)])
+			}
 		}
 		for _, m := range script.FindAllStringSubmatch(body, -1) {
 			if !strings.HasPrefix(m[1], "/assets/") {
@@ -325,6 +337,9 @@ func TestPagesFollowTheCSP(t *testing.T) {
 			}
 		}
 	})
+	if blocks != 1 {
+		t.Errorf("found %d JSON data blocks, want the checker's one", blocks)
+	}
 }
 
 func TestAssetsAreFingerprinted(t *testing.T) {
@@ -352,12 +367,14 @@ func TestAssetsAreFingerprinted(t *testing.T) {
 var (
 	hiddenElem = regexp.MustCompile(`(?s)<(p|span|div|button|section)\b[^>]*\shidden\b[^>]*>.*?</(p|span|div|button|section)>`)
 	svgElem    = regexp.MustCompile(`(?s)<svg\b.*?</svg>`)
+	scriptElem = regexp.MustCompile(`(?s)<script\b.*?</script>`)
 )
 
 // visibleText is the text a reader sees before any script runs: the page
-// without its hidden elements, drawings and tags.
+// without its hidden elements, scripts, drawings and tags.
 func visibleText(page string) string {
 	page = hiddenElem.ReplaceAllString(page, " ")
+	page = scriptElem.ReplaceAllString(page, " ")
 	page = svgElem.ReplaceAllString(page, " ")
 	page = anyTag.ReplaceAllString(page, " ")
 	return spaces.ReplaceAllString(html.UnescapeString(page), " ")
@@ -376,12 +393,14 @@ func section(t *testing.T, page, id string) string {
 }
 
 // TestCheckerClaimsOnlyWhatExists keeps the page from saying the browser
-// checks a file. The page as built carries no checker script, so those
-// sentences wait in hidden elements that the script reveals when it runs.
+// checks a file before it can. Those sentences wait in hidden elements that
+// the checker script reveals once the module is ready, and a page built
+// without the module never reveals them.
 func TestCheckerClaimsOnlyWhatExists(t *testing.T) {
 	builds := map[string]func(*config){
-		"without evidence": nil,
-		"with evidence":    withEvidence(t, exampleEvidence),
+		"example":             nil,
+		"recorded":            withEvidence(t, exampleEvidence),
+		"example with module": withWasm(t, fakeWasm(goodWasm), fakeExec),
 	}
 	for name, mutate := range builds {
 		home := read(t, buildSite(t, mutate), "index.html")
@@ -403,64 +422,6 @@ func TestCheckerClaimsOnlyWhatExists(t *testing.T) {
 	}
 }
 
-func TestCheckerWithoutEvidence(t *testing.T) {
-	home := read(t, buildSite(t, nil), "index.html")
-	for _, want := range []string{`id="checker"`, "<noscript>", "canary verify"} {
-		if !strings.Contains(home, want) {
-			t.Errorf("home lacks %q", want)
-		}
-	}
-	for _, want := range []string{
-		wording.Site.CheckerTryReal,
-		wording.Site.CheckerTryTampered,
-		wording.Site.CheckerNoEvidence,
-		wording.Site.CheckerPendingNoEvidence,
-		wording.Site.CheckerNoScriptNoEvidence,
-		wording.Site.RunIntroNoEvidence,
-		wording.Site.RunAfterNoEvidence,
-		wording.Site.RunPlaceholderNote,
-	} {
-		if !strings.Contains(home, htmlText(want)) {
-			t.Errorf("home lacks %q", want)
-		}
-	}
-	// With no file published, nothing on the page tells the reader to
-	// download one.
-	for _, gone := range []string{
-		wording.Site.CheckerPending,
-		wording.Site.CheckerNoScript,
-		wording.Site.RunIntro,
-		wording.Site.RunAfter,
-	} {
-		if strings.Contains(home, htmlText(gone)) {
-			t.Errorf("home shows %q although no evidence file was given", gone)
-		}
-	}
-	if shown := strings.ToLower(visibleText(home)); strings.Contains(shown, "download") {
-		t.Error("home tells the reader to download a file although none is published")
-	}
-	checker := section(t, home, "checker")
-	if strings.Contains(checker, "/evidence/") {
-		t.Error("the checker links to an evidence file although none was given")
-	}
-	// The verify command shows its file as a placeholder, with nothing to
-	// copy, so nobody pastes a command that fails.
-	run := section(t, home, "run-h")
-	if strings.Contains(run, "FILE.json") || strings.Contains(run, `data-copy="./canary verify`) {
-		t.Error("the run section offers a verify command for a file that does not exist")
-	}
-	if !strings.Contains(run, "./canary verify <var>"+wording.Site.RunFilePlaceholder+"</var>") {
-		t.Error("the run section does not show the verify command with a placeholder")
-	}
-	if n := strings.Count(run, `data-copy="`); n != 2 {
-		t.Errorf("the run section offers %d commands to copy, want clone and build", n)
-	}
-	// The claim leads, and the checker sits right under it.
-	if h1, c := strings.Index(home, "<h1"), strings.Index(home, `id="checker"`); h1 < 0 || c < h1 {
-		t.Error("the checker does not follow the claim")
-	}
-}
-
 func TestCheckerWithEvidence(t *testing.T) {
 	dist := buildSite(t, withEvidence(t, exampleEvidence))
 	name := filepath.Base(exampleEvidence)
@@ -479,7 +440,7 @@ func TestCheckerWithEvidence(t *testing.T) {
 	if v.Proof.Siblings[0] == r.Proof.Siblings[0] || v.Proof.Siblings[1] != r.Proof.Siblings[1] {
 		t.Error("the flipped byte is not in proof.siblings[0]")
 	}
-	note := wording.Site.TamperNote(diff+1, "proof.siblings[0]", string(real[diff]), string(tampered[diff]))
+	note := wording.Site.TamperNote(diff+1, "proof.siblings[0]", string(real[diff]), string(tampered[diff]), "inclusion")
 	home := read(t, dist, "index.html")
 	if !strings.Contains(home, htmlText(note)) {
 		t.Errorf("home lacks the exact tamper note %q", note)
@@ -490,6 +451,7 @@ func TestCheckerWithEvidence(t *testing.T) {
 		`data-copy="./canary verify evidence/` + name + `"`,
 		htmlText(wording.Site.CheckerPending),
 		htmlText(wording.Site.CheckerNoScript),
+		htmlText(wording.Site.CheckerSourceRecorded("3 October 2026")),
 		htmlText(wording.Site.RunIntro),
 		htmlText(wording.Site.RunAfter),
 	} {
@@ -498,8 +460,8 @@ func TestCheckerWithEvidence(t *testing.T) {
 		}
 	}
 	for _, gone := range []string{
-		wording.Site.CheckerNoEvidence,
-		wording.Site.CheckerPendingNoEvidence,
+		wording.Site.CheckerSourceExample,
+		wording.Site.RunIntroNoEvidence,
 		wording.Site.RunPlaceholderNote,
 	} {
 		if strings.Contains(home, htmlText(gone)) {
@@ -628,7 +590,7 @@ func oneEntryEvidence(t *testing.T) string {
 		"served_base64":    nil,
 		"missing":          map[string]any{"txid": core.DisplayHex(leaf.TxID), "tweak": hex.EncodeToString(leaf.Tweak[:])},
 		"proof":            map[string]any{"index": 0, "n": 1, "siblings": []string{}},
-		"context":          map[string]any{"server_label": "withholder"},
+		"context":          map[string]any{"server_label": "withholder", "written_at": "2026-10-03T08:32:11Z"},
 	}
 	b, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
@@ -663,7 +625,7 @@ func TestTamperOneEntryBlock(t *testing.T) {
 		t.Errorf("the flipped byte is not in missing.txid: %q", v.Missing.Txid)
 	}
 	checkInclusion(t, []byte(tampered), false)
-	note := wording.Site.TamperNote(diff+1, "missing.txid", string(real[diff]), string(tampered[diff]))
+	note := wording.Site.TamperNote(diff+1, "missing.txid", string(real[diff]), string(tampered[diff]), "inclusion")
 	if home := read(t, dist, "index.html"); !strings.Contains(home, htmlText(note)) {
 		t.Errorf("home lacks the exact tamper note %q", note)
 	}

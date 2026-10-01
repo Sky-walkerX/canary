@@ -326,7 +326,12 @@ func siteText() []string {
 		}
 	}
 	walk(reflect.ValueOf(Site))
-	out = append(out, Site.TamperNote(1843, "proof.siblings[0]", "3", "2"))
+	walk(reflect.ValueOf(Checker))
+	out = append(out, Site.TamperNote(1843, "proof.siblings[0]", "3", "2", "inclusion"),
+		Site.CheckerSourceRecorded("3 October 2026"),
+		CheckerBuildLine("05de74dd2f8698efdb163ab6ed00f3efa09e27fc", "Go 1.26.4", false),
+		CheckerBuildLine("05de74dd2f8698efdb163ab6ed00f3efa09e27fc", "Go 1.26.4", true),
+		CheckerBuildLine("", "Go 1.26.4", false))
 	return out
 }
 
@@ -360,8 +365,8 @@ func TestSiteWordingIsComplete(t *testing.T) {
 			t.Errorf("description of %q is %d characters, over the 160 a search result shows", p.Title, n)
 		}
 	}
-	note := Site.TamperNote(1843, "proof.siblings[0]", "3", "2")
-	for _, want := range []string{"1843", "proof.siblings[0]", `"2"`, `"3"`} {
+	note := Site.TamperNote(1843, "proof.siblings[0]", "3", "2", "inclusion")
+	for _, want := range []string{"1843", "proof.siblings[0]", `"2"`, `"3"`, VerifyStep("inclusion")} {
 		if !strings.Contains(note, want) {
 			t.Errorf("tamper note %q lacks %q", note, want)
 		}

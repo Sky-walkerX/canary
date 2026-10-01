@@ -7,11 +7,17 @@
 //
 // Run it from the repository root:
 //
+//	make wasm                           # the browser checker, into bin/wasm
 //	go run ./cmd/site                   # writes site/dist, with noindex
 //	go run ./cmd/site -evidence evidence/FILE.json
 //	go run ./cmd/site -noindex=false    # after submission
 //
 // Then deploy site/dist to Cloudflare Pages.
+//
+// The home page's checker loads canary.wasm, which make wasm builds. Without
+// it the page says this build has no checker, and the generator says to run
+// make wasm. Until a run is recorded, the checker's sample is the formats
+// document's example evidence file, and the page says so.
 //
 // A build with -evidence, or with -noindex=false, publishes commands that a
 // fresh clone must be able to run. So it refuses an evidence file outside the
@@ -26,6 +32,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -43,9 +50,12 @@ type config struct {
 	Docs     string // the docs directory; its parent is the repository root
 	Headers  string // the _headers source file
 	Evidence string // optional: the real evidence file for the checker
+	Wasm     string // the directory make wasm writes canary.wasm and wasm_exec.js to
 	Repo     string // the repository's address, the one outside link
 	BaseURL  string // optional: the site's own address, for canonical and og:url
 	NoIndex  bool   // ask search engines to stay away
+
+	Log io.Writer // where notes for the builder go; nil drops them
 }
 
 const defaultRepo = "https://github.com/Sky-walkerX/canary"
@@ -62,10 +72,12 @@ func main() {
 	flag.StringVar(&cfg.Docs, "docs", "docs", "docs directory, inside the repository")
 	flag.StringVar(&cfg.Headers, "headers", filepath.Join("site", "_headers"), "Cloudflare Pages _headers source")
 	flag.StringVar(&cfg.Evidence, "evidence", "", "the real evidence file, committed in the repository's evidence directory, to publish with a tampered copy (optional; needs ./cmd/canary)")
+	flag.StringVar(&cfg.Wasm, "wasm", filepath.Join("bin", "wasm"), "the directory where make wasm wrote canary.wasm and wasm_exec.js")
 	flag.StringVar(&cfg.Repo, "repo", defaultRepo, "repository address for source links")
 	flag.StringVar(&cfg.BaseURL, "base-url", "", "the site's own address, such as https://canary.pages.dev (optional)")
 	flag.BoolVar(&cfg.NoIndex, "noindex", true, "ask search engines not to index the site")
 	flag.Parse()
+	cfg.Log = os.Stderr
 	if err := build(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -78,7 +90,8 @@ type site struct {
 	cfg      config
 	parts    *template.Template // the shared partials, for badges and drawings
 	pages    map[string]*template.Template
-	assetDir string // "/assets/<hash>"
+	assetDir string  // "/assets/<hash>"
+	module   *module // the browser checker, or nil when the build has none
 	checker  checkerView
 }
 
@@ -103,7 +116,7 @@ func build(cfg config) error {
 		return err
 	}
 	s := &site{cfg: cfg, parts: parts, pages: pages}
-	for _, step := range []func() error{s.writeAssets, s.writeIcons, s.writeEvidence, s.writePages, s.writeHeaders} {
+	for _, step := range []func() error{s.readModule, s.writeAssets, s.writeIcons, s.writeEvidence, s.writePages, s.writeHeaders} {
 		if err := step(); err != nil {
 			return err
 		}
@@ -199,7 +212,10 @@ func (s *site) write(rel string, b []byte) error {
 
 // writeAssets copies the design system's files and the site's own stylesheet
 // into one directory named by a hash of them all. The stylesheets refer to
-// the fonts by relative paths, which stay valid inside that directory.
+// the fonts by relative paths, which stay valid inside that directory. With
+// the browser checker, its folder holds checker.js beside the canary.wasm and
+// wasm_exec.js it loads, so one hash covers all three and a browser never
+// pairs the script with a module from another build.
 func (s *site) writeAssets() error {
 	files := map[string][]byte{}
 	err := fs.WalkDir(ui.Assets(), ".", func(p string, d fs.DirEntry, err error) error {
@@ -213,6 +229,10 @@ func (s *site) writeAssets() error {
 		case p == "fonts/SOURCE.txt":
 			// The download record names the fonts' origin, which the site never
 			// contacts. The licences ship; the record stays in the repository.
+			return nil
+		case strings.HasPrefix(p, "checker/") && s.module == nil:
+			// Without its module the checker can't run, so the page never
+			// loads its script.
 			return nil
 		case strings.HasSuffix(p, ".css"), strings.HasSuffix(p, ".js"), strings.HasSuffix(p, ".woff2"), strings.HasSuffix(p, ".txt"):
 		default:
@@ -230,6 +250,10 @@ func (s *site) writeAssets() error {
 		return fmt.Errorf("site: read site.css: %w", err)
 	}
 	files["site.css"] = css
+	if s.module != nil {
+		files["checker/canary.wasm"] = s.module.Wasm
+		files["checker/wasm_exec.js"] = s.module.Exec
+	}
 
 	names := make([]string, 0, len(files))
 	for n := range files {
@@ -292,6 +316,8 @@ type page struct {
 	Framing   string
 	Repo      string
 	License   string
+	Styles    []string // extra stylesheets, after the site's own
+	Scripts   []string // extra scripts, loaded with defer
 	Main      any
 }
 
@@ -364,7 +390,18 @@ func (s *site) writePages() error {
 		Steps:    verifySteps(),
 		Commands: s.runCommands(),
 	}
-	if err := s.render("home", "index.html", s.page(wording.Site.Home, "/", home)); err != nil {
+	homePage := s.page(wording.Site.Home, "/", home)
+	if m := s.module; m != nil {
+		home.Checker.Module = &moduleView{
+			Size:  len(m.Wasm),
+			Build: wording.CheckerBuildLine(m.Revision, m.GoRelease, m.Modified),
+			Text:  wording.Checker,
+		}
+		homePage.Main = home
+		homePage.Styles = []string{s.assetDir + "/checker/checker.css"}
+		homePage.Scripts = []string{s.assetDir + "/checker/checker.js"}
+	}
+	if err := s.render("home", "index.html", homePage); err != nil {
 		return err
 	}
 	for _, d := range docPages {
@@ -421,7 +458,7 @@ func verifySteps() []string {
 // already made sure a release build's evidence file sits in evidence/.
 func (s *site) runCommands() []command {
 	verify := command{Value: "./canary verify ", Placeholder: wording.Site.RunFilePlaceholder}
-	if s.checker.RealName != "" {
+	if s.checker.Recorded {
 		verify = command{Value: "./canary verify evidence/" + s.checker.RealName, Label: wording.Site.RunVerifyLabel}
 	}
 	return []command{

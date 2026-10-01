@@ -24,8 +24,10 @@
 <link rel="stylesheet" href="{{.Assets}}/tokens.css">
 <link rel="stylesheet" href="{{.Assets}}/ui.css">
 <link rel="stylesheet" href="{{.Assets}}/site.css">
-<script src="{{.Assets}}/app.js"></script>
-</head>
+{{range .Styles}}<link rel="stylesheet" href="{{.}}">
+{{end}}<script src="{{.Assets}}/app.js"></script>
+{{range .Scripts}}<script src="{{.}}" defer></script>
+{{end}}</head>
 <body class="site">
 {{.Sprite}}
 <a class="skip-link" href="#main">{{.Text.SkipLink}}</a>

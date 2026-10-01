@@ -49,13 +49,19 @@
 .checker-paste-note:empty { display: none; }
 
 /* One result: which file, then the report. */
-.checker-report { display: grid; gap: var(--space-3); min-width: 0; }
+.checker-report { display: grid; gap: var(--space-3); min-width: 0; scroll-margin-top: var(--space-4); }
 .checker-source {
   font-size: var(--text-s);
   color: var(--ink-muted);
   overflow-wrap: anywhere;
 }
 .checker-report .command { margin-top: 0; }
+/* The report's facts sit in a narrower column than the dashboard's, so the
+   label column narrows the way a server card's does, and a shortened hash
+   keeps its line. */
+@media (min-width: 720px) {
+  .checker-report .facts > div { grid-template-columns: 8.5rem minmax(0, 1fr); gap: var(--space-3); }
+}
 
 /* Which commit and Go release built the module. */
 .checker-build {

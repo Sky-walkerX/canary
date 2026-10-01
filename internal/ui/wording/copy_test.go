@@ -116,7 +116,7 @@ func allText() []string {
 		EvidenceNote, BlocksIntro(0, 212, 213), HeightNotFound("150", 1, 213), HeightNotFound("abc", 1, 213),
 		UpdateNewResults, UpdateNewFindings(1), UpdateNewFindings(3), UpdateUpdated, UpdateLost("14:02"), UpdateBack,
 		UpdateReload, UpdateDismiss, RegtestBadge, NetworkBadge("signet"), Framing, WarningSuffix, NoPubkey,
-		PolicyText(true, 546, false), PolicyText(false, 0, false), TipText(212, true), TipText(210, false),
+		PolicyText(true, 546, false), PolicyText(false, 0, false), PolicyNotDeclared, PolicyUnknown, TipText(212, true), TipText(210, false),
 		VerifyChecksOut, VerifyInclusionOnly, VerifyInclusionOnlyDetail[0], VerifyInclusionOnlyDetail[1],
 		VerifyDoesNotCheckOut("receipt"), VerifyCantRead("not JSON"), VerifyNotHonest, VerifyNotRunEarlier, VerifyNotRunNoReceipt,
 		EvidenceStatusLine("x.json", true), EvidenceStatusLine("x.json", false))

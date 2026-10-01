@@ -133,7 +133,8 @@ var reasons = map[string]string{
 	"no_records":          "The server signed no record for this block. It may sign nothing, or may have started indexing above this block.",
 	"no_record_for_block": "The server signed records for blocks on both sides of this one, but not for this one.",
 	"not_indexed_yet":     "The server has not reached this block yet.",
-	"server_unreachable":  "The server did not answer, or said it was not ready.",
+	"server_unreachable": "The server did not answer, said it was not ready, " +
+		"or refused the request with an error a v1 server never gives Canary.",
 
 	"records_differ": "Two servers signed different roots for this block hash.",
 
@@ -1305,9 +1306,16 @@ func CheckCoreUnreachable(url string) string {
 const CheckCoreSyncing = "Bitcoin Core is still in its initial sync, so honest tips would look false. " +
 	"Run canary check again when the sync finishes."
 
-// CheckCoreChain is the error for a chain canary check cannot name.
+// CheckCoreChain is the error for a chain canary check cannot name. Every
+// signet reports the name "signet", and a custom signet's network magic comes
+// from its challenge, so the name cannot say which magic to check against.
 func CheckCoreChain(chain string) string {
-	return "Bitcoin Core reports chain " + strconv.Quote(chain) + ". canary check v1 runs on regtest and main only."
+	msg := "Bitcoin Core reports chain " + strconv.Quote(chain) + ". canary check v1 runs on regtest and main only."
+	if chain == "signet" {
+		msg += " Every signet reports that same name, so Canary can't tell which signet Core is on." +
+			" Signet needs a flag that names the network, which is planned after v1."
+	}
+	return msg
 }
 
 // CheckServerUnusable is the error for a server whose answer Canary cannot
@@ -1359,6 +1367,13 @@ const ServerInfoFailed = "Its /info did not answer."
 // ServerRecordUnanswered is a server's error when a record request failed.
 func ServerRecordUnanswered(height uint32) string {
 	return fmt.Sprintf("It did not answer for block %d's record.", height)
+}
+
+// ServerRecordRefused is a server's error when it answered a record request
+// with an error outside the v1 API, after it had shown in the run that it is
+// a v1 server. Canary records the block like an outage.
+func ServerRecordRefused(height uint32) string {
+	return fmt.Sprintf("It answered the request for block %d's record with an error a v1 server never gives Canary.", height)
 }
 
 // ServerRecordRejected is a server's error when a record failed the checks.

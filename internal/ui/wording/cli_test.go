@@ -22,13 +22,13 @@ func cliText() []string {
 		CheckExpectNotInBlock(strings.Repeat("ab", 32), strings.Repeat("cd", 32)),
 		CheckExpectBlockUnknown(strings.Repeat("cd", 32)),
 		CheckExpectNotChecked(strings.Repeat("ab", 32), strings.Repeat("cd", 32), 0, 100),
-		ServerInfoFailed, ServerRecordUnanswered(3), ServerRecordRejected(3),
+		ServerInfoFailed, ServerRecordUnanswered(3), ServerRecordRefused(3), ServerRecordRejected(3),
 		ServerListUnanswered(3), ServerNotAsked(3), ServerReceiptRejected(3), ServerListRejected(3),
 		CheckServerLastError("honest", ServerListUnanswered(3)), CheckInterrupted,
 		CheckExpectNotFound(strings.Repeat("ab", 32)), CheckNoHome("state file"), CheckPaymentEntry(strings.Repeat("ab", 32)),
 		CheckStateUnreadable("/s.json"), CheckStateNewer("/s.json", "canary-state/2"),
 		CheckStateOtherNetwork("/s.json", "main", "regtest"),
-		CheckCoreUnreachable("http://127.0.0.1:18443/rest"), CheckCoreSyncing, CheckCoreChain("testnet4"),
+		CheckCoreUnreachable("http://127.0.0.1:18443/rest"), CheckCoreSyncing, CheckCoreChain("testnet4"), CheckCoreChain("signet"),
 		CheckServerUnusable("honest", "http://127.0.0.1:8081"), CheckWriteState("/s.json"),
 		CheckWriteEvidence("/e/x.json"), CheckStarting(0, 212, 2), CheckDroppedFinding("827a8d3f502e", strings.Repeat("cd", 32)),
 		CheckSaved("/s.json"),
@@ -112,6 +112,18 @@ func TestCLILines(t *testing.T) {
 		{VersionLine("0.1.0", "abc1234"), "canary 0.1.0 (abc1234)"},
 		{CLIDetails("x: y"), "  Details: x: y"},
 		{CheckRangeBackwards(9, 3), "--from 9 is above --to 3."},
+		{CheckCoreChain("testnet4"), `Bitcoin Core reports chain "testnet4". canary check v1 runs on regtest and main only.`},
+		// Every signet reports the chain name "signet", and a custom signet's
+		// magic comes from its challenge. So the name cannot say which magic
+		// to check against, and v1 refuses until a flag can name it.
+		{CheckCoreChain("signet"), `Bitcoin Core reports chain "signet". canary check v1 runs on regtest and main only. ` +
+			"Every signet reports that same name, so Canary can't tell which signet Core is on. " +
+			"Signet needs a flag that names the network, which is planned after v1."},
+		// not_found, bad_block_hash and unsupported_parameter are v1 error
+		// codes. A v1 server never gives them to Canary's well-formed requests.
+		{ServerRecordRefused(3), "It answered the request for block 3's record with an error a v1 server never gives Canary."},
+		{Reason("server_unreachable"), "The server did not answer, said it was not ready, " +
+			"or refused the request with an error a v1 server never gives Canary."},
 	}
 	for _, tt := range tests {
 		if tt.got != tt.want {

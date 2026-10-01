@@ -83,9 +83,11 @@ type Server struct {
 	Tip *uint32
 
 	// Unreachable is true when the record request got no answer, or an
-	// internal or not_ready error. It is also true when canary check stopped
-	// asking the server before it asked for this block's list, because the
-	// server refused nothing. The ladder then reads nothing else.
+	// internal or not_ready error. It is also true when the record request
+	// got an error outside the v1 API from a server that showed in the run
+	// that it is a v1 server, and when canary check stopped asking the server
+	// before it asked for this block's list, because the server refused
+	// nothing. The ladder then reads nothing else.
 	Unreachable bool
 
 	// Record is the body of /commitment/{hash}, the signed Nostr event as

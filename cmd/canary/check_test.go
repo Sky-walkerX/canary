@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -470,10 +471,14 @@ func answerOn(prefix string, status int, code string) func(http.Handler) http.Ha
 	}
 }
 
-// A v1 server never answers Canary's requests with not_found or
-// bad_block_hash. Either means a wrong --indexer URL or a bug, so the run
-// stops with exit code 5 instead of recording anything about the server.
-// The errors a v1 server does give, unknown_block and not_ready, are data.
+// A v1 server never answers Canary's requests with not_found,
+// bad_block_hash or unsupported_parameter. From a server that has not yet
+// shown it is a v1 server, such an answer means a wrong --indexer URL or a
+// bug, so the run stops with exit code 5. A server whose every record
+// request gets not_found never shows it. A server that answered /info and
+// signed a valid record has shown it, so its refused lists are recorded
+// like any list it did not serve. The errors a v1 server does give,
+// unknown_block and not_ready, are always data.
 func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -483,11 +488,12 @@ func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 		exit   int
 	}{
 		{"record not_found", "/commitment/", http.StatusNotFound, "not_found", 5},
-		{"list bad_block_hash", "/tweaks/", http.StatusBadRequest, "bad_block_hash", 5},
-		{"list unsupported_parameter", "/tweaks/", http.StatusBadRequest, "unsupported_parameter", 5},
-		{"record not_ready", "/commitment/", http.StatusServiceUnavailable, "not_ready", 0},
 		// A list refused inside the window raises a warning, and warnings
 		// count as findings for the exit code.
+		{"list bad_block_hash", "/tweaks/", http.StatusBadRequest, "bad_block_hash", 1},
+		{"list unsupported_parameter", "/tweaks/", http.StatusBadRequest, "unsupported_parameter", 1},
+		{"list not_found", "/tweaks/", http.StatusNotFound, "not_found", 1},
+		{"record not_ready", "/commitment/", http.StatusServiceUnavailable, "not_ready", 0},
 		{"list unknown_block", "/tweaks/", http.StatusNotFound, "unknown_block", 1},
 	}
 	for _, tt := range tests {
@@ -505,9 +511,262 @@ func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 			}
 			f := loadState(t, w.statePath())
 			o := serverIn(t, blockAt(t, f, w.height), "odd")
-			want := map[string]state.Reason{"not_ready": state.ServerUnreachable, "unknown_block": state.ListNotServed}[tt.code]
+			want := state.ListNotServed
+			if tt.code == "not_ready" {
+				want = state.ServerUnreachable
+			}
 			if o.Reason != want || f.Servers[1].Error == nil {
 				t.Errorf("odd = %s/%s error %v, want %s with an error", o.State, o.Reason, f.Servers[1].Error, want)
+			}
+			// The other server's blocks are unaffected.
+			for _, b := range f.Blocks {
+				if h := serverIn(t, b, "honest"); h.State != state.Verified || b.State != state.Verified {
+					t.Errorf("block %d: honest %s, block %s, want both verified", b.Height, h.State, b.State)
+				}
+			}
+		})
+	}
+}
+
+// both puts outer in front of inner.
+func both(outer, inner func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler { return outer(inner(next)) }
+}
+
+// A withholder that has shown itself cannot stop the run that would name it
+// by answering a request with an error a v1 server never gives Canary. Once
+// it has answered /info and signed a valid record in this run, Canary
+// records that answer like an outage. Here it refuses one block's list with
+// not_found: that block reads
+// Can't be checked for it, with a warning naming it, and the run still saves
+// the evidence it found in another block.
+func TestCheckWithholderCannotStopTheRun(t *testing.T) {
+	chain := coretest.NewChain(t)
+	chain.MineEmpty(2)
+	victim := chain.PayToTaproot(coretest.P2WPKH)
+	refused := chain.Mine(victim) // height 3
+	caught := chain.PayToTaproot(coretest.P2TR, coretest.P2WPKH)
+	withheld := chain.Mine(caught) // height 4
+	chain.MineEmpty(3)
+	tip, _ := chain.Tip()
+	w := &world{chain: chain, rest: coretest.Serve(t, chain), block: withheld, height: 4, target: caught, tip: tip, dir: t.TempDir()}
+
+	refuse := answerOn("/tweaks/"+refused.BlockHash().String(), http.StatusNotFound, "not_found")
+	servers := []server{w.honest(t, "honest", 1), w.withholder(t, "withholder", 2, refuse)}
+	victimID := victim.TxHash().String()
+	r := runCLI(t, w.args(servers, "--expect", victimID+"@"+refused.BlockHash().String())...)
+	wantExit(t, r, 1)
+
+	f := loadState(t, w.statePath())
+	if len(f.Blocks) != int(tip)+1 {
+		t.Fatalf("%d blocks saved, want %d", len(f.Blocks), tip+1)
+	}
+
+	// The refused list: Can't be checked for the withholder, with the
+	// list_not_served warning naming it. The honest server still decides
+	// the block.
+	b := blockAt(t, f, 3)
+	if s := serverIn(t, b, "withholder"); s.State != state.Unresolvable || s.Reason != state.ListNotServed {
+		t.Errorf("block 3: withholder = %s/%s, want unresolvable/list_not_served", s.State, s.Reason)
+	}
+	if b.State != state.Verified || b.Reason != state.RecordsAgree {
+		t.Errorf("block 3 = %s/%s, want verified/records_agree from the honest server", b.State, b.Reason)
+	}
+
+	// Every block still reads Checked for the honest server.
+	for _, b := range f.Blocks {
+		if h := serverIn(t, b, "honest"); h.State != state.Verified {
+			t.Errorf("block %d: honest = %s/%s, want verified", b.Height, h.State, h.Reason)
+		}
+	}
+
+	var warned, accused *state.Finding
+	for i := range f.Findings {
+		x := &f.Findings[i]
+		switch {
+		case x.Kind == state.KindWarning && x.Reason == state.ListNotServed && x.Block.Height == 3:
+			warned = x
+		case x.Kind == state.KindWithheld && x.Block.Height == 4:
+			accused = x
+		default:
+			t.Errorf("unexpected finding %+v", *x)
+		}
+	}
+	if warned == nil || warned.Servers[0].Label != "withholder" {
+		t.Errorf("findings = %+v, want a list_not_served warning naming the withholder at block 3", f.Findings)
+	}
+	if accused == nil || accused.Servers[0].Label != "withholder" || accused.Reason != state.AbsentInWindow ||
+		accused.Evidence == nil || !accused.Provable {
+		t.Fatalf("findings = %+v, want a provable absent_in_window finding against the withholder at block 4", f.Findings)
+	}
+	rep, err := evidence.Verify(readFile(t, filepath.Join(w.evidenceDir(), *accused.Evidence)))
+	if err != nil || rep.Code != evidence.CodeOK {
+		t.Errorf("the evidence file does not check out: %v %+v", err, rep)
+	}
+
+	if e := f.Servers[1].Error; e == nil || *e != wording.ServerListUnanswered(3) {
+		t.Errorf("withholder error = %v, want %q", e, wording.ServerListUnanswered(3))
+	}
+	if !f.Servers[1].PublishesRecords || !f.Servers[1].Reachable {
+		t.Errorf("withholder = %+v, want reachable and publishing records", f.Servers[1])
+	}
+
+	// The tripwire cannot read the refused list, so the payment is
+	// unresolvable for the withholder, not found and not withheld.
+	p := f.ExpectedPayments[0]
+	if p.Txid != victimID || p.Outcome != "unresolvable" || len(p.Servers) != 2 ||
+		p.Servers[0].Outcome != "found" || p.Servers[1].Outcome != "unresolvable" {
+		t.Errorf("payment = %+v, want found by honest and unresolvable for the withholder", p)
+	}
+}
+
+// resignTip puts tip in the receipt for one block's list and signs the
+// receipt again with sk, as a server that claims that tip would.
+func resignTip(t *testing.T, sk [32]byte, blockHash string, tip uint32) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/tweaks/"+blockHash {
+				next.ServeHTTP(w, r)
+				return
+			}
+			rec := httptest.NewRecorder()
+			next.ServeHTTP(rec, r)
+			for k, v := range rec.Header() {
+				w.Header()[k] = v
+			}
+			rc, err := wire.DecodeReceiptHeader(rec.Header().Get(wire.ReceiptHeader))
+			if err == nil {
+				rc.TipHeight = tip
+				rc, err = wire.SignReceipt(rc, sk)
+			}
+			if err != nil {
+				t.Errorf("re-sign the receipt: %v", err)
+			} else {
+				w.Header().Set(wire.ReceiptHeader, wire.EncodeReceiptHeader(rc))
+			}
+			w.WriteHeader(rec.Code)
+			_, _ = w.Write(rec.Body.Bytes())
+		})
+	}
+}
+
+// A withholder can sign a tip that puts the hidden block past the window.
+// Core's chain contradicts any such tip far from Core's own, so the run names
+// the withholder with false_chain_claim. That holds for a tip too high for
+// Core's REST interface to read: Core refuses that request with 400, and the
+// refusal must not stop the run that names the withholder.
+func TestCheckFalseSignedTipNamesTheWithholder(t *testing.T) {
+	tests := []struct {
+		name string
+		tip  uint32
+	}{
+		{"far above Core's tip", 1000},
+		{"above any height Core reads", 1 << 31},
+		{"the largest height", math.MaxUint32},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t)
+			k := testKey(2)
+			id := w.targetID()
+			liar := server{label: "withholder", url: startIndexer(t, w.rest, k, &id, resignTip(t, k, w.blockHash(), tt.tip)).URL, pubkey: pubHex(t, k)}
+			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), liar})...)
+			wantExit(t, r, 1)
+
+			f := loadState(t, w.statePath())
+			b := blockAt(t, f, w.height)
+			if s := serverIn(t, b, "withholder"); s.State != state.Compromised || s.Reason != state.FalseChainClaim {
+				t.Errorf("withholder = %s/%s, want compromised/false_chain_claim", s.State, s.Reason)
+			}
+			if b.State != state.Compromised || b.Reason != state.FalseChainClaim {
+				t.Errorf("block = %s/%s, want compromised/false_chain_claim", b.State, b.Reason)
+			}
+			if len(f.Findings) != 1 {
+				t.Fatalf("findings = %+v, want one", f.Findings)
+			}
+			x := f.Findings[0]
+			if x.Kind != state.KindWithheld || x.Reason != state.FalseChainClaim || x.Servers[0].Label != "withholder" ||
+				x.Evidence != nil || x.Provable {
+				t.Errorf("finding = %+v, want a false_chain_claim against the withholder, not provable, with no file", x)
+			}
+		})
+	}
+}
+
+// A record request refused with not_found, from a server that answered /info
+// and signed a valid record in this run, reads Not checked like an outage.
+// Canary decides after the record pass, so the refused block may come before
+// every valid record. Here it is the first block of the range.
+func TestCheckRefusedRecordReadsLikeAnOutage(t *testing.T) {
+	w := newWorld(t)
+	first := w.chain.Block(0).BlockHash().String()
+	k := testKey(4)
+	odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, answerOn("/commitment/"+first, http.StatusNotFound, "not_found")).URL, pubkey: pubHex(t, k)}
+	r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
+	wantExit(t, r, 0)
+
+	f := loadState(t, w.statePath())
+	b := blockAt(t, f, 0)
+	if o := serverIn(t, b, "odd"); o.State != state.Unverified || o.Reason != state.ServerUnreachable {
+		t.Errorf("block 0: odd = %s/%s, want unverified/server_unreachable", o.State, o.Reason)
+	}
+	if b.State != state.Verified || b.Reason != state.OwnRecord {
+		t.Errorf("block 0 = %s/%s, want verified/own_record from the honest server", b.State, b.Reason)
+	}
+	for _, b := range f.Blocks[1:] {
+		if b.State != state.Verified || b.Reason != state.RecordsAgree {
+			t.Errorf("block %d = %s/%s, want verified/records_agree", b.Height, b.State, b.Reason)
+		}
+	}
+	if e := f.Servers[1].Error; e == nil || *e != wording.ServerRecordRefused(0) {
+		t.Errorf("odd error = %v, want %q", e, wording.ServerRecordRefused(0))
+	}
+	if len(f.Findings) != 0 {
+		t.Errorf("findings = %+v, want none", f.Findings)
+	}
+}
+
+// Until a server has answered /info and signed a record that verifies under
+// its pin in this run, an answer outside the v1 API still means a wrong
+// --indexer URL or a bug. The run stops with exit code 5 and saves nothing.
+func TestCheckOutsideTheAPIStopsTheRunBeforeTheServerShowsItself(t *testing.T) {
+	tests := []struct {
+		name     string
+		wrap     func(w *world) func(http.Handler) http.Handler
+		wrongPin bool
+		cause    string // the request whose answer stopped the run
+	}{
+		{"/info not_found", func(*world) func(http.Handler) http.Handler {
+			return answerOn("/info", http.StatusNotFound, "not_found")
+		}, false, "GET /info"},
+		{"every record not_found", func(*world) func(http.Handler) http.Handler {
+			return answerOn("/commitment/", http.StatusNotFound, "not_found")
+		}, false, "GET /commitment/"},
+		{"no record verifies under the pin", func(w *world) func(http.Handler) http.Handler {
+			return answerOn("/commitment/"+w.blockHash(), http.StatusNotFound, "not_found")
+		}, true, "GET /commitment/"},
+		{"/info gave no answer", func(w *world) func(http.Handler) http.Handler {
+			return both(dropOn("/info"), answerOn("/tweaks/"+w.blockHash(), http.StatusNotFound, "not_found"))
+		}, false, "GET /tweaks/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t)
+			k := testKey(4)
+			odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, tt.wrap(w)).URL, pubkey: pubHex(t, k)}
+			if tt.wrongPin {
+				odd.pubkey = pubHex(t, testKey(5))
+			}
+			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
+			wantExit(t, r, 5)
+			if !strings.Contains(r.stderr, wording.CheckServerUnusable("odd", odd.url)) {
+				t.Errorf("stderr lacks the unusable server:\n%s", r)
+			}
+			if !strings.Contains(r.stderr, wording.CLIDetails("canary: "+tt.cause)) || !strings.Contains(r.stderr, "not_found") {
+				t.Errorf("stderr lacks the cause %q:\n%s", tt.cause, r)
+			}
+			if _, err := os.Stat(w.statePath()); !os.IsNotExist(err) {
+				t.Errorf("a stopped run wrote a state file: %v", err)
 			}
 		})
 	}
@@ -904,9 +1163,11 @@ func TestCheckNeverNamesAnotherFindingsEvidence(t *testing.T) {
 	}
 }
 
-// canary check v1 refuses signet. The chain name does not say which signet,
-// and a custom signet's magic comes from its challenge. The formats doc
-// says check accepts every network it names, so this pins the difference.
+// canary check v1 accepts regtest and main only, and refuses signet. Every
+// signet reports the chain name "signet", and a custom signet's magic comes
+// from its challenge, so the name cannot say which magic to check against.
+// Signet needs a flag that names the network, planned after v1. The run
+// stops with exit code 5, says why on one line, and saves nothing.
 func TestCheckRefusesSignet(t *testing.T) {
 	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/chaininfo.json" {
@@ -921,8 +1182,14 @@ func TestCheckRefusesSignet(t *testing.T) {
 	r := runCLI(t, "check", "--indexer", "http://127.0.0.1:1=a", "--pubkey", "a=none", "--core-rest", core.URL+"/rest",
 		"--state", statePath, "--evidence-dir", filepath.Join(dir, "evidence"))
 	wantExit(t, r, 5)
-	if !strings.Contains(r.stderr, wording.CheckCoreChain("signet")) {
-		t.Errorf("stderr lacks the chain refusal:\n%s", r)
+	want := `canary check: Bitcoin Core reports chain "signet". canary check v1 runs on regtest and main only. ` +
+		"Every signet reports that same name, so Canary can't tell which signet Core is on. " +
+		"Signet needs a flag that names the network, which is planned after v1.\n"
+	if r.stderr != want {
+		t.Errorf("stderr = %q\nwant     %q", r.stderr, want)
+	}
+	if r.stdout != "" {
+		t.Errorf("stdout = %q, want nothing before the refusal", r.stdout)
 	}
 	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 		t.Error("a refused run wrote a state file")

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/Sky-walkerX/canary/canonical"
@@ -79,6 +81,16 @@ func (s *serverRun) note(sentence string, err error) {
 // the last failed request's, because that request is the cause.
 func (s *serverRun) notAsked() {
 	s.lastErr = wording.ServerNotAsked(maxDownStreak)
+}
+
+// shown reports whether the server has shown in this run that it is a v1
+// server: its /info answered as canary-info/1, and at least one record it
+// served verified under its pinned key. After that, an answer outside the
+// v1 API for one block is the server refusing that block, not a wrong
+// --indexer URL. Canary records it like an outage, so a server cannot stop
+// the run that would name it.
+func (s *serverRun) shown() bool {
+	return s.info != nil && slices.Contains(s.valid, true)
 }
 
 // runCheck is canary check.
@@ -271,9 +283,15 @@ func (ch *checker) fetchInfo() int {
 // fetchRecords is the first pass: every pinned server's signed record for
 // every checked block. It comes before any list, because a missing record
 // raises a warning only when the server signed records on both sides of it.
+//
+// An answer outside the v1 API marks its block unreachable. Whether it
+// stops the run waits for the end of the server's pass, so the order of the
+// blocks never decides it: the run stops only when the server never showed
+// it is a v1 server.
 func (ch *checker) fetchRecords() int {
 	n := len(ch.blocks)
 	for _, s := range ch.runs {
+		var refused *response // the first answer outside the v1 API
 		s.records, s.unreachable, s.valid = make([][]byte, n), make([]bool, n), make([]bool, n)
 		if s.cfg.pubkey == nil {
 			// A server pinned as none signs nothing, so there is no record
@@ -305,8 +323,20 @@ func (ch *checker) fetchRecords() int {
 			case answerStopped:
 				return ch.interrupted()
 			default:
-				return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
+				// Without a usable /info, the server cannot show itself in
+				// this run, so there is nothing to wait for.
+				if s.info == nil {
+					return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
+				}
+				s.unreachable[i] = true
+				s.note(wording.ServerRecordRefused(b.height), r.err)
+				if refused == nil {
+					refused = &r
+				}
 			}
+		}
+		if refused != nil && !s.shown() {
+			return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), refused.err)
 		}
 	}
 	return 0
@@ -318,7 +348,21 @@ type coreChain struct {
 	c   *core.Client
 }
 
+// maxCoreHeight is the highest height Core's REST interface reads. Core
+// parses the height as a signed 32-bit number and answers 400 to anything
+// larger, so no chain it serves has a block above it.
+const maxCoreHeight = math.MaxInt32
+
+// ActiveHash returns Core's block hash at height. The height comes from a
+// server's signed receipt, so the server picks it. Core answers a height
+// above maxCoreHeight with 400, not 404, and that error would stop the run
+// and blame Core. So Canary answers that height itself: no block is there.
+// It does not answer locally for every height above this run's tip, because
+// Core may reach that height during a long run and confirm an honest tip.
 func (x coreChain) ActiveHash(height uint32) ([32]byte, bool, error) {
+	if height > maxCoreHeight {
+		return [32]byte{}, false, nil
+	}
 	h, err := x.c.BlockHash(x.ctx, height)
 	if errors.Is(err, core.ErrNotFound) {
 		return [32]byte{}, false, nil
@@ -380,7 +424,13 @@ func (ch *checker) evaluate(payments []declared) ([]state.Block, map[int]ladder.
 				case answerStopped:
 					return nil, nil, ch.interrupted()
 				default:
-					return nil, nil, ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
+					// An answer outside the v1 API. From a server that has
+					// shown itself, it is a list not served, with the
+					// warning inside the window, like any refused list.
+					if !s.shown() {
+						return nil, nil, ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
+					}
+					s.note(wording.ServerListUnanswered(b.height), r.err)
 				}
 			}
 			servers[j] = ls

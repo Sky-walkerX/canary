@@ -39,7 +39,10 @@ const (
 	// body over the limit. It carries no signature, so it proves nothing.
 	answerDown
 	// answerUnusable is an answer a v1 server never gives Canary, such as
-	// bad_block_hash or not_found. It means a wrong URL or a bug.
+	// bad_block_hash or not_found. Before the server has shown in the run
+	// that it is a v1 server, it means a wrong URL or a bug, and the run
+	// stops. After that, it is the server refusing one block, and canary
+	// check records it like an outage.
 	answerUnusable
 	// answerSkipped means Canary did not send the request, because the
 	// server's last requests got no answer. The server refused nothing.

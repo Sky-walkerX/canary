@@ -275,7 +275,7 @@ limits follow. The README and the demo's last act state them too.
 |---|---|---|
 | **Output-side withholding** | The server serves the correct `(txid, tweak)` entry. Then it leaves the payment's output out of the new-UTXO filter or the `/utxos` list, marks it spent, or drops its 8-byte prefix from BlindBit v2's `outputs_short`. Wallets on BlindBit v1 then skip the payment without an error | Not detected. Every check passes and the block reads Verified. The sender in [Attacks in scope](#12-attacks-in-scope) knows the output key it created, so this costs it no more than hiding the entry. v2 plans to add each transaction's taproot output keys to its entry. That covers the filter and `outputs_short`. A false spent flag stays outside any per-block commitment, because whether an output is spent depends on later blocks. It remains a limit after v2 |
 | **Hash-only withholding under a declared policy** | A server declares a subtractive policy, such as pruning (`prunes_spent`) or a dust threshold. It serves the victim's entry as its 32-byte hash. The root recomputes and matches, the policy permits the gap, and the retention rule is met because the hash was kept | Passes the per-block check. The block reads *Checked, gap filled*: state `resolved`, reason `hash_retained`. The union ([Union for tweaks](#43-union-for-tweaks-k-of-n-belongs-on-filters)) still recovers the payment when any other server the client consults serves the entry in full. Otherwise nothing in the per-block check catches it. The tripwire can, for a payment the client made itself, when the local Core node shows one of its taproot outputs unspent. That finding is not provable to others ([Canary tripwire](#5-canary-tripwire)). An auditor holding the block can also catch it, by showing the policy did not permit the gap. For example, the transaction behind a hashed entry may still have an unspent taproot output at or above the declared dust threshold ([Policy declaration](#23-policy-declaration)). v1 reads policy from the unsigned `/info`. A server that declares no filtering and still sends a hash gets a warning with the reason `hash_without_policy`. It is never an accusation, because nothing the server signed declares its policy ([v1 formats](2026-09-30-v1-formats.md)) |
-| **Regtest only** | v1 is built and tested on regtest only, against its own reference indexer | Nothing has been shown on signet or mainnet, or with an unmodified wallet in the path |
+| **Regtest only** | v1 is built and tested on regtest only, against its own reference indexer. `canary check` accepts regtest and main, and refuses signet. Every signet reports the same chain name to Bitcoin Core, so Canary cannot know which network magic to check against | Nothing has been shown on signet or mainnet, or with an unmodified wallet in the path. Signet needs a flag that names the network, which is planned after v1 ([v1 formats](2026-09-30-v1-formats.md#9-the-cli)) |
 
 ### 1.6 Non-goals
 
@@ -293,7 +293,7 @@ These are outside the project, on purpose.
    Dana ([Proxy, not observer](#62-proxy-not-observer)).
 6. Not mainnet-scale indexing in v1. v1 is built and tested on regtest only
    ([Limits of v1](#limits-of-v1)). Signet, with bounded block ranges, is the first
-   public network after it.
+   public network after it, once a flag can name the network.
 7. Not a succinct (SNARK) proof of correct indexing. It is named as the last phase, not
    built.
 

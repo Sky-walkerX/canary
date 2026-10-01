@@ -27,7 +27,7 @@ Repo: `github.com/Sky-walkerX/canary`. It stays **private** until submission, be
 publishing early hands the idea to competitors. It goes public, with an MIT `LICENSE`,
 on 5 Oct.
 
-## Current state — 2026-09-30
+## Current state on 2026-10-01
 
 **The design is approved and implementation is under way.** The approval gate passed on
 8 Sep. Write code test-first, within the approved 30 Sep plan.
@@ -37,26 +37,35 @@ on 5 Oct.
 It lives outside the repo. The scored feature roadmap, with the v1 cut line and the v2
 themes, is `docs/roadmap/2026-09-30-feature-roadmap.md`.
 
-| Part | State on 30 Sep |
+**Every part of the v1 detection loop is built and tested, on a synthetic regtest chain
+only.** `internal/core/coretest` builds that chain in Go and serves it the way Core's REST
+interface does. Nothing has run against a real Bitcoin Core node yet.
+
+| Part | State on 1 Oct |
 |---|---|
-| Design doc, sections 1–8 | Settled on 8 Sep. The eight amendments of 30 Sep were applied the same day, under "Amendments of 2026-09-30". Exact byte layouts are in `docs/design/2026-09-30-v1-formats.md` |
-| `canonical`, `commit`, `feed`, `policy`, `internal/testvector` | Built. On the evening of 30 Sep, `go test ./... -count=1` passed in all 7 packages on Go 1.26.4: 80 top-level tests, none failing. That count includes `wire` and `commit.ProveFromLeafHashes`, both added that day and not yet committed |
-| `wire`, including `wire/receipt.go` | In progress. `wire/response.go` is written and its tests pass, not yet committed. `wire/receipt.go` is not written. **Finishing it is the next task** |
-| `cmd/canary-indexer`, the reference indexer with `--withhold-txid` | Not started |
-| `ladder`, minimal, applying the retention rule | Not started |
-| `evidence` | Not started |
-| `cmd/canary`: `check`, `verify`, `status`, `ui` | Not started |
-| Tripwire, tweak check only | Not started |
-| `internal/ui`, `cmd/site`, `cmd/verify-wasm` | Not started; a parallel Claude session builds them |
-| `scripts/demo-regtest.sh` and the committed evidence file | Not started |
+| Design doc, sections 1–8 | Settled on 8 Sep. The eight amendments of 30 Sep are applied, under "Amendments of 2026-09-30". Exact byte layouts are in `docs/design/2026-09-30-v1-formats.md` |
+| `canonical`, `commit`, `feed`, `policy`, `internal/testvector` | Built and tested. `feed` has a relay client, but v1's checker fetches records over HTTP from each server and uses no relay |
+| `wire`: tweak list and signed receipts | Built and tested. The receipt signs the server's tip. Every inside-or-outside decision about the retention window goes through `wire.InsideRetentionWindow` |
+| `cmd/canary-indexer` and `internal/indexer`, with `--withhold-txid` | Built and tested |
+| `ladder`: per-block states and reasons, gaps filled before the root | Built and tested |
+| `evidence`: `canary-evidence/1` files and offline verify | Built and tested |
+| `cmd/canary`: `check`, `verify`, `status`, `ui` | Built and tested. `check --expect` is the v1 tripwire, tweak check only |
+| `internal/ui`, the local dashboard (`canary ui`) | Built and tested. `go run -tags uidev ./cmd/canary-uidev` shows it on sample data |
+| `cmd/site`, the public site generator | Built and tested. It does not copy the browser checker into `site/dist` yet, although the Makefile comment says it does |
+| `cmd/verify-wasm`, the browser checker | Built and tested. `make wasm` gives 8.66 MB raw, 2.66 MB at gzip -9 |
+| End-to-end gate, `TestGate` in `cmd/canary/gate_test.go` | Passes. Two reference indexers on a 209-block synthetic chain, one withholding a taproot payment. `canary check` names the server, block and txid; the evidence file verifies with every connection refused; six one-byte tamperings each fail at their step; the dashboard shows the finding |
+| A run on a real Bitcoin Core regtest node | Not done. `scripts/demo-regtest.sh` is being written, and `bitcoind` is not installed |
+| The committed real evidence file and its CI test | Not done. It comes from that run |
+| Recorded-run page, video, public deploy | Not done |
 
-Also true on the morning of 30 Sep: six commits were not pushed, the repo had no
-`LICENSE`, and no `bitcoind` was installed. CI runs `go vet` and `go test`, and has passed
-on every pushed commit.
+Tests on 1 Oct: `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again
+with `-race`. That is 361 top-level tests plus one fuzz test's seeds, and 706 passing cases
+with subtests. Recount before quoting; other tracks merge into `main`. Everything up to
+`05de74d` is pushed, and CI passed on it. The repo still has no `LICENSE`.
 
-**Next task:** finish the `wire` package with receipts (`wire/receipt.go`), then the
-reference indexer. The state-file and evidence-file JSON schemas were frozen on 30 Sep in
-the formats doc, because the UI reads them.
+**Next task:** run `scripts/demo-regtest.sh` once `bitcoind` is installed. Then commit the
+real evidence file it writes, with a CI test that verifies it. Then build the recorded-run
+page from that run.
 
 Where things are:
 
@@ -146,7 +155,9 @@ Each rule says what not to do and why. The positive target follows where it help
   self-asserted and can be backdated. Each record is tied to a block by its hash, and
   order comes from the chain.
 - **Don't say v1 "runs only on regtest".** Say "v1 is built and tested on regtest only",
-  because `canary check` accepts other networks and prints a notice.
+  because `canary check` also accepts mainnet and prints a notice there. It refuses
+  signet (decided 1 Oct). Until a real Core run lands, also say the tests use a synthetic
+  chain.
 - **Don't claim v1 tests two independent implementations.** Its reference indexer reuses
   `canonical`, and the docs must say so.
 - **Don't make a claim the roadmap rejects,** such as amounts, a score, "provably
@@ -226,6 +237,8 @@ Each has its full reason, and its history, in [docs/decisions.md](docs/decisions
 | Coverage, not alarms, with six states | Disputed is split from Compromised, because root divergence does not say which server lied |
 | Go | blindbit-oracle, silentiumd and go-bip352 are all Go |
 | v1 on regtest; signet next; no mainnet | Regtest needs no public server or coins and mines on demand |
+| v1 accepts regtest and main only (1 Oct) | Core reports only the name "signet", and a custom signet takes its magic from its challenge. Guessing the default magic would sign or check every record for the wrong network, and nothing would fail. So `canary check` and the reference indexer both refuse signet, through `core.NetworkFromChain`. The formats doc still says `check` accepts every network it names; `TestCheckRefusesSignet` pins the difference |
+| A refused list is a per-block result, never an abort (1 Oct) | A 404 `unknown_block` or a 5xx on `/tweaks` after a valid record reads Can't be checked, `list_not_served`, with a warning naming the server inside the window. Aborting the run would hand one server a veto over the check of every other server and block. Only answers a v1 server never gives, such as `not_found`, stop the run with exit code 5 |
 | No daemon and no proxy in v1 | `canary check` writes a state file, `canary ui` reads it. The v2 proxy targets BlindBit v1 clients and refuses Data withheld and Servers disagree blocks only |
 | The v1 reference indexer reuses `canonical` | Saves 4–6 hours; the docs say v1 does not test independent implementations |
 | The output hole is named now, fixed in v2 | The entry is `(txid, tweak)`; output keys join it in v2 |

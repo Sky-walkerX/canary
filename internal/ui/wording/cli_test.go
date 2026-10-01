@@ -22,14 +22,15 @@ func cliText() []string {
 		CheckExpectNotInBlock(strings.Repeat("ab", 32), strings.Repeat("cd", 32)),
 		CheckExpectBlockUnknown(strings.Repeat("cd", 32)),
 		CheckExpectNotChecked(strings.Repeat("ab", 32), strings.Repeat("cd", 32), 0, 100),
-		ServerInfoFailed, ServerRecordUnanswered(3), ServerRecordRefused(3), ServerRecordRejected(3),
+		ServerInfoFailed, ServerInfoUnusable, ServerRecordUnanswered(3), ServerRecordRefused(3), ServerRecordRejected(3),
 		ServerListUnanswered(3), ServerNotAsked(3), ServerReceiptRejected(3), ServerListRejected(3),
-		CheckServerLastError("honest", ServerListUnanswered(3)), CheckInterrupted,
+		CheckServerLastError("honest", ServerListUnanswered(3)), CheckServerInfoError("honest", ServerInfoFailed), CheckInterrupted,
 		CheckExpectNotFound(strings.Repeat("ab", 32)), CheckNoHome("state file"), CheckPaymentEntry(strings.Repeat("ab", 32)),
 		CheckStateUnreadable("/s.json"), CheckStateNewer("/s.json", "canary-state/2"),
 		CheckStateOtherNetwork("/s.json", "main", "regtest"),
 		CheckCoreUnreachable("http://127.0.0.1:18443/rest"), CheckCoreSyncing, CheckCoreChain("testnet4"), CheckCoreChain("signet"),
-		CheckServerUnusable("honest", "http://127.0.0.1:8081"), CheckWriteState("/s.json"),
+		CheckServerUnusable("honest", "http://127.0.0.1:8081"), CheckServerUnusablePinnedNone("honest", "http://127.0.0.1:8081"),
+		ServerRecordTooLarge(3, 200000, 5), ServerRecordTooLarge(3, 1, 1), ServerRecordTooLarge(3, 3, 2), CheckWriteState("/s.json"),
 		CheckWriteEvidence("/e/x.json"), CheckStarting(0, 212, 2), CheckDroppedFinding("827a8d3f502e", strings.Repeat("cd", 32)),
 		CheckSaved("/s.json"),
 		StatusMissing("/s.json"), StatusUnreadable("/s.json"), StatusNewer("/s.json", "canary-state/2"),
@@ -122,6 +123,29 @@ func TestCLILines(t *testing.T) {
 		// not_found, bad_block_hash and unsupported_parameter are v1 error
 		// codes. A v1 server never gives them to Canary's well-formed requests.
 		{ServerRecordRefused(3), "It answered the request for block 3's record with an error a v1 server never gives Canary."},
+		// A failed /info no longer stops the run, so the error says what the
+		// server loses: its declared policy.
+		{ServerInfoFailed, "Its /info did not answer, so its policy is unknown."},
+		{ServerInfoUnusable, "Its /info did not answer as canary-info/1, so its policy is unknown."},
+		// A later error replaces the /info one as the server's last error, so
+		// the terminal prints the /info one on a line of its own.
+		{CheckServerInfoError("withholder", ServerInfoUnusable),
+			"Error from withholder: Its /info did not answer as canary-info/1, so its policy is unknown."},
+		// The run stops for a server only when nothing it sent verified.
+		{CheckServerUnusable("odd", "http://127.0.0.1:8081"), "Server odd at http://127.0.0.1:8081 answered in a way " +
+			"Canary can't use, and none of its records verified under its pin. Check its --indexer URL and --pubkey."},
+		// A server pinned as none signs nothing, so Canary asked it for no
+		// record, and the sentence names no pin to check.
+		{CheckServerUnusablePinnedNone("odd", "http://127.0.0.1:8081"), "Server odd at http://127.0.0.1:8081 did not answer " +
+			"/info as canary-info/1. It is pinned as none, so nothing else shows that the URL reaches a v1 server. Check its --indexer URL."},
+		// BIP-352 gives at most one entry per transaction and none for the
+		// coinbase, so the count excludes the coinbase.
+		{ServerRecordTooLarge(3, 200000, 5), "Its record for block 3 claims 200000 entries, " +
+			"but the block has only 4 transactions besides the coinbase. Canary counts it as no record."},
+		{ServerRecordTooLarge(3, 1, 1), "Its record for block 3 claims 1 entry, " +
+			"but the block has no transactions besides the coinbase. Canary counts it as no record."},
+		{ServerRecordTooLarge(3, 3, 2), "Its record for block 3 claims 3 entries, " +
+			"but the block has only 1 transaction besides the coinbase. Canary counts it as no record."},
 		{Reason("server_unreachable"), "The server did not answer, said it was not ready, " +
 			"or refused the request with an error a v1 server never gives Canary."},
 	}

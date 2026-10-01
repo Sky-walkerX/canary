@@ -16,6 +16,36 @@ filling gaps, and working out which of two servers lied.
 
 ---
 
+## 1 October 2026: what one server can cost a run
+
+A review found that a server whose records verify could still stall `canary check` or
+exhaust its memory. A record can sign any `n`. The server signed `n` = 200,000 for one
+block and served that many `absent` positions with no receipt. Each became a finding, and
+finding ids were deduplicated by a linear scan. That run took more than a minute, and the
+cost grows with the square of `n`. A 64 MiB list would need about 6.6 GB just to decode.
+
+A second review found the same route through the record itself. A record may carry any
+extra tag its server signs, and Canary read records to 1 MiB and kept every one until the
+run ended, valid or not. The review measured a server that padded its records with a
+1 MiB tag: the run reached a 1.06 GB heap at 300 blocks and 2.19 GB at 600, against about
+20 MB for honest servers. The run exited 0 and named no one.
+Memory grew with the range, and the default range is the whole chain, so the process
+would be killed before it saved anything, and the server would never be named. Each
+block's ladder result was also kept to the end, records, gaps and proofs included, though
+only blocks with a declared payment need it.
+
+| Decision | Why |
+|---|---|
+| **A record whose `n` is not below its block's transaction count fails the record checks.** It counts as no record, as a wrong network tag does. Canary asks Core for the block when `n` is above zero | BIP-352 gives at most one entry per transaction and none for the coinbase, so such a record contradicts the user's own node. Counting it as no record bounds a block's findings by its real size |
+| **Not an accusation.** Reporting it as one `served_contradicts_record` finding was considered and rejected | That reason, and its wording, say the served list contradicts the record. Here the record contradicts the chain, and no list was read. A new reason code would change the frozen state format. The server gains nothing over refusing the record, which reads the same |
+| **A list is read to `4 + 66n` bytes at most.** A longer answer counts as no list, like any answer over a size limit | No list of `n` positions is longer. Without the limit, any record could be paired with a 64 MiB list of 1-byte positions. A list of the wrong length that fits is still accused |
+| **A record is read to 4096 bytes at most.** A longer answer counts as no answer: Not checked, `server_unreachable` | An honest record is 689 bytes on regtest and under 720 at any height. 4096 is about six times that, so padding costs a run a few times an honest server's memory, never more. With records at the limit, 600 blocks peaked at 21 MB, against 16 MB for an honest server. It is not an accusation: no v1 reason code fits, and a v1 server never signs a record that long |
+| **Only a record that passes the record checks is kept** | The ladder reaches the same no-record result for a record that fails as for none, so the bytes are dropped at once. A server whose records never verify can no longer fill memory with 200 answers that are not records |
+| **A block's ladder result is kept only while that block is read** | The rows for declared payments are taken from it then. Keeping every result held each block's records, gaps and proofs until the run ended |
+| **A record's signature alone proves the `--indexer` URL** | A record that verifies under the pin and then fails on its `n` still shows the URL reaches the pinned server. So it keeps the server from stopping the run, as any verified record does |
+| **Finding ids are deduplicated with a map** | The linear scan made a block with many findings cost the square of their number |
+| **A slow server is a named limit, not handled** | Each request may take 30 seconds, and a slow answer is still an answer. A per-server time budget would make coverage depend on timing, and tests on timing are flaky. The formats doc lists the limit |
+
 ## 1 October 2026: plain-language pass over the design
 
 The design document was rewritten in plain language. No rule, number, byte layout or
@@ -54,7 +84,7 @@ those formats, so no version number changed.
 | **A new warning, `hash_without_policy`.** A server whose `/info` declares no filtering sent a position as a hash only | Nothing the server signed declares its policy in v1, so the contradiction rests on unsigned data. It is a warning, never an accusation |
 | **Declared-payment findings split in two.** If the server's signed record leaves the declared entry out, that is always an accusation, with no check on whether the outputs are spent. If the list carries only a hash, or marks the entry absent outside the retention window, that is an accusation only in one case. Core must show one of the payment's taproot outputs unspent | A record commits to every entry in the block, spent or not, so no policy explains a gap in the record. A gap in the list can be honest pruning when the outputs are spent. Neither finding is provable to others in v1: the evidence format has no claim for a missing entry, and cannot show an output unspent |
 | **Status line.** `canary status` prints the formats doc's line in UTC. The dashboard adds the viewer's local time and a relative age, such as "6 min ago" | A terminal log reads best in one fixed time zone. A person glancing at a dashboard wants their own time and how stale the result is |
-| **The v1 tripwire is one declared payment.** Scheduled test payments at random times and amounts wait for v2, roadmap feature F25 | v1 has no scheduler and picks no amounts. The single declared payment is enough for the demo's detection scene |
+| **The v1 tripwire is one declared payment.** Scheduled test payments at random times and amounts wait for v2, roadmap feature F25 | v1 has no scheduler and picks no amounts. The single declared payment is enough for the demo's detection scene. *Changed 1 Oct:* `--expect` is repeatable, so the tripwire is the payments you declare, one flag each |
 
 ## 30 September 2026: the v1 plan
 
@@ -69,7 +99,7 @@ cut line and the dates after v1.
 |---|---|
 | **One developer plus Claude.** Parallel Claude sessions build the UI and the docs, and the developer reviews them. Merges go into `main` one at a time | The three-person split in the 8 Sep plans no longer applies. The plan budgets about 50 to 55 hours of the developer's time before 5 Oct, and the core loop alone needs 45 to 60 hours of work. When time runs short, the core detection loop wins |
 | **Ship v1 by Monday 5 Oct 2026, 23:59 IST, then keep building** | The roadmap holds the later themes: 13 to 25 Oct, the BOSS Summit from 26 Oct to 1 Nov, and btc++ Seoul on 5 and 6 Nov |
-| **Regtest for v1** | It needs no public server and no signet coins, and blocks are mined on demand. The demo video says why. The wording is "v1 is built and tested on regtest only", not "runs only on regtest", because `canary check` accepts other networks and prints a notice that they are untested. Signet and mainnet come after v1 |
+| **Regtest for v1** | It needs no public server and no signet coins, and blocks are mined on demand. The demo video says why. The wording is "v1 is built and tested on regtest only", not "runs only on regtest", because `canary check` also accepts main and prints a notice there that v1 is tested on regtest only. It refuses every other chain. Signet needs a flag that names the network, which is planned after v1. *Changed 1 Oct:* before, the line said `check` accepted other networks too |
 | **No daemon and no proxy in v1.** `canary check` writes a state file, and `canary ui` reads it | A proxy in the wallet's path costs 22 to 26 hours. It returns after v1, as a reverse proxy for the BlindBit v1 HTTP interface |
 | **The v1 reference indexer reuses `canonical`** | It saves 4 to 6 hours of building a separate path. It breaks the rule that the indexer computes entries independently, so the docs must say v1 does not test two independent implementations against each other. The rule applies again to any later indexer |
 | **The output hole is named now and fixed in v2** | Canary's entry is a txid and a tweak. Wallets decide whether a payment exists from output data Canary does not commit to: the BlindBit v1 filter and `/utxos`, or v2's `outputs_short`. So "Checked" means the tweak list was checked, never that payments were. Output keys in the entry cost 6 to 10 hours the budget does not have |

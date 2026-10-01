@@ -1318,10 +1318,21 @@ func CheckCoreChain(chain string) string {
 	return msg
 }
 
-// CheckServerUnusable is the error for a server whose answer Canary cannot
-// use, usually a wrong --indexer URL.
+// CheckServerUnusable is the error for a server that proves nothing in the
+// run: an answer outside the v1 API, no canary-info/1 /info, and no record
+// that verified under its pin. That is usually a wrong --indexer URL, and
+// sometimes a wrong pin.
 func CheckServerUnusable(label, url string) string {
-	return "Server " + label + " at " + url + " answered in a way Canary can't use. Check its --indexer URL."
+	return "Server " + label + " at " + url + " answered in a way Canary can't use, " +
+		"and none of its records verified under its pin. Check its --indexer URL and --pubkey."
+}
+
+// CheckServerUnusablePinnedNone is CheckServerUnusable for a server pinned as
+// none. Canary asks such a server for no record, so only its /info could show
+// that the URL reaches a v1 server, and it did not.
+func CheckServerUnusablePinnedNone(label, url string) string {
+	return "Server " + label + " at " + url + " did not answer /info as canary-info/1. " +
+		"It is pinned as none, so nothing else shows that the URL reaches a v1 server. Check its --indexer URL."
 }
 
 // CheckWriteState is the error when the state file cannot be written.
@@ -1361,8 +1372,16 @@ func CheckSaved(path string) string {
 // sentence. The Go error's own text goes to the terminal after
 // CheckServerLastError and CLIDetails, never into the state file.
 
-// ServerInfoFailed is a server's error when /info did not answer.
-const ServerInfoFailed = "Its /info did not answer."
+// ServerInfoFailed is a server's error when /info did not answer, or
+// answered internal or not_ready. The run goes on. The state file then has no
+// policy for the server, and the dashboard shows it as not declared.
+const ServerInfoFailed = "Its /info did not answer, so its policy is unknown."
+
+// ServerInfoUnusable is a server's error when /info answered with something
+// other than canary-info/1. The run goes on only when one of the server's
+// records verified under its pin. The state file then has no policy for the
+// server, and the dashboard shows it as not declared.
+const ServerInfoUnusable = "Its /info did not answer as canary-info/1, so its policy is unknown."
 
 // ServerRecordUnanswered is a server's error when a record request failed.
 func ServerRecordUnanswered(height uint32) string {
@@ -1370,8 +1389,8 @@ func ServerRecordUnanswered(height uint32) string {
 }
 
 // ServerRecordRefused is a server's error when it answered a record request
-// with an error outside the v1 API, after it had shown in the run that it is
-// a v1 server. Canary records the block like an outage.
+// with an error outside the v1 API, and the run went on. Canary records the
+// block like an outage.
 func ServerRecordRefused(height uint32) string {
 	return fmt.Sprintf("It answered the request for block %d's record with an error a v1 server never gives Canary.", height)
 }
@@ -1379,6 +1398,20 @@ func ServerRecordRefused(height uint32) string {
 // ServerRecordRejected is a server's error when a record failed the checks.
 func ServerRecordRejected(height uint32) string {
 	return fmt.Sprintf("Its record for block %d failed Canary's checks.", height)
+}
+
+// ServerRecordTooLarge is a server's error when its record verified under its
+// pin but claims more entries than the block can hold. BIP-352 gives at most
+// one entry per transaction and none for the coinbase. txs is the block's
+// transaction count, coinbase included, as Core reports it.
+func ServerRecordTooLarge(height, n uint32, txs int) string {
+	entries := plural(int(n), "1 entry", strconv.FormatUint(uint64(n), 10)+" entries")
+	others := "only " + plural(txs-1, "1 transaction", strconv.Itoa(txs-1)+" transactions")
+	if txs <= 1 {
+		others = "no transactions"
+	}
+	return fmt.Sprintf("Its record for block %d claims %s, but the block has %s besides the coinbase. "+
+		"Canary counts it as no record.", height, entries, others)
 }
 
 // ServerListUnanswered is a server's error when a list request failed.
@@ -1407,6 +1440,13 @@ func ServerListRejected(height uint32) string {
 // where CLIDetails follows it with the Go error's own text.
 func CheckServerLastError(label, sentence string) string {
 	return "Last error from " + label + ": " + sentence
+}
+
+// CheckServerInfoError introduces a server's /info error on the terminal,
+// when a later error replaced it as the server's last error. It comes before
+// CheckServerLastError, so the reader still learns the policy is unknown.
+func CheckServerInfoError(label, sentence string) string {
+	return "Error from " + label + ": " + sentence
 }
 
 // canary status failures, exit code 3.

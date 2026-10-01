@@ -38,6 +38,9 @@ nsec*
 /tmp/
 /scratch/
 
+# Output of scripts/demo-regtest.sh: state file, evidence files, logs
+demo-out/
+
 # UI screenshots from design reviews
 /.ui-screens/
 

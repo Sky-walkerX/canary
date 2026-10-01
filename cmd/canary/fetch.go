@@ -12,14 +12,29 @@ import (
 	"github.com/Sky-walkerX/canary/policy"
 )
 
-// Response size limits. A list of n full entries is 4 + 66n bytes, so 64 MiB
-// holds a million entries, far past any block. The limits stop a server from
-// streaming without end.
+// Response size limits. They stop a server from streaming without end. A
+// list's limit comes from its record, in listLimit. maxListBody caps it
+// anyway: 64 MiB holds a million full entries, far past any block.
+//
+// maxRecordBody is 4 KiB. An honest record is about 700 bytes, because every
+// field it carries has a bounded length. A server can still sign extra tags
+// into its own record, and the record verifies. canary check keeps each
+// valid record until the run ends, so this limit is also the most one
+// server's record costs the run per block: a few times an honest record.
 const (
 	maxInfoBody   = 1 << 20
-	maxRecordBody = 1 << 20
+	maxRecordBody = 4 << 10
 	maxListBody   = 64 << 20
 )
+
+// listLimit is the most bytes a list of n positions can take: the 4-byte
+// count, then n positions of at most 1 + 32 + 33 bytes each. A longer answer
+// cannot be a list of n positions. Reading no more keeps the decoder from
+// building millions of positions for a record that names a few, because each
+// 1-byte absent position becomes about 98 bytes in memory.
+func listLimit(n uint32) int64 {
+	return min(4+66*int64(n), maxListBody)
+}
 
 // maxDownStreak is how many requests in a row may fail to get any answer
 // before canary check stops asking that server. Its remaining blocks read as
@@ -39,10 +54,11 @@ const (
 	// body over the limit. It carries no signature, so it proves nothing.
 	answerDown
 	// answerUnusable is an answer a v1 server never gives Canary, such as
-	// bad_block_hash or not_found. Before the server has shown in the run
-	// that it is a v1 server, it means a wrong URL or a bug, and the run
-	// stops. After that, it is the server refusing one block, and canary
-	// check records it like an outage.
+	// bad_block_hash or not_found. canary check records it like an outage,
+	// as the server refusing one block or its /info. It stops the run only
+	// for a server that proves nothing in the run: none of its records
+	// verified and its /info was not canary-info/1. That points to a wrong
+	// URL or a bug.
 	answerUnusable
 	// answerSkipped means Canary did not send the request, because the
 	// server's last requests got no answer. The server refused nothing.
@@ -139,10 +155,12 @@ func (x *indexerClient) commitment(ctx context.Context, hash [32]byte) response 
 	return x.get(ctx, "/commitment/"+core.DisplayHex(hash), maxRecordBody)
 }
 
-// tweaks fetches /tweaks/{blockhash}. canary check always asks for no dust
-// threshold, because it checks the full list, not a wallet's filtered view.
-func (x *indexerClient) tweaks(ctx context.Context, hash [32]byte) response {
-	return x.get(ctx, "/tweaks/"+core.DisplayHex(hash)+"?dust_sat=0", maxListBody)
+// tweaks fetches /tweaks/{blockhash} for a block whose valid record names n
+// entries. canary check always asks for no dust threshold, because it checks
+// the full list, not a wallet's filtered view. A body longer than any list of
+// n positions is over the limit, so it counts as no answer.
+func (x *indexerClient) tweaks(ctx context.Context, hash [32]byte, n uint32) response {
+	return x.get(ctx, "/tweaks/"+core.DisplayHex(hash)+"?dust_sat=0", listLimit(n))
 }
 
 // serverInfo is what canary check reads from /info. The server signs none of

@@ -146,13 +146,16 @@ func (ch *checker) finding(kind string, reason state.Reason, servers []int, b ch
 	}
 }
 
-// add keeps a finding of this run once, by id.
+// add keeps a finding of this run once, by id. The lookup is a map, so a
+// block with many findings costs time in proportion to their number.
 func (ch *checker) add(f state.Finding) {
-	for _, x := range ch.fresh {
-		if x.ID == f.ID {
-			return
-		}
+	if ch.ids[f.ID] {
+		return
 	}
+	if ch.ids == nil {
+		ch.ids = map[string]bool{}
+	}
+	ch.ids[f.ID] = true
 	ch.fresh = append(ch.fresh, f)
 }
 

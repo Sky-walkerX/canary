@@ -7,7 +7,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/Sky-walkerX/canary/canonical"
@@ -35,8 +34,10 @@ type checker struct {
 	byHash map[[32]byte]int  // block hash to its index in blocks
 	runs   []*serverRun      // in --indexer order
 	known  map[[32]byte]bool // blocks Core was asked about for old findings
+	txs    map[[32]byte]int  // transactions per block, as Core counts them
 	runAt  time.Time         // when the run started
 	fresh  []state.Finding   // this run's findings, in the order found
+	ids    map[string]bool   // the ids in fresh
 }
 
 // chainBlock is one height of the checked range and the hash Core gives for
@@ -52,20 +53,36 @@ type serverRun struct {
 	client *indexerClient
 	info   *serverInfo // nil when /info did not answer
 
-	// Per checked block, from the first pass: the record body as served,
-	// whether the record request got no answer, and whether the record
-	// passed the checks.
+	// Per checked block, from the first pass: the record body as served
+	// when it passed the checks, whether the record request got no answer,
+	// whether the record passed the checks, and the n a valid record signs.
 	records     [][]byte
 	unreachable []bool
 	valid       []bool
+	n           []uint32
+
+	// pinned is true once a record's signature verified under the pin, even
+	// a record that then failed on its n. That proves the --indexer URL
+	// reaches the server the pin names.
+	pinned bool
 
 	signs bool          // a list arrived with a valid receipt
 	best  *wire.Receipt // the valid receipt with the highest signed tip
+
+	// refused is the server's first answer outside the v1 API, on /info or
+	// on a record request. Whether it stops the run waits for the end of
+	// the record pass.
+	refused *response
 
 	// The server's last error: a plain sentence for the state file, and the
 	// Go error's own text for the terminal only.
 	lastErr    string
 	lastDetail string
+
+	// The /info error, kept apart because a later error replaces it as the
+	// last error. The terminal still says the server's policy is unknown.
+	infoErr    string
+	infoDetail string
 }
 
 // note keeps sentence as the server's last error, and err's text as its
@@ -83,14 +100,26 @@ func (s *serverRun) notAsked() {
 	s.lastErr = wording.ServerNotAsked(maxDownStreak)
 }
 
-// shown reports whether the server has shown in this run that it is a v1
-// server: its /info answered as canary-info/1, and at least one record it
-// served verified under its pinned key. After that, an answer outside the
-// v1 API for one block is the server refusing that block, not a wrong
-// --indexer URL. Canary records it like an outage, so a server cannot stop
-// the run that would name it.
-func (s *serverRun) shown() bool {
-	return s.info != nil && slices.Contains(s.valid, true)
+// refuse keeps r as the server's first answer outside the v1 API.
+func (s *serverRun) refuse(r response) {
+	if s.refused == nil {
+		s.refused = &r
+	}
+}
+
+// provesNothing reports, once the server's records are in, whether the run
+// must stop for it. That holds only when none of its records verified under
+// its pin, its /info gave no canary-info/1 answer, and at least one of its
+// answers was outside the v1 API. Canary then can't tell a hostile server
+// from a wrong --indexer URL, and a wrong URL is the likelier.
+//
+// A verified signature proves the URL reaches the server the pin names, and
+// a canary-info/1 answer shows it reaches a v1 server. After either, an
+// answer outside the API is the server refusing one block or its /info, and
+// Canary records it like an outage. So a server cannot stop the run that
+// would name it. A server that gave no answer at all is an outage too.
+func (s *serverRun) provesNothing() bool {
+	return s.refused != nil && s.info == nil && !s.pinned
 }
 
 // runCheck is canary check.
@@ -110,7 +139,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	if err != nil {
 		return c.usage(wording.CheckBadCore(cfg.coreREST))
 	}
-	ch := &checker{ctx: ctx, cmd: c, cfg: cfg, core: client, runAt: now(), known: map[[32]byte]bool{}}
+	ch := &checker{ctx: ctx, cmd: c, cfg: cfg, core: client, runAt: now(), known: map[[32]byte]bool{}, txs: map[[32]byte]int{}}
 	for _, s := range cfg.servers {
 		ch.runs = append(ch.runs, &serverRun{cfg: s, client: &indexerClient{base: s.url, hc: hc}})
 	}
@@ -208,7 +237,7 @@ func (ch *checker) run() int {
 	if code := ch.fetchRecords(); code != 0 {
 		return code
 	}
-	blocks, results, code := ch.evaluate(payments)
+	blocks, rows, code := ch.evaluate(payments)
 	if code != 0 {
 		return code
 	}
@@ -234,9 +263,7 @@ func (ch *checker) run() int {
 		Findings:    findings,
 	}
 	f.Coverage, f.Counts = coverage(blocks)
-	for _, d := range payments {
-		f.ExpectedPayments = append(f.ExpectedPayments, ch.paymentState(d, results))
-	}
+	f.ExpectedPayments = rows
 	if ch.ctx.Err() != nil {
 		return ch.interrupted()
 	}
@@ -258,9 +285,10 @@ func (ch *checker) run() int {
 	return exitOK
 }
 
-// fetchInfo reads each server's /info. A server that does not answer is
-// unreachable for this run. One that answers with something other than
-// canary-info/1 is not a v1 server, which stops the run.
+// fetchInfo reads each server's /info. A server that does not answer, or
+// answers with something other than canary-info/1, declares no policy in
+// this run. Whether an answer outside the API stops the run waits for the
+// end of the record pass, in fetchRecords.
 func (ch *checker) fetchInfo() int {
 	for _, s := range ch.runs {
 		info, r := s.client.info(ch.ctx)
@@ -274,7 +302,11 @@ func (ch *checker) fetchInfo() int {
 		case r.kind == answerSkipped:
 			s.notAsked()
 		default:
-			return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
+			s.note(wording.ServerInfoUnusable, r.err)
+			s.refuse(r)
+		}
+		if s.info == nil {
+			s.infoErr, s.infoDetail = s.lastErr, s.lastDetail
 		}
 	}
 	return 0
@@ -286,60 +318,105 @@ func (ch *checker) fetchInfo() int {
 //
 // An answer outside the v1 API marks its block unreachable. Whether it
 // stops the run waits for the end of the server's pass, so the order of the
-// blocks never decides it: the run stops only when the server never showed
-// it is a v1 server.
+// blocks never decides it. The run stops only for a server that proves
+// nothing (provesNothing).
 func (ch *checker) fetchRecords() int {
 	n := len(ch.blocks)
 	for _, s := range ch.runs {
-		var refused *response // the first answer outside the v1 API
-		s.records, s.unreachable, s.valid = make([][]byte, n), make([]bool, n), make([]bool, n)
-		if s.cfg.pubkey == nil {
-			// A server pinned as none signs nothing, so there is no record
-			// to ask for. Without /info it is simply unreachable.
-			for i := range s.unreachable {
-				s.unreachable[i] = s.info == nil
-			}
-			continue
+		s.records, s.unreachable, s.valid, s.n = make([][]byte, n), make([]bool, n), make([]bool, n), make([]uint32, n)
+		if code := ch.fetchServerRecords(s); code != 0 {
+			return code
 		}
-		for i, b := range ch.blocks {
-			r := s.client.commitment(ch.ctx, b.hash)
-			switch r.kind {
-			case answerOK:
-				s.records[i] = r.body
-				// The ladder checks the record again. This pass only learns
-				// which blocks the server signed for.
-				if _, err := ladder.CheckRecord(r.body, *s.cfg.pubkey, b.hash, ch.net); err != nil {
-					s.note(wording.ServerRecordRejected(b.height), err)
-				} else {
-					s.valid[i] = true
-				}
-			case answerNone:
-			case answerDown:
-				s.unreachable[i] = true
-				s.note(wording.ServerRecordUnanswered(b.height), r.err)
-			case answerSkipped:
-				s.unreachable[i] = true
-				s.notAsked()
-			case answerStopped:
-				return ch.interrupted()
-			default:
-				// Without a usable /info, the server cannot show itself in
-				// this run, so there is nothing to wait for.
-				if s.info == nil {
-					return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
-				}
-				s.unreachable[i] = true
-				s.note(wording.ServerRecordRefused(b.height), r.err)
-				if refused == nil {
-					refused = &r
-				}
+		if s.provesNothing() {
+			msg := wording.CheckServerUnusable(s.cfg.label, s.cfg.url)
+			if s.cfg.pubkey == nil {
+				msg = wording.CheckServerUnusablePinnedNone(s.cfg.label, s.cfg.url)
 			}
-		}
-		if refused != nil && !s.shown() {
-			return ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), refused.err)
+			return ch.cmd.fail(exitFailure, msg, s.refused.err)
 		}
 	}
 	return 0
+}
+
+// fetchServerRecords asks one server for its record for every block.
+func (ch *checker) fetchServerRecords(s *serverRun) int {
+	if s.cfg.pubkey == nil {
+		// A server pinned as none signs nothing, so there is no record to
+		// ask for. Without /info it is simply unreachable.
+		for i := range s.unreachable {
+			s.unreachable[i] = s.info == nil
+		}
+		return 0
+	}
+	for i, b := range ch.blocks {
+		r := s.client.commitment(ch.ctx, b.hash)
+		switch r.kind {
+		case answerOK:
+			// The ladder checks the record again. This pass only learns
+			// which blocks the server signed for. It keeps a record's bytes
+			// only when they pass, because the ladder reaches the same
+			// result for a record that fails as for no record. Bytes that
+			// fail are dropped here, so they cost the run nothing.
+			rec, err := ladder.CheckRecord(r.body, *s.cfg.pubkey, b.hash, ch.net)
+			if err != nil {
+				s.note(wording.ServerRecordRejected(b.height), err)
+				continue
+			}
+			s.pinned = true
+			n := rec.Commitment.N
+			fits, txs, err := ch.fits(b.hash, n)
+			if err != nil {
+				return ch.coreFailed(err)
+			}
+			if !fits {
+				// The ladder would accept the signature, so it gets no
+				// record for this block, as for unknown_block.
+				s.note(wording.ServerRecordTooLarge(b.height, n, txs),
+					fmt.Errorf("canary: record for block %s: n=%d, and Core's block holds %d transactions", core.DisplayHex(b.hash), n, txs))
+				continue
+			}
+			s.records[i], s.valid[i], s.n[i] = r.body, true, n
+		case answerNone:
+		case answerDown:
+			s.unreachable[i] = true
+			s.note(wording.ServerRecordUnanswered(b.height), r.err)
+		case answerSkipped:
+			s.unreachable[i] = true
+			s.notAsked()
+		case answerStopped:
+			return ch.interrupted()
+		default:
+			s.unreachable[i] = true
+			s.note(wording.ServerRecordRefused(b.height), r.err)
+			s.refuse(r)
+		}
+	}
+	return 0
+}
+
+// fits reports whether the block can hold a record's n entries, and the
+// block's transaction count when Core was asked. BIP-352 gives at most one
+// entry per transaction and none for the coinbase, so n is at most the count
+// less one. A record that claims more contradicts the user's own node.
+//
+// The check bounds what one record can cost the run. Without it, a record
+// can sign any n, and a list of n absent positions inside the window makes
+// one finding per position. Core is asked once per block, and only for an n
+// above zero.
+func (ch *checker) fits(hash [32]byte, n uint32) (bool, int, error) {
+	if n == 0 {
+		return true, 0, nil
+	}
+	txs, ok := ch.txs[hash]
+	if !ok {
+		blk, err := ch.core.Block(ch.ctx, chainhash.Hash(hash))
+		if err != nil {
+			return false, 0, err
+		}
+		txs = len(blk.Transactions)
+		ch.txs[hash] = txs
+	}
+	return int64(n) < int64(txs), txs, nil
 }
 
 // coreChain answers the ladder's one question about Core's active chain.
@@ -375,14 +452,25 @@ func (x coreChain) ActiveHash(height uint32) ([32]byte, bool, error) {
 
 // evaluate is the second pass. For each block it fetches the list from every
 // server that signed a valid record, runs the ladder, and records the
-// block's state, its findings and their evidence files.
-func (ch *checker) evaluate(payments []declared) ([]state.Block, map[int]ladder.BlockResult, int) {
+// block's state, its findings and their evidence files. It also returns the
+// state file's row for each declared payment, in --expect order.
+//
+// A block's ladder result holds its records, gaps and proofs. evaluate keeps
+// it only while it reads that block, and takes the rows of the payments in
+// the block from it then. Keeping every result to the end would let one
+// server grow the run's memory with every block in the range.
+func (ch *checker) evaluate(payments []declared) ([]state.Block, []state.Payment, int) {
 	below, above := ch.neighbours()
 	for _, s := range ch.runs {
 		s.client.newPass()
 	}
 	out := make([]state.Block, 0, len(ch.blocks))
-	results := map[int]ladder.BlockResult{}
+	rows := make([]state.Payment, len(payments))
+	for k, d := range payments {
+		if d.block < 0 {
+			rows[k] = ch.paymentState(d, ladder.BlockResult{})
+		}
+	}
 	for i, b := range ch.blocks {
 		if ch.ctx.Err() != nil {
 			return nil, nil, ch.interrupted()
@@ -408,7 +496,7 @@ func (ch *checker) evaluate(payments []declared) ([]state.Block, map[int]ladder.
 				}
 			}
 			if s.valid[i] {
-				r := s.client.tweaks(ch.ctx, b.hash)
+				r := s.client.tweaks(ch.ctx, b.hash, s.n[i])
 				switch r.kind {
 				case answerOK:
 					lists[j] = &ladder.List{Body: r.body, Receipt: r.header.Get(wire.ReceiptHeader)}
@@ -424,12 +512,11 @@ func (ch *checker) evaluate(payments []declared) ([]state.Block, map[int]ladder.
 				case answerStopped:
 					return nil, nil, ch.interrupted()
 				default:
-					// An answer outside the v1 API. From a server that has
-					// shown itself, it is a list not served, with the
-					// warning inside the window, like any refused list.
-					if !s.shown() {
-						return nil, nil, ch.cmd.fail(exitFailure, wording.CheckServerUnusable(s.cfg.label, s.cfg.url), r.err)
-					}
+					// An answer outside the v1 API. The server signed a
+					// valid record for this block, so its URL is proven,
+					// and the answer is a list not served. Like any refused
+					// list, it reads Can't be checked, with the warning
+					// inside the window.
 					s.note(wording.ServerListUnanswered(b.height), r.err)
 				}
 			}
@@ -446,14 +533,18 @@ func (ch *checker) evaluate(payments []declared) ([]state.Block, map[int]ladder.
 		if err != nil {
 			return nil, nil, ch.coreFailed(err)
 		}
-		results[i] = res
+		for k, d := range payments {
+			if d.block == i {
+				rows[k] = ch.paymentState(d, res)
+			}
+		}
 		ch.noteServers(b, res)
 		if code := ch.recordFindings(b, res, lists); code != 0 {
 			return nil, nil, code
 		}
 		out = append(out, blockState(b, res))
 	}
-	return out, results, 0
+	return out, rows, 0
 }
 
 // neighbours says, per server and block, whether the server signed a valid
@@ -496,14 +587,21 @@ func (ch *checker) noteServers(b chainBlock, res ladder.BlockResult) {
 
 // printServerErrors puts each server's last error on stderr, with the Go
 // error's own text under it. The state file keeps the plain sentence only.
+// When a later error replaced a failed /info as the last error, the /info
+// error comes first, because it is why the server's policy is unknown.
 func (ch *checker) printServerErrors() {
-	for _, s := range ch.runs {
-		if s.lastErr == "" {
-			continue
+	line := func(text, detail string) {
+		fmt.Fprintf(ch.cmd.stderr, "canary %s: %s\n", ch.cmd.name, text)
+		if detail != "" {
+			fmt.Fprintln(ch.cmd.stderr, wording.CLIDetails(detail))
 		}
-		fmt.Fprintf(ch.cmd.stderr, "canary %s: %s\n", ch.cmd.name, wording.CheckServerLastError(s.cfg.label, s.lastErr))
-		if s.lastDetail != "" {
-			fmt.Fprintln(ch.cmd.stderr, wording.CLIDetails(s.lastDetail))
+	}
+	for _, s := range ch.runs {
+		if s.infoErr != "" && s.infoErr != s.lastErr {
+			line(wording.CheckServerInfoError(s.cfg.label, s.infoErr), s.infoDetail)
+		}
+		if s.lastErr != "" {
+			line(wording.CheckServerLastError(s.cfg.label, s.lastErr), s.lastDetail)
 		}
 	}
 }

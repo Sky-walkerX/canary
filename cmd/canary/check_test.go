@@ -246,14 +246,24 @@ func TestCheckUnreachableServer(t *testing.T) {
 	}
 }
 
-// An --indexer URL that is not a v1 server stops the run with exit code 5.
+// An --indexer URL that is not a v1 server stops the run with exit code 5
+// and saves nothing, even the honest server's results. Nothing it sends
+// verifies under the pin, and its /info is not canary-info/1.
 func TestCheckServerThatIsNotAnIndexer(t *testing.T) {
 	w := newWorld(t)
-	wrong := server{label: "wrong", url: strings.TrimSuffix(w.rest, "/rest"), pubkey: pubHex(t, testKey(9))}
-	r := runCLI(t, w.args([]server{wrong})...)
-	wantExit(t, r, 5)
-	if !strings.Contains(r.stderr, wording.CheckServerUnusable("wrong", wrong.url)) {
-		t.Errorf("stderr:\n%s", r)
+	web := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(web.Close)
+	for _, url := range []string{strings.TrimSuffix(w.rest, "/rest"), web.URL} {
+		wrong := server{label: "wrong", url: url, pubkey: pubHex(t, testKey(9))}
+		r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), wrong})...)
+		wantExit(t, r, 5)
+		if !strings.Contains(r.stderr, wording.CheckServerUnusable("wrong", wrong.url)) ||
+			!strings.Contains(r.stderr, wording.CLIDetails("canary: GET /info")) {
+			t.Errorf("%s: stderr lacks the unusable server and its cause:\n%s", url, r)
+		}
+		if _, err := os.Stat(w.statePath()); !os.IsNotExist(err) {
+			t.Errorf("%s: a stopped run wrote a state file: %v", url, err)
+		}
 	}
 }
 
@@ -472,13 +482,13 @@ func answerOn(prefix string, status int, code string) func(http.Handler) http.Ha
 }
 
 // A v1 server never answers Canary's requests with not_found,
-// bad_block_hash or unsupported_parameter. From a server that has not yet
-// shown it is a v1 server, such an answer means a wrong --indexer URL or a
-// bug, so the run stops with exit code 5. A server whose every record
-// request gets not_found never shows it. A server that answered /info and
-// signed a valid record has shown it, so its refused lists are recorded
-// like any list it did not serve. The errors a v1 server does give,
-// unknown_block and not_ready, are always data.
+// bad_block_hash or unsupported_parameter. From a server whose /info
+// answered as canary-info/1, such an answer is the server refusing one
+// block, so Canary records it like an outage and the run goes on. That
+// holds even when no record of its verifies. A refused record reads Not
+// checked, and a list refused after a valid record reads Can't be checked.
+// The errors a v1 server does give, unknown_block and not_ready, are always
+// data.
 func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -486,15 +496,16 @@ func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 		status int
 		code   string
 		exit   int
+		reason state.Reason // odd's reason at the payment block
 	}{
-		{"record not_found", "/commitment/", http.StatusNotFound, "not_found", 5},
+		{"every record not_found", "/commitment/", http.StatusNotFound, "not_found", 0, state.ServerUnreachable},
 		// A list refused inside the window raises a warning, and warnings
 		// count as findings for the exit code.
-		{"list bad_block_hash", "/tweaks/", http.StatusBadRequest, "bad_block_hash", 1},
-		{"list unsupported_parameter", "/tweaks/", http.StatusBadRequest, "unsupported_parameter", 1},
-		{"list not_found", "/tweaks/", http.StatusNotFound, "not_found", 1},
-		{"record not_ready", "/commitment/", http.StatusServiceUnavailable, "not_ready", 0},
-		{"list unknown_block", "/tweaks/", http.StatusNotFound, "unknown_block", 1},
+		{"list bad_block_hash", "/tweaks/", http.StatusBadRequest, "bad_block_hash", 1, state.ListNotServed},
+		{"list unsupported_parameter", "/tweaks/", http.StatusBadRequest, "unsupported_parameter", 1, state.ListNotServed},
+		{"list not_found", "/tweaks/", http.StatusNotFound, "not_found", 1, state.ListNotServed},
+		{"record not_ready", "/commitment/", http.StatusServiceUnavailable, "not_ready", 0, state.ServerUnreachable},
+		{"list unknown_block", "/tweaks/", http.StatusNotFound, "unknown_block", 1, state.ListNotServed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -503,20 +514,11 @@ func TestCheckServerAnsweringOutsideTheAPI(t *testing.T) {
 			odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, answerOn(tt.prefix, tt.status, tt.code)).URL, pubkey: pubHex(t, k)}
 			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
 			wantExit(t, r, tt.exit)
-			if tt.exit == 5 {
-				if !strings.Contains(r.stderr, wording.CheckServerUnusable("odd", odd.url)) {
-					t.Errorf("stderr:\n%s", r)
-				}
-				return
-			}
 			f := loadState(t, w.statePath())
 			o := serverIn(t, blockAt(t, f, w.height), "odd")
-			want := state.ListNotServed
-			if tt.code == "not_ready" {
-				want = state.ServerUnreachable
-			}
-			if o.Reason != want || f.Servers[1].Error == nil {
-				t.Errorf("odd = %s/%s error %v, want %s with an error", o.State, o.Reason, f.Servers[1].Error, want)
+			if o.Reason != tt.reason || f.Servers[1].Error == nil || !f.Servers[1].Reachable {
+				t.Errorf("odd = %s/%s error %v reachable %v, want %s with an error, reachable",
+					o.State, o.Reason, f.Servers[1].Error, f.Servers[1].Reachable, tt.reason)
 			}
 			// The other server's blocks are unaffected.
 			for _, b := range f.Blocks {
@@ -533,90 +535,122 @@ func both(outer, inner func(http.Handler) http.Handler) func(http.Handler) http.
 	return func(next http.Handler) http.Handler { return outer(inner(next)) }
 }
 
-// A withholder that has shown itself cannot stop the run that would name it
-// by answering a request with an error a v1 server never gives Canary. Once
-// it has answered /info and signed a valid record in this run, Canary
-// records that answer like an outage. Here it refuses one block's list with
-// not_found: that block reads
-// Can't be checked for it, with a warning naming it, and the run still saves
-// the evidence it found in another block.
+// A withholder cannot stop the run that would name it by answering a
+// request with an error a v1 server never gives Canary. Once one of its
+// records verifies under its pin, the --indexer URL is proven right, and
+// Canary records every such answer like an outage. Here it refuses one
+// block's list with not_found: that block reads Can't be checked for it,
+// with a warning naming it, and the run still saves the evidence it found in
+// another block. That holds whatever its /info does, because a server that
+// leaves /info unanswered or answers it outside the API gains nothing: its
+// policy reads as not declared, and the run goes on.
 func TestCheckWithholderCannotStopTheRun(t *testing.T) {
-	chain := coretest.NewChain(t)
-	chain.MineEmpty(2)
-	victim := chain.PayToTaproot(coretest.P2WPKH)
-	refused := chain.Mine(victim) // height 3
-	caught := chain.PayToTaproot(coretest.P2TR, coretest.P2WPKH)
-	withheld := chain.Mine(caught) // height 4
-	chain.MineEmpty(3)
-	tip, _ := chain.Tip()
-	w := &world{chain: chain, rest: coretest.Serve(t, chain), block: withheld, height: 4, target: caught, tip: tip, dir: t.TempDir()}
+	tests := []struct {
+		name     string
+		info     func(http.Handler) http.Handler // nil: /info answers
+		answered bool
+		infoErr  string // the /info error the terminal must print
+	}{
+		{"/info answers", nil, true, ""},
+		{"/info off the API", answerOn("/info", http.StatusNotFound, "not_found"), false, wording.ServerInfoUnusable},
+		{"/info gave no answer", dropOn("/info"), false, wording.ServerInfoFailed},
+		{"/info internal", answerOn("/info", http.StatusInternalServerError, "internal"), false, wording.ServerInfoFailed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := coretest.NewChain(t)
+			chain.MineEmpty(2)
+			victim := chain.PayToTaproot(coretest.P2WPKH)
+			refused := chain.Mine(victim) // height 3
+			caught := chain.PayToTaproot(coretest.P2TR, coretest.P2WPKH)
+			withheld := chain.Mine(caught) // height 4
+			chain.MineEmpty(3)
+			tip, _ := chain.Tip()
+			w := &world{chain: chain, rest: coretest.Serve(t, chain), block: withheld, height: 4, target: caught, tip: tip, dir: t.TempDir()}
 
-	refuse := answerOn("/tweaks/"+refused.BlockHash().String(), http.StatusNotFound, "not_found")
-	servers := []server{w.honest(t, "honest", 1), w.withholder(t, "withholder", 2, refuse)}
-	victimID := victim.TxHash().String()
-	r := runCLI(t, w.args(servers, "--expect", victimID+"@"+refused.BlockHash().String())...)
-	wantExit(t, r, 1)
+			refuse := answerOn("/tweaks/"+refused.BlockHash().String(), http.StatusNotFound, "not_found")
+			if tt.info != nil {
+				refuse = both(tt.info, refuse)
+			}
+			servers := []server{w.honest(t, "honest", 1), w.withholder(t, "withholder", 2, refuse)}
+			victimID := victim.TxHash().String()
+			r := runCLI(t, w.args(servers, "--expect", victimID+"@"+refused.BlockHash().String())...)
+			wantExit(t, r, 1)
 
-	f := loadState(t, w.statePath())
-	if len(f.Blocks) != int(tip)+1 {
-		t.Fatalf("%d blocks saved, want %d", len(f.Blocks), tip+1)
-	}
+			f := loadState(t, w.statePath())
+			if len(f.Blocks) != int(tip)+1 {
+				t.Fatalf("%d blocks saved, want %d", len(f.Blocks), tip+1)
+			}
 
-	// The refused list: Can't be checked for the withholder, with the
-	// list_not_served warning naming it. The honest server still decides
-	// the block.
-	b := blockAt(t, f, 3)
-	if s := serverIn(t, b, "withholder"); s.State != state.Unresolvable || s.Reason != state.ListNotServed {
-		t.Errorf("block 3: withholder = %s/%s, want unresolvable/list_not_served", s.State, s.Reason)
-	}
-	if b.State != state.Verified || b.Reason != state.RecordsAgree {
-		t.Errorf("block 3 = %s/%s, want verified/records_agree from the honest server", b.State, b.Reason)
-	}
+			// The refused list: Can't be checked for the withholder, with the
+			// list_not_served warning naming it. The honest server still
+			// decides the block.
+			b := blockAt(t, f, 3)
+			if s := serverIn(t, b, "withholder"); s.State != state.Unresolvable || s.Reason != state.ListNotServed {
+				t.Errorf("block 3: withholder = %s/%s, want unresolvable/list_not_served", s.State, s.Reason)
+			}
+			if b.State != state.Verified || b.Reason != state.RecordsAgree {
+				t.Errorf("block 3 = %s/%s, want verified/records_agree from the honest server", b.State, b.Reason)
+			}
 
-	// Every block still reads Checked for the honest server.
-	for _, b := range f.Blocks {
-		if h := serverIn(t, b, "honest"); h.State != state.Verified {
-			t.Errorf("block %d: honest = %s/%s, want verified", b.Height, h.State, h.Reason)
-		}
-	}
+			// Every block still reads Checked for the honest server.
+			for _, b := range f.Blocks {
+				if h := serverIn(t, b, "honest"); h.State != state.Verified {
+					t.Errorf("block %d: honest = %s/%s, want verified", b.Height, h.State, h.Reason)
+				}
+			}
 
-	var warned, accused *state.Finding
-	for i := range f.Findings {
-		x := &f.Findings[i]
-		switch {
-		case x.Kind == state.KindWarning && x.Reason == state.ListNotServed && x.Block.Height == 3:
-			warned = x
-		case x.Kind == state.KindWithheld && x.Block.Height == 4:
-			accused = x
-		default:
-			t.Errorf("unexpected finding %+v", *x)
-		}
-	}
-	if warned == nil || warned.Servers[0].Label != "withholder" {
-		t.Errorf("findings = %+v, want a list_not_served warning naming the withholder at block 3", f.Findings)
-	}
-	if accused == nil || accused.Servers[0].Label != "withholder" || accused.Reason != state.AbsentInWindow ||
-		accused.Evidence == nil || !accused.Provable {
-		t.Fatalf("findings = %+v, want a provable absent_in_window finding against the withholder at block 4", f.Findings)
-	}
-	rep, err := evidence.Verify(readFile(t, filepath.Join(w.evidenceDir(), *accused.Evidence)))
-	if err != nil || rep.Code != evidence.CodeOK {
-		t.Errorf("the evidence file does not check out: %v %+v", err, rep)
-	}
+			var warned, accused *state.Finding
+			for i := range f.Findings {
+				x := &f.Findings[i]
+				switch {
+				case x.Kind == state.KindWarning && x.Reason == state.ListNotServed && x.Block.Height == 3:
+					warned = x
+				case x.Kind == state.KindWithheld && x.Block.Height == 4:
+					accused = x
+				default:
+					t.Errorf("unexpected finding %+v", *x)
+				}
+			}
+			if warned == nil || warned.Servers[0].Label != "withholder" {
+				t.Errorf("findings = %+v, want a list_not_served warning naming the withholder at block 3", f.Findings)
+			}
+			if accused == nil || accused.Servers[0].Label != "withholder" || accused.Reason != state.AbsentInWindow ||
+				accused.Evidence == nil || !accused.Provable {
+				t.Fatalf("findings = %+v, want a provable absent_in_window finding against the withholder at block 4", f.Findings)
+			}
+			rep, err := evidence.Verify(readFile(t, filepath.Join(w.evidenceDir(), *accused.Evidence)))
+			if err != nil || rep.Code != evidence.CodeOK {
+				t.Errorf("the evidence file does not check out: %v %+v", err, rep)
+			}
 
-	if e := f.Servers[1].Error; e == nil || *e != wording.ServerListUnanswered(3) {
-		t.Errorf("withholder error = %v, want %q", e, wording.ServerListUnanswered(3))
-	}
-	if !f.Servers[1].PublishesRecords || !f.Servers[1].Reachable {
-		t.Errorf("withholder = %+v, want reachable and publishing records", f.Servers[1])
-	}
+			// The state file keeps the last error. A failed /info shows as
+			// not reachable, with no policy, and stderr names it on the way.
+			wh := f.Servers[1]
+			if e := wh.Error; e == nil || *e != wording.ServerListUnanswered(3) {
+				t.Errorf("withholder error = %v, want %q", e, wording.ServerListUnanswered(3))
+			}
+			if !wh.PublishesRecords || !wh.SignsReceipts || wh.Reachable != tt.answered || (wh.Policy != nil) != tt.answered {
+				t.Errorf("withholder = %+v, want records and receipts, reachable and a policy %v", wh, tt.answered)
+			}
+			if strings.Contains(r.stderr, wording.CheckServerUnusable("withholder", servers[1].url)) {
+				t.Errorf("the run called the withholder unusable:\n%s", r)
+			}
+			// The list error replaced the /info error as the last error, so
+			// the terminal prints the /info error on a line of its own.
+			if n := strings.Count(r.stderr, "Its /info"); tt.infoErr == "" && n != 0 ||
+				tt.infoErr != "" && (n != 1 || !strings.Contains(r.stderr, "canary check: "+wording.CheckServerInfoError("withholder", tt.infoErr)+"\n")) {
+				t.Errorf("stderr should say %q once:\n%s", tt.infoErr, r)
+			}
 
-	// The tripwire cannot read the refused list, so the payment is
-	// unresolvable for the withholder, not found and not withheld.
-	p := f.ExpectedPayments[0]
-	if p.Txid != victimID || p.Outcome != "unresolvable" || len(p.Servers) != 2 ||
-		p.Servers[0].Outcome != "found" || p.Servers[1].Outcome != "unresolvable" {
-		t.Errorf("payment = %+v, want found by honest and unresolvable for the withholder", p)
+			// The tripwire cannot read the refused list, so the payment is
+			// unresolvable for the withholder, not found and not withheld.
+			p := f.ExpectedPayments[0]
+			if p.Txid != victimID || p.Outcome != "unresolvable" || len(p.Servers) != 2 ||
+				p.Servers[0].Outcome != "found" || p.Servers[1].Outcome != "unresolvable" {
+				t.Errorf("payment = %+v, want found by honest and unresolvable for the withholder", p)
+			}
+		})
 	}
 }
 
@@ -693,61 +727,140 @@ func TestCheckFalseSignedTipNamesTheWithholder(t *testing.T) {
 	}
 }
 
-// A record request refused with not_found, from a server that answered /info
-// and signed a valid record in this run, reads Not checked like an outage.
-// Canary decides after the record pass, so the refused block may come before
-// every valid record. Here it is the first block of the range.
+// A record request refused with not_found, from a server that signed a
+// valid record in this run, reads Not checked like an outage. Canary decides
+// after the record pass, so the refused block may come before every valid
+// record. Here it is the first block of the range. The server's /info may
+// answer outside the API too: its valid records prove the URL, so the run
+// still goes on, and only its policy is unknown.
 func TestCheckRefusedRecordReadsLikeAnOutage(t *testing.T) {
-	w := newWorld(t)
-	first := w.chain.Block(0).BlockHash().String()
-	k := testKey(4)
-	odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, answerOn("/commitment/"+first, http.StatusNotFound, "not_found")).URL, pubkey: pubHex(t, k)}
-	r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
-	wantExit(t, r, 0)
-
-	f := loadState(t, w.statePath())
-	b := blockAt(t, f, 0)
-	if o := serverIn(t, b, "odd"); o.State != state.Unverified || o.Reason != state.ServerUnreachable {
-		t.Errorf("block 0: odd = %s/%s, want unverified/server_unreachable", o.State, o.Reason)
-	}
-	if b.State != state.Verified || b.Reason != state.OwnRecord {
-		t.Errorf("block 0 = %s/%s, want verified/own_record from the honest server", b.State, b.Reason)
-	}
-	for _, b := range f.Blocks[1:] {
-		if b.State != state.Verified || b.Reason != state.RecordsAgree {
-			t.Errorf("block %d = %s/%s, want verified/records_agree", b.Height, b.State, b.Reason)
+	for _, infoOffAPI := range []bool{false, true} {
+		name := "/info answers"
+		if infoOffAPI {
+			name = "/info off the API"
 		}
-	}
-	if e := f.Servers[1].Error; e == nil || *e != wording.ServerRecordRefused(0) {
-		t.Errorf("odd error = %v, want %q", e, wording.ServerRecordRefused(0))
-	}
-	if len(f.Findings) != 0 {
-		t.Errorf("findings = %+v, want none", f.Findings)
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t)
+			first := w.chain.Block(0).BlockHash().String()
+			wrap := answerOn("/commitment/"+first, http.StatusNotFound, "not_found")
+			if infoOffAPI {
+				wrap = both(answerOn("/info", http.StatusNotFound, "not_found"), wrap)
+			}
+			k := testKey(4)
+			odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, wrap).URL, pubkey: pubHex(t, k)}
+			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
+			wantExit(t, r, 0)
+
+			f := loadState(t, w.statePath())
+			b := blockAt(t, f, 0)
+			if o := serverIn(t, b, "odd"); o.State != state.Unverified || o.Reason != state.ServerUnreachable {
+				t.Errorf("block 0: odd = %s/%s, want unverified/server_unreachable", o.State, o.Reason)
+			}
+			if b.State != state.Verified || b.Reason != state.OwnRecord {
+				t.Errorf("block 0 = %s/%s, want verified/own_record from the honest server", b.State, b.Reason)
+			}
+			for _, b := range f.Blocks[1:] {
+				if b.State != state.Verified || b.Reason != state.RecordsAgree {
+					t.Errorf("block %d = %s/%s, want verified/records_agree", b.Height, b.State, b.Reason)
+				}
+			}
+			o := f.Servers[1]
+			if o.Error == nil || *o.Error != wording.ServerRecordRefused(0) {
+				t.Errorf("odd error = %v, want %q", o.Error, wording.ServerRecordRefused(0))
+			}
+			if o.Reachable == infoOffAPI || (o.Policy == nil) != infoOffAPI || !o.PublishesRecords {
+				t.Errorf("odd = %+v, want records, and reachable with a policy only when /info answered", o)
+			}
+			if said := strings.Contains(r.stderr, wording.CheckServerInfoError("odd", wording.ServerInfoUnusable)); said != infoOffAPI {
+				t.Errorf("stderr names the /info error: %v, want %v\n%s", said, infoOffAPI, r)
+			}
+			if len(f.Findings) != 0 {
+				t.Errorf("findings = %+v, want none", f.Findings)
+			}
+		})
 	}
 }
 
-// Until a server has answered /info and signed a record that verifies under
-// its pin in this run, an answer outside the v1 API still means a wrong
-// --indexer URL or a bug. The run stops with exit code 5 and saves nothing.
-func TestCheckOutsideTheAPIStopsTheRunBeforeTheServerShowsItself(t *testing.T) {
+// A server that proves nothing stops the run with exit code 5 and saves
+// nothing. None of its records verifies under its pin, its /info gives no
+// usable answer, and at least one answer is outside the v1 API. Canary then
+// can't tell a hostile server from a wrong --indexer URL, and the URL is
+// the likelier.
+func TestCheckStopsForAServerThatProvesNothing(t *testing.T) {
 	tests := []struct {
-		name     string
-		wrap     func(w *world) func(http.Handler) http.Handler
-		wrongPin bool
-		cause    string // the request whose answer stopped the run
+		name  string
+		wrap  func(w *world) func(http.Handler) http.Handler
+		pin   string // "wrong" pins another key, "none" pins none
+		cause string // the request whose answer stopped the run
 	}{
-		{"/info not_found", func(*world) func(http.Handler) http.Handler {
+		{"/info and every record not_found", func(*world) func(http.Handler) http.Handler {
+			return answerOn("/", http.StatusNotFound, "not_found")
+		}, "", "GET /info"},
+		{"/info gave no answer, every record not_found", func(*world) func(http.Handler) http.Handler {
+			return both(dropOn("/info"), answerOn("/commitment/", http.StatusNotFound, "not_found"))
+		}, "", "GET /commitment/"},
+		{"/info not_found, no record verifies under the pin", func(*world) func(http.Handler) http.Handler {
 			return answerOn("/info", http.StatusNotFound, "not_found")
-		}, false, "GET /info"},
-		{"every record not_found", func(*world) func(http.Handler) http.Handler {
-			return answerOn("/commitment/", http.StatusNotFound, "not_found")
-		}, false, "GET /commitment/"},
-		{"no record verifies under the pin", func(w *world) func(http.Handler) http.Handler {
-			return answerOn("/commitment/"+w.blockHash(), http.StatusNotFound, "not_found")
-		}, true, "GET /commitment/"},
-		{"/info gave no answer", func(w *world) func(http.Handler) http.Handler {
-			return both(dropOn("/info"), answerOn("/tweaks/"+w.blockHash(), http.StatusNotFound, "not_found"))
-		}, false, "GET /tweaks/"},
+		}, "wrong", "GET /info"},
+		{"/info not_found, pinned as none", func(*world) func(http.Handler) http.Handler {
+			return answerOn("/info", http.StatusNotFound, "not_found")
+		}, "none", "GET /info"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t)
+			k := testKey(4)
+			odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, tt.wrap(w)).URL, pubkey: pubHex(t, k)}
+			switch tt.pin {
+			case "wrong":
+				odd.pubkey = pubHex(t, testKey(5))
+			case "none":
+				odd.pubkey = "none"
+			}
+			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
+			wantExit(t, r, 5)
+			// A server pinned as none was asked for no record, so the
+			// sentence names no pin to check.
+			want, other := wording.CheckServerUnusable("odd", odd.url), wording.CheckServerUnusablePinnedNone("odd", odd.url)
+			if tt.pin == "none" {
+				want, other = other, want
+			}
+			if !strings.Contains(r.stderr, want) || strings.Contains(r.stderr, other) {
+				t.Errorf("stderr lacks %q:\n%s", want, r)
+			}
+			if !strings.Contains(r.stderr, wording.CLIDetails("canary: "+tt.cause)) || !strings.Contains(r.stderr, "not_found") {
+				t.Errorf("stderr lacks the cause %q:\n%s", tt.cause, r)
+			}
+			if _, err := os.Stat(w.statePath()); !os.IsNotExist(err) {
+				t.Errorf("a stopped run wrote a state file: %v", err)
+			}
+		})
+	}
+}
+
+// A server whose /info answered as canary-info/1 reaches a v1 server, so
+// its answers outside the API count like outages even when none of its
+// records verifies. A server with a verified record has proven its URL, so
+// an /info outside the API costs it only its declared policy. Either way
+// the run goes on and saves.
+func TestCheckKeepsGoingForAServerThatShowsItsURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		wrap      func(w *world) func(http.Handler) http.Handler
+		wrongPin  bool
+		reachable bool
+		err       func(w *world) string // the server's last error
+		reason    state.Reason          // its reason at the payment block
+	}{
+		{"/info not_found, records verify", func(*world) func(http.Handler) http.Handler {
+			return answerOn("/info", http.StatusNotFound, "not_found")
+		}, false, false, func(*world) string { return wording.ServerInfoUnusable }, state.RecordsAgree},
+		{"/info gave no answer, records verify", func(*world) func(http.Handler) http.Handler {
+			return dropOn("/info")
+		}, false, false, func(*world) string { return wording.ServerInfoFailed }, state.RecordsAgree},
+		{"/info answers, no record verifies under the pin, one not_found", func(w *world) func(http.Handler) http.Handler {
+			return answerOn("/commitment/"+w.chain.Block(w.tip).BlockHash().String(), http.StatusNotFound, "not_found")
+		}, true, true, func(w *world) string { return wording.ServerRecordRefused(w.tip) }, state.NoRecords},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -758,15 +871,26 @@ func TestCheckOutsideTheAPIStopsTheRunBeforeTheServerShowsItself(t *testing.T) {
 				odd.pubkey = pubHex(t, testKey(5))
 			}
 			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd})...)
-			wantExit(t, r, 5)
-			if !strings.Contains(r.stderr, wording.CheckServerUnusable("odd", odd.url)) {
-				t.Errorf("stderr lacks the unusable server:\n%s", r)
+			wantExit(t, r, 0)
+			f := loadState(t, w.statePath())
+			o := f.Servers[1]
+			if o.Reachable != tt.reachable || (o.Policy != nil) != tt.reachable {
+				t.Errorf("odd = %+v, want reachable and a declared policy: %v", o, tt.reachable)
 			}
-			if !strings.Contains(r.stderr, wording.CLIDetails("canary: "+tt.cause)) || !strings.Contains(r.stderr, "not_found") {
-				t.Errorf("stderr lacks the cause %q:\n%s", tt.cause, r)
+			if want := tt.err(w); o.Error == nil || *o.Error != want {
+				t.Errorf("odd error = %v, want %q", o.Error, want)
 			}
-			if _, err := os.Stat(w.statePath()); !os.IsNotExist(err) {
-				t.Errorf("a stopped run wrote a state file: %v", err)
+			// An /info error that is still the last error prints once.
+			if n := strings.Count(r.stderr, "Its /info"); n > 1 {
+				t.Errorf("stderr gives the /info error %d times:\n%s", n, r)
+			}
+			if s := serverIn(t, blockAt(t, f, w.height), "odd"); s.Reason != tt.reason {
+				t.Errorf("odd at the payment block = %s/%s, want reason %s", s.State, s.Reason, tt.reason)
+			}
+			for _, b := range f.Blocks {
+				if b.State != state.Verified {
+					t.Errorf("block %d = %s/%s, want verified", b.Height, b.State, b.Reason)
+				}
 			}
 		})
 	}
@@ -829,23 +953,37 @@ func TestCheckWrongEntryAtACommittedPosition(t *testing.T) {
 }
 
 // A list of the wrong length cannot be matched to the record position by
-// position, so the finding names the server and the block only.
+// position, so the finding names the server and the block only. The longer
+// list here still fits in the bytes a list of n positions may take, so
+// Canary reads it. TestCheckReadsNoListLongerThanItsRecordAllows covers a
+// list that does not.
 func TestCheckListOfTheWrongLength(t *testing.T) {
-	w := newWorld(t)
-	k := testKey(5)
-	longer := rewriteList(func(ps []wire.Position) []wire.Position {
-		return append(ps, wire.Position{Kind: wire.KindAbsent})
-	})
-	odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, longer).URL, pubkey: pubHex(t, k)}
-	wantExit(t, runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd}, "--from", "3", "--to", "3")...), 1)
-
-	f := loadState(t, w.statePath())
-	if len(f.Findings) != 1 {
-		t.Fatalf("findings = %+v, want one", f.Findings)
+	tests := []struct {
+		name   string
+		change func([]wire.Position) []wire.Position
+	}{
+		{"one position short", func(ps []wire.Position) []wire.Position { return ps[:len(ps)-1] }},
+		{"one position long", func(ps []wire.Position) []wire.Position {
+			ps[len(ps)-1] = wire.Position{Kind: wire.KindAbsent}
+			return append(ps, wire.Position{Kind: wire.KindAbsent})
+		}},
 	}
-	x := f.Findings[0]
-	if x.Reason != state.ServedContradictsRecord || x.Position != nil || x.Txid != nil || x.Evidence != nil || x.Provable {
-		t.Errorf("finding = %+v, want served_contradicts_record with no position and no file", x)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t)
+			k := testKey(5)
+			odd := server{label: "odd", url: startIndexer(t, w.rest, k, nil, rewriteList(tt.change)).URL, pubkey: pubHex(t, k)}
+			wantExit(t, runCLI(t, w.args([]server{w.honest(t, "honest", 1), odd}, "--from", "3", "--to", "3")...), 1)
+
+			f := loadState(t, w.statePath())
+			if len(f.Findings) != 1 {
+				t.Fatalf("findings = %+v, want one", f.Findings)
+			}
+			x := f.Findings[0]
+			if x.Reason != state.ServedContradictsRecord || x.Position != nil || x.Txid != nil || x.Evidence != nil || x.Provable {
+				t.Errorf("finding = %+v, want served_contradicts_record with no position and no file", x)
+			}
+		})
 	}
 }
 

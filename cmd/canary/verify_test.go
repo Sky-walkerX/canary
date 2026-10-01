@@ -166,10 +166,11 @@ func TestVerifyUsageAndMissingFiles(t *testing.T) {
 	wantExit(t, runCLI(t, "verify", "a.json", "b.json"), 2)
 }
 
-// blockNetwork replaces every dialer the standard library would use with one
-// that fails and counts, until restore runs or the test ends. It first shows
-// that the replacement catches a real request, or the count would prove
-// nothing.
+// blockNetwork replaces net/http's default transport and the default DNS
+// resolver with dialers that fail and count, until restore runs or the test
+// ends. It first shows that the replacement catches a real request, or the
+// count would prove nothing. A dialer the code builds itself gets past it, so
+// runOffline is the check that covers every dialer.
 func blockNetwork(t *testing.T) (attempts *atomic.Int32, restore func()) {
 	t.Helper()
 	attempts = new(atomic.Int32)
@@ -204,5 +205,36 @@ func TestVerifyOpensNoConnection(t *testing.T) {
 	wantExit(t, runCLI(t, "verify", "--json", path), 0)
 	if n := attempts.Load(); n != 0 {
 		t.Errorf("canary verify tried to open %d connections", n)
+	}
+}
+
+// The network cut refuses net/http's requests too, not only the direct dial
+// the child makes first. canary check run inside it cannot reach the Core
+// REST server this process serves, and says so.
+func TestOfflineChildReachesNoServer(t *testing.T) {
+	w := newWorld(t)
+	r := runOffline(t, w.args([]server{w.honest(t, "honest", 1)})...)
+	wantExit(t, r, 5)
+	if !strings.Contains(r.stderr, wording.CheckCoreUnreachable(w.rest)) {
+		t.Errorf("stderr lacks the Core error:\n%s", r)
+	}
+	if _, err := os.Stat(w.statePath()); !os.IsNotExist(err) {
+		t.Errorf("a run cut off from the network wrote a state file: %v", err)
+	}
+}
+
+// canary verify checks a file in a process the operating system has cut off
+// from the network, so no dialer at all can reach it.
+func TestVerifyChecksOutCutOffFromTheNetwork(t *testing.T) {
+	path := docEvidence(t)
+	r := runOffline(t, "verify", path)
+	wantExit(t, r, 0)
+	if first := strings.SplitN(r.stdout, "\n", 2)[0]; first != wording.VerifyChecksOut {
+		t.Errorf("first line %q, want %q\n%s", first, wording.VerifyChecksOut, r)
+	}
+	r = runOffline(t, "verify", "--json", path)
+	wantExit(t, r, 0)
+	if !strings.Contains(r.stdout, `"result": "checks_out"`) {
+		t.Errorf("the report does not check out:\n%s", r)
 	}
 }

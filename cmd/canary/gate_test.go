@@ -126,6 +126,16 @@ func TestGate(t *testing.T) {
 	if first := strings.SplitN(r.stdout, "\n", 2)[0]; first != wording.VerifyChecksOut {
 		t.Errorf("verify's first line = %q, want %q", first, wording.VerifyChecksOut)
 	}
+	// The failing transport catches only requests that go through it. In a
+	// process the operating system has cut off from the network, every
+	// connection is refused, whatever dialer asks for it.
+	t.Run("verify cut off from the network", func(t *testing.T) {
+		r := runOffline(t, "verify", evPath)
+		wantExit(t, r, 0)
+		if first := strings.SplitN(r.stdout, "\n", 2)[0]; first != wording.VerifyChecksOut {
+			t.Errorf("verify's first line = %q, want %q\n%s", first, wording.VerifyChecksOut, r)
+		}
+	})
 
 	// One changed byte fails the step that checks it.
 	start = time.Now()

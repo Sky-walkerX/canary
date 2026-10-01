@@ -130,9 +130,10 @@ func paymentsIn(ds []declared, block int) []ladder.Payment {
 	return out
 }
 
-// paymentState is the state file's row for one declared payment. results
-// holds the ladder's answer for each checked block that has one.
-func (ch *checker) paymentState(d declared, results map[int]ladder.BlockResult) state.Payment {
+// paymentState is the state file's row for one declared payment. res is the
+// ladder's result for the payment's block. A payment with no block yet
+// reads none of it.
+func (ch *checker) paymentState(d declared, res ladder.BlockResult) state.Payment {
 	p := state.Payment{Txid: core.DisplayHex(d.txid), Servers: []state.PaymentServer{}}
 	if d.block < 0 {
 		p.Outcome = "pending"
@@ -145,7 +146,7 @@ func (ch *checker) paymentState(d declared, results map[int]ladder.BlockResult) 
 		return p
 	}
 	reached := map[string]bool{}
-	for _, sr := range results[d.block].Servers {
+	for _, sr := range res.Servers {
 		for _, pr := range sr.Payments {
 			if pr.TxID == d.entry.TxID {
 				p.Servers = append(p.Servers, state.PaymentServer{Label: sr.Label, Outcome: pr.Outcome})

@@ -38,7 +38,7 @@ interface does. Nothing has run against a real Bitcoin Core node yet.
 | Reference indexer, `cmd/canary-indexer` | Built and tested | Signs one record per block and serves it with the tweak list and a receipt. `--withhold-txid` makes it leave one transaction out of what it serves, while its record still includes it |
 | `ladder` | Built and tested | Gives each block a state and a reason code. It fills gaps before it recomputes the root |
 | `evidence` | Built and tested | Writes and checks `canary-evidence/1` files. Checking a file needs no network |
-| `canary check`, `verify`, `status`, `ui` | Built and tested | The command-line checker. `check --expect` is the tripwire. It checks one payment you declare, by its tweak only |
+| `canary check`, `verify`, `status`, `ui` | Built and tested | The command-line checker. `check --expect` is the tripwire. It checks the payments you declare, by their tweaks only |
 | Local dashboard | Built and tested | `canary ui` serves the results on 127.0.0.1 and makes no outside requests |
 | Public site generator, `cmd/site` | Built and tested | Writes the public site as static files, on the dashboard's design system |
 | Browser checker, `cmd/verify-wasm` | Built and tested | Runs the same evidence check in a browser. The module is 8.66 MB, or 2.66 MB with gzip. The site generator does not copy it into the site yet |
@@ -50,26 +50,30 @@ One end-to-end test, `TestGate` in `cmd/canary`, runs the v1 demo in one process
 through the same code that the `canary` command and the reference indexer run. A synthetic
 chain of 209 blocks feeds two reference indexers. One of them leaves a taproot payment out
 of what it serves, while its signed record still includes it. The test checks four things,
-and all four pass:
+and all four pass on macOS:
 
 - `canary check` names the withholding server, the block and the txid, from that server's
   own signatures. Every block reads Checked for the honest server.
-- The evidence file verifies while every network connection is refused.
+- The evidence file verifies in a process that the operating system cuts off from the
+  network, so every connection is refused. This has run on macOS. The Linux version, for
+  amd64 and arm64, is written and builds, but has not run yet. Elsewhere the test skips
+  that step.
 - A one-byte change fails the check at the step that covers that byte. The test changes
   the record signature, the accused key, the block height, a proof hash, the receipt and
   the served list, one at a time.
 - The dashboard shows the finding under the server's name.
 
 On 1 Oct, `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again with
-`-race`. That is 361 top-level tests and one fuzz test's seed inputs, none failing, and
-706 passing cases once subtests are counted. GitHub Actions runs `go vet` and `go test` on
+`-race`. That is 394 top-level tests and one fuzz test's seed inputs, none failing, and
+769 passing cases once subtests are counted. GitHub Actions runs `go vet` and `go test` on
 every push. The run for the latest commit, on 1 Oct, passed.
 
 Version 1 is built and tested on regtest only, a private local test network. `canary
-check` accepts regtest and mainnet, and on mainnet it prints a notice that v1 is tested on
-regtest only. It refuses signet. Bitcoin Core reports only the name "signet", and a custom
-signet takes its network magic from its challenge, so the name does not say which signet
-it is. Nothing has been run against signet or mainnet servers.
+check` accepts regtest and mainnet only, and on mainnet it prints a notice that v1 is
+tested on regtest only. It refuses signet and every other chain. Bitcoin Core reports only
+the name "signet", and a custom signet takes its network magic from its challenge, so the
+name does not say which signet it is. Signet needs a flag that names the network, which is
+planned after v1. Nothing has been run against mainnet servers.
 
 ## Try it now
 
@@ -257,10 +261,10 @@ The checks, cheapest first:
    - In both cases you know, but cannot yet prove it to others. v1's evidence file cannot
      show that a record lacks an entry, or that an output is unspent.
    - A transaction ID someone else gave you supports detection only, not naming a server.
-   - A passed tripwire shows only that the server reported that one tweak.
-   - In v1 the tripwire is one payment you declare to `canary check`, and it checks the
-     tweak only, not the output data. Scheduled test payments at random times and
-     amounts come after v1.
+   - A passed tripwire shows only that the server reported each declared tweak.
+   - In v1 the tripwire is the payments you declare to `canary check`, one `--expect`
+     flag each. It checks their tweaks only, not the output data. Scheduled test
+     payments at random times and amounts come after v1.
 
 **The main output is coverage, not alarms.** An alarm that never fires looks like a
 product that does nothing. Coverage is reported per block range, in one of six states:

@@ -600,7 +600,7 @@ func TestRecordedSample(t *testing.T) {
 	checker := section(t, home, "checker")
 	// The fixture's context says canary check wrote it at 2026-10-03T08:32:11Z.
 	for _, want := range []string{
-		htmlText(wording.Site.CheckerSourceRecorded("3 October 2026")),
+		htmlText(wording.Site.CheckerSourceRecorded("3 Oct 2026")),
 		htmlText(wording.Site.CheckerTryReal),
 		htmlText(wording.Site.CheckerDownloadReal),
 	} {

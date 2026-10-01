@@ -107,7 +107,7 @@ func allText() []string {
 		EvidenceNotFound("x.json"), EvidenceNotFound(""), ServerError("1a2b3c4d"), Stale("3 h")} {
 		out = append(out, m.Title, m.Body, m.Action)
 	}
-	for _, v := range []Verdict{VerdictAllChecked(213), VerdictSomeChecked(200, 213), VerdictNoneChecked(213), VerdictNoneChecked(1),
+	for _, v := range []Verdict{VerdictAllChecked(213), VerdictSomeChecked(200, 213), VerdictNoneChecked(213, 0, ""), VerdictNoneChecked(1, 1, "gap_unfilled"), VerdictNoneChecked(4, 4, ""), VerdictNoneChecked(9, 3, "list_not_served"),
 		VerdictDisputed(2), VerdictWithheldOne("withholder left out an entry it had signed for.", 205, "You can prove this to others."), VerdictWithheldMany(3),
 		VerdictOpenFindings(VerdictAllChecked(220), 1), VerdictOpenFindings(VerdictSomeChecked(200, 213), 2)} {
 		out = append(out, v.Headline, v.Lede)
@@ -175,7 +175,7 @@ func TestFormatsDocLines(t *testing.T) {
 		{EvidenceStatusLine("omission-regtest-205-01982d71-b1070620.json", true),
 			"Evidence: omission-regtest-205-01982d71-b1070620.json. You can prove this to others."},
 		{VerifyCode("ok"), "Checks out. The server signed a record that includes this entry, then signed a list that left it out."},
-		{VerifyInclusionOnly, "Inclusion only: you can be sure of this, you can't yet prove it to others."},
+		{VerifyInclusionOnly, "Inclusion only: this file shows the server signed for the entry. It does not prove the entry was left out."},
 		{VerifyDoesNotCheckOut("receipt"), "Does not check out: receipt failed."},
 		{VerifyNotRunEarlier, "Not run: an earlier step failed."},
 		{VerifyNotRunNoReceipt, "Not run: this file has no receipt."},
@@ -249,6 +249,52 @@ func TestAbsentInWindowClaimsASignedTipOnlyWithAReceipt(t *testing.T) {
 		if !strings.Contains(noReceipt, want) {
 			t.Errorf("the no-receipt wording lacks %q: %q", want, noReceipt)
 		}
+	}
+}
+
+// TestVerdictNoneChecked keeps the overview from saying a server signed
+// nothing when it did. A block that reads Can't be checked had a signed
+// record, so its lede says so and gives the reason when every block shares
+// one.
+func TestVerdictNoneChecked(t *testing.T) {
+	tests := []struct {
+		name         string
+		total, unres int
+		reason       string
+		want         []string
+		notWant      []string
+	}{
+		{"nothing signed", 12, 0, "", []string{"No block had a signed record Canary could check against."}, []string{"recompute"}},
+		{"one unresolvable block", 1, 1, "gap_unfilled",
+			[]string{"The block had a signed record, but Canary could not recompute its root.", Reason("gap_unfilled"), "neither a pass nor an accusation"},
+			[]string{"No block had a signed record"}},
+		{"all unresolvable, one reason", 3, 3, "list_not_served",
+			[]string{"Every block had a signed record, but Canary could not recompute its root.", Reason("list_not_served")},
+			[]string{"No block had a signed record"}},
+		{"all unresolvable, mixed reasons", 3, 3, "",
+			[]string{"Every block had a signed record, but Canary could not recompute its root.", "neither a pass nor an accusation"},
+			[]string{"No block had a signed record", "This build of Canary does not know"}},
+		{"some unresolvable", 9, 3, "",
+			[]string{"6 blocks had no signed record to check against.", "For the other 3, Canary could not recompute the root."},
+			[]string{"No block had a signed record"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := VerdictNoneChecked(tt.total, tt.unres, tt.reason)
+			for _, w := range tt.want {
+				if !strings.Contains(v.Lede, w) {
+					t.Errorf("lede %q lacks %q", v.Lede, w)
+				}
+			}
+			for _, w := range tt.notWant {
+				if strings.Contains(v.Lede, w) {
+					t.Errorf("lede %q contains %q", v.Lede, w)
+				}
+			}
+		})
+	}
+	if h := VerdictNoneChecked(1, 1, "gap_unfilled").Headline; h != "The 1 block could not be checked." {
+		t.Errorf("headline = %q", h)
 	}
 }
 
@@ -328,8 +374,8 @@ func siteText() []string {
 	walk(reflect.ValueOf(Site))
 	walk(reflect.ValueOf(Checker))
 	out = append(out, Site.TamperNote(1843, "proof.siblings[0]", "3", "2", "inclusion"),
-		Site.CheckerSourceRecorded("3 October 2026"),
-		Site.CheckerSourceRun("regtest", "1 October 2026", "v31.1.0"), Site.CheckerSourceRun("regtest", "1 October 2026", ""),
+		Site.CheckerSourceRecorded("3 Oct 2026"),
+		Site.CheckerSourceRun("regtest", "1 Oct 2026", "v31.1.0"), Site.CheckerSourceRun("regtest", "1 Oct 2026", ""),
 		Site.RecordedTitle("Finding 79ec3cb71656", "1 Oct 2026", "Act 5"), Site.RecordedRunTitle("1 Oct 2026"),
 		Site.RecordedDescription("regtest", "1 Oct 2026", "351 Checked · 1 Data withheld"),
 		Site.RecordedRanWith("scripts/demo-regtest.sh --act5", "regtest", "1 Oct 2026", "v31.1.0"),
@@ -449,5 +495,65 @@ func TestRecordedWording(t *testing.T) {
 	}
 	if RecordedNetworkBadge("regtest") != RecordedRegtestBadge || strings.Contains(RecordedRegtestBadge, "computer") {
 		t.Error("a recorded page's regtest badge names a computer the reader never used")
+	}
+}
+
+// TestInclusionOnlyIsHonestForStrangers keeps canary verify and the browser
+// checker from telling anyone who opens a file without a receipt that they
+// can be sure of an omission. Only the check that wrote the file saw it.
+// The dashboard reads the user's own check, so it may say that check saw it.
+func TestInclusionOnlyIsHonestForStrangers(t *testing.T) {
+	for _, s := range []string{VerifyInclusionOnly, VerifyCode("inclusion_only")} {
+		low := strings.ToLower(s)
+		if strings.Contains(low, "be sure") {
+			t.Errorf("%q tells a stranger to be sure", s)
+		}
+		if !strings.Contains(low, "signed for the entry") || !strings.Contains(low, "does not prove the entry was left out") {
+			t.Errorf("%q does not say what the file shows and what it does not", s)
+		}
+	}
+	own := ProvableShort("withheld", false, true)
+	if strings.Contains(strings.ToLower(own), "be sure") || !strings.Contains(own, "Your check saw") || !strings.Contains(own, "can't prove") {
+		t.Errorf("the dashboard's inclusion-only line = %q", own)
+	}
+}
+
+// TestSiteClaimCarriesItsCondition keeps the headline from promising a name
+// for every entry left out. Past the 144-block window, or with no record
+// that includes the entry, Canary names nobody.
+func TestSiteClaimCarriesItsCondition(t *testing.T) {
+	if !strings.Contains(Site.Claim, "recent entry it signed for") {
+		t.Errorf("claim %q drops the condition", Site.Claim)
+	}
+	if !strings.Contains(Site.Lede, "144 blocks deep") || !strings.Contains(Site.Lede, "the record includes") {
+		t.Errorf("lede %q does not state the window and the signed record", Site.Lede)
+	}
+	if d := Site.Home.Description; strings.Contains(d, "when they differ") || !strings.Contains(d, "recent entry") {
+		t.Errorf("home description %q overclaims", d)
+	}
+}
+
+// TestSiteLimitsNameTheOneServerGap keeps the main way around v1 on the
+// limits table: one server alone can sign a record without your entry.
+func TestSiteLimitsNameTheOneServerGap(t *testing.T) {
+	for _, l := range Site.Limits {
+		if strings.Contains(l.Text, "One server alone") && strings.Contains(l.Text, "reads Checked") &&
+			strings.Contains(l.Text, "Servers disagree") && strings.Contains(l.Text, "can't prove") {
+			return
+		}
+	}
+	t.Error("no limit says one server alone can sign a record without your entry")
+}
+
+// TestRunsAboutAllowsSeveralChecks keeps the runs index true to a run that
+// holds more than one canary check, as the 1 Oct run does.
+func TestRunsAboutAllowsSeveralChecks(t *testing.T) {
+	for _, s := range []string{Site.RunsAbout, Site.RunsAboutEmpty} {
+		if strings.Contains(s, "one real canary check") {
+			t.Errorf("%q says a run is one check", s)
+		}
+	}
+	if !strings.Contains(Site.RunsAbout, "more than one canary check") {
+		t.Errorf("RunsAbout %q does not say a run can hold several checks", Site.RunsAbout)
 	}
 }

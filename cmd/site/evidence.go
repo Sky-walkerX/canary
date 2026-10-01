@@ -17,8 +17,9 @@ import (
 // checkerView is what the checker area on the home page shows. The page
 // script that runs the checker reads the data attributes it renders.
 type checkerView struct {
-	// Recorded is true when the sample comes from the recorded run, given
-	// with -evidence. Otherwise it is the formats document's example.
+	// Recorded is true when the sample is a real evidence file: the one
+	// committed in the repository's evidence directory, or the one -evidence
+	// names. Otherwise it is the formats document's example.
 	Recorded     bool
 	RealName     string
 	RealURL      string
@@ -92,11 +93,11 @@ func (s *site) writeEvidence() error {
 }
 
 // sample returns the evidence file the checker offers, its published name,
-// and the words that say where it comes from. A real file comes from a
-// recorded run. When a run on the site names it, the page names that run's
+// and the words that say where it comes from. A real file is one canary
+// check wrote. When a run on the site names it, the page names that run's
 // network, day and Bitcoin Core release, and links the run. Otherwise it is
-// dated by the time canary check wrote it. Without a real file, the sample
-// is the formats document's example, named for what it is.
+// dated by the time canary check wrote it, and names no run. Without a real
+// file, the sample is the formats document's example, named for what it is.
 func (s *site) sample() ([]byte, string, checkerView, error) {
 	if s.cfg.Evidence == "" {
 		doc, err := os.ReadFile(filepath.Join(s.cfg.Docs, filepath.FromSlash(formatsDoc)))
@@ -131,7 +132,7 @@ func (s *site) sample() ([]byte, string, checkerView, error) {
 	}
 	when, err := time.Parse(time.RFC3339, ev.Context.WrittenAt)
 	if err != nil {
-		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: context.written_at %q is not an RFC 3339 time, and the page dates the recorded run from it",
+		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: context.written_at %q is not an RFC 3339 time, and the page dates the sample from it",
 			s.cfg.Evidence, ev.Context.WrittenAt)
 	}
 	name := filepath.Base(s.cfg.Evidence)
@@ -139,10 +140,10 @@ func (s *site) sample() ([]byte, string, checkerView, error) {
 		Recorded:      true,
 		TryLabel:      wording.Site.CheckerTryReal,
 		DownloadLabel: wording.Site.CheckerDownloadReal,
-		Source:        wording.Site.CheckerSourceRecorded(when.UTC().Format("2 January 2006")),
+		Source:        wording.Site.CheckerSourceRecorded(when.UTC().Format(dateLayout)),
 	}
 	if r := s.runFor(name); r != nil {
-		view.Source = wording.Site.CheckerSourceRun(r.Network, r.Date.Format("2 January 2006"), r.Core)
+		view.Source = wording.Site.CheckerSourceRun(r.Network, r.date(), r.Core)
 		view.RunURL = r.URL
 	}
 	return file, name, view, nil

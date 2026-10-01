@@ -118,7 +118,7 @@ func buildStrip(id string, f *state.File) stripView {
 		label := wording.State(string(c.State)).Label
 		v.Segments = append(v.Segments, stripSegment{
 			X: pct(x), W: pct(w), State: string(c.State),
-			Title: "Blocks " + heights(c.From, c.To) + ": " + label,
+			Title: blockSpan(c.From, c.To) + ": " + label,
 		})
 		if problem(c.State) && len(v.Markers) < maxMarkers {
 			v.Markers = append(v.Markers, stripMarker{X: pct(x + w/2), State: string(c.State)})
@@ -165,6 +165,18 @@ func stripSummary(f *state.File) string {
 			parts = append(parts, strconv.FormatUint(uint64(n), 10)+" "+wording.State(string(s)).Label)
 		}
 	}
-	return "Coverage of blocks " + strconv.FormatUint(uint64(f.Checked.From), 10) + " to " +
-		strconv.FormatUint(uint64(f.Checked.To), 10) + ": " + strings.Join(parts, "; ") + "."
+	span := "blocks " + strconv.FormatUint(uint64(f.Checked.From), 10) + " to " + strconv.FormatUint(uint64(f.Checked.To), 10)
+	if f.Checked.From == f.Checked.To {
+		span = "block " + strconv.FormatUint(uint64(f.Checked.From), 10)
+	}
+	return "Coverage of " + span + ": " + strings.Join(parts, "; ") + "."
+}
+
+// blockSpan names a range of heights for a title: "Block 205" for one block,
+// "Blocks 0–204" for more.
+func blockSpan(from, to uint32) string {
+	if from == to {
+		return "Block " + heights(from, to)
+	}
+	return "Blocks " + heights(from, to)
 }

@@ -94,7 +94,7 @@ func TestSampleLabels(t *testing.T) {
 			t.Errorf("%q calls the example file real", s)
 		}
 	}
-	if got, want := Site.CheckerSourceRecorded("3 October 2026"), "The sample comes from the recorded run on 3 October 2026."; got != want {
+	if got, want := Site.CheckerSourceRecorded("3 Oct 2026"), "The sample is an evidence file canary check wrote on 3 Oct 2026."; got != want {
 		t.Errorf("CheckerSourceRecorded = %q, want %q", got, want)
 	}
 }

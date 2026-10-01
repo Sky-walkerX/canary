@@ -60,8 +60,9 @@ type Options struct {
 	// Zero means one hour.
 	StaleAfter time.Duration
 
-	// ReleaseNotesURL is linked from the footer. Empty means the project's
-	// releases page. The dashboard never fetches it.
+	// ReleaseNotesURL is linked from the footer. Empty leaves the link out,
+	// so the footer never points at a releases page that may hold nothing.
+	// The dashboard never fetches it.
 	ReleaseNotesURL string
 
 	// Now and Location set the clock and time zone for the status line.
@@ -73,8 +74,6 @@ type Options struct {
 	// the page shows. Nil means os.Stderr.
 	ErrorLog io.Writer
 }
-
-const defaultReleaseNotes = "https://github.com/Sky-walkerX/canary/releases"
 
 // maxEvidenceBytes bounds how much of an evidence file the finding page reads
 // for a check. A list of 2,000 entries is about 180 KB of base64.
@@ -130,9 +129,6 @@ func New(opts Options) (http.Handler, error) {
 	}
 	if opts.StaleAfter <= 0 {
 		opts.StaleAfter = time.Hour
-	}
-	if opts.ReleaseNotesURL == "" {
-		opts.ReleaseNotesURL = defaultReleaseNotes
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -514,7 +510,7 @@ func (h *handler) finding(w http.ResponseWriter, r *http.Request) {
 		}
 		v := buildFinding(f, i, h.opts.Location)
 		if v.Evidence != nil {
-			v.Evidence.Path = filepath.Join(h.evidenceDir(f), v.Evidence.Name)
+			v.Evidence.Path = filepath.Join(h.shownEvidenceDir(f), v.Evidence.Name)
 			v.Evidence.VerifyCommand = "canary verify " + shellQuote(v.Evidence.Path)
 			if h.opts.Verify != nil {
 				v.Report, v.ReportErr = h.verifyEvidence(f, v.Evidence.Name)
@@ -534,11 +530,28 @@ func (h *handler) finding(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusNotFound, "error", pg)
 }
 
+// evidenceDir is the directory the dashboard opens evidence files in. The
+// EvidenceDir option wins. A relative evidence_dir in the state file is read
+// from the state file's own directory, so a run copied elsewhere, such as a
+// recorded run in a clone, still finds its files.
 func (h *handler) evidenceDir(f *state.File) string {
 	if h.opts.EvidenceDir != "" {
 		return h.opts.EvidenceDir
 	}
-	return f.EvidenceDir
+	if f.EvidenceDir == "" || filepath.IsAbs(f.EvidenceDir) {
+		return f.EvidenceDir
+	}
+	return filepath.Join(filepath.Dir(h.opts.StatePath), f.EvidenceDir)
+}
+
+// shownEvidenceDir is the directory the finding page's verify command
+// names. It is evidenceDir, except that a relative evidence_dir stays
+// relative to the state file's directory, as the state file wrote it.
+func (h *handler) shownEvidenceDir(f *state.File) string {
+	if h.opts.EvidenceDir == "" && f.EvidenceDir != "" && !filepath.IsAbs(f.EvidenceDir) {
+		return f.EvidenceDir
+	}
+	return h.evidenceDir(f)
 }
 
 // openEvidence opens a listed evidence file inside the evidence directory.

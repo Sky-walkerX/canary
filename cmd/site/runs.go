@@ -102,8 +102,13 @@ type runEvidence struct {
 	body      []byte
 }
 
+// dateLayout is the one way the site writes a run's day, as in "1 Oct 2026".
+// The banner, the runs index, the titles and the home page's sample label
+// all use it, so one date never reads two ways.
+const dateLayout = "2 Jan 2006"
+
 // date formats a run's day the way its pages name it.
-func (r *recordedRun) date() string { return r.Date.Format("2 Jan 2006") }
+func (r *recordedRun) date() string { return r.Date.Format(dateLayout) }
 
 // readRuns reads every recorded run under -runs and renders its pages. A
 // missing directory means no run is recorded yet.

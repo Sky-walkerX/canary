@@ -21,7 +21,13 @@ that server from its own signatures.
 scripts/demo-regtest.sh              # writes ./demo-out
 scripts/demo-regtest.sh ~/canary-run # or any directory that is empty or absent
 scripts/demo-regtest.sh --act5       # adds the demo's last act, a block that can't be checked
+scripts/demo-regtest.sh --help       # prints the usage and the environment variables
 ```
+
+The script creates the output directory only once `bitcoind` is up. A run that fails to
+build or to start `bitcoind` leaves nothing behind, so you can fix the cause and run the
+same command again. A run that fails later keeps the indexer logs there, for you to read,
+and you remove the directory before the next run.
 
 It uses ports 28443 (RPC and REST) and 28444 (P2P, bound to 127.0.0.1) for `bitcoind`,
 and 28481 and 28482 for the two indexers. It stops before starting anything if a port is
@@ -34,8 +40,11 @@ taken. To use other ports, set `CANARY_DEMO_RPC_PORT`, `CANARY_DEMO_P2P_PORT`,
 2. Starts `bitcoind -regtest -rest=1 -txindex=1 -fallbackfee=0.0001` with a new data
    directory inside that temporary directory.
 3. Creates a wallet and mines 200 blocks, so the first block rewards can be spent.
-4. Sends 1 BTC to a new taproot (bech32m) address and mines 1 block. It notes the txid
-   and the block hash.
+4. Sends five taproot (bech32m) payments, of 0.2, 0.3, 1, 0.4 and 0.5 BTC in that
+   order, and mines 1 block. The 1 BTC payment is the one the withholder leaves out. In
+   the committed run it was entry 0 of 5 in the block's list. Its position depends on
+   the order Core puts the transactions in the block, so another run may differ. The
+   script notes that payment's txid and the block hash.
 5. Makes two throwaway indexer keys with `canary-indexer --gen-key`.
 6. Starts an honest indexer, and a second one with `--withhold-txid` set to the payment.
 7. Waits until both indexers report Core's tip in `/info`.

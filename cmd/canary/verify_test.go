@@ -166,6 +166,20 @@ func TestVerifyUsageAndMissingFiles(t *testing.T) {
 	wantExit(t, runCLI(t, "verify", "a.json", "b.json"), 2)
 }
 
+// The evidence directory is an easy thing to pass by mistake. Canary says it
+// is a directory, not that the system refused to open it.
+func TestVerifyADirectory(t *testing.T) {
+	dir := t.TempDir()
+	r := runCLI(t, "verify", dir)
+	wantExit(t, r, 3)
+	if !strings.Contains(r.stdout, wording.VerifyCantRead(wording.VerifyReasonDirectory)) {
+		t.Errorf("a directory:\n%s", r)
+	}
+	if strings.Contains(r.stdout, wording.VerifyReasonNotOpened) {
+		t.Errorf("a directory is not a permissions problem:\n%s", r)
+	}
+}
+
 // blockNetwork replaces net/http's default transport and the default DNS
 // resolver with dialers that fail and count, until restore runs or the test
 // ends. It first shows that the replacement catches a real request, or the

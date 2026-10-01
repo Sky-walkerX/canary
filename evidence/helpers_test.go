@@ -92,6 +92,11 @@ func newScenario() *scenario {
 	return s
 }
 
+// scenarioCreatedAt is the created_at every scenario record carries:
+// 2026-10-03 08:00:00 UTC. ToEvent stamps the clock's time, so the scenario
+// re-signs with this value, and two builds of one scenario give one id.
+const scenarioCreatedAt nostr.Timestamp = 1791014400
+
 func (s *scenario) event(t *testing.T) nostr.Event {
 	t.Helper()
 	c := feed.Commitment{
@@ -103,6 +108,10 @@ func (s *scenario) event(t *testing.T) nostr.Event {
 	}
 	ev, err := c.ToEvent(s.recordKey)
 	if err != nil {
+		t.Fatal(err)
+	}
+	ev.CreatedAt = scenarioCreatedAt
+	if err := ev.Sign(hex.EncodeToString(s.recordKey[:])); err != nil {
 		t.Fatal(err)
 	}
 	return ev

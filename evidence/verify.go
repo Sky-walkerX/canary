@@ -39,11 +39,12 @@ var (
 	ErrProofInvalid = errors.New("evidence: proof invalid")
 
 	// ErrReceiptInvalid means the receipt's signature, network, block hash,
-	// resource or body digest does not match.
+	// resource or body digest does not match, or it signs a dust threshold
+	// other than 0.
 	ErrReceiptInvalid = errors.New("evidence: receipt invalid")
 
 	// ErrEntryServed means the served list carries the entry, or its correct
-	// hash, at the proof's position. The file's claim fails.
+	// hash, at the proof's position or at any other. The file's claim fails.
 	ErrEntryServed = errors.New("evidence: entry served")
 
 	// ErrNotInWindow means the position is absent, but the block sat at least

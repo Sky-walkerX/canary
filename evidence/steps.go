@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Sky-walkerX/canary/canonical"
 	"github.com/Sky-walkerX/canary/commit"
 	"github.com/Sky-walkerX/canary/feed"
 	"github.com/Sky-walkerX/canary/internal/core"
@@ -75,7 +76,13 @@ func (v *verifier) inclusion() (string, error) {
 
 // receiptStep is step 6. The evidence file has no dust field, so this step
 // checks the signature under the accused key and the network, block hash,
-// resource and body digest itself, rather than calling wire.VerifyReceipt.
+// resource, dust threshold and body digest itself, rather than calling
+// wire.VerifyReceipt.
+//
+// The dust threshold must be 0. A list filtered at a threshold may leave
+// entries out by design, and the evidence format has no way to show an
+// entry's amount. canary check asks every server for 0, so it never builds a
+// file from any other receipt.
 func (v *verifier) receiptStep() (string, error) {
 	r, err := wire.DecodeReceiptHeader(*v.p.file.Receipt)
 	if err != nil {
@@ -99,6 +106,9 @@ func (v *verifier) receiptStep() (string, error) {
 	case r.Resource != wire.ResourceTweakList:
 		return wording.VerifyReceiptOtherResource, fmt.Errorf("%w: resource %#x, want the tweak list %#x",
 			ErrReceiptInvalid, byte(r.Resource), byte(wire.ResourceTweakList))
+	case r.DustSat != 0:
+		return wording.VerifyReceiptDust(r.DustSat), fmt.Errorf("%w: dust threshold %d sat, an omission needs the full list, 0",
+			ErrReceiptInvalid, r.DustSat)
 	}
 	if sum := sha256.Sum256(served); sum != r.BodySHA256 {
 		return wording.VerifyReceiptOtherBody(len(served)), fmt.Errorf("%w: body_sha256 %x, the %d served bytes hash to %x",
@@ -108,7 +118,9 @@ func (v *verifier) receiptStep() (string, error) {
 }
 
 // servedList is step 7. The signed list must decode, have the record's n
-// positions, and not carry the entry at the proof's position.
+// positions, and not carry the entry at all: not at the proof's position, and
+// not, in full or as its hash, at any other. A list that carries the entry
+// at another position served it, out of order, so it shows no omission.
 func (v *verifier) servedList() (string, error) {
 	positions, err := wire.DecodeResponse(v.p.served)
 	if err != nil {
@@ -123,21 +135,41 @@ func (v *verifier) servedList() (string, error) {
 	v.positions = positions
 
 	pos := positions[idx] // idx < n, since step 5 proved it
+	switch {
+	case pos.Kind == wire.KindFull && pos.Leaf == v.p.entry:
+		return wording.VerifyServedEntry(idx), fmt.Errorf("%w: position %d carries the entry in full", ErrEntryServed, idx)
+	case pos.Kind == wire.KindHash && pos.Hash == commit.LeafHash(v.p.entry):
+		return wording.VerifyServedEntryHash(idx), fmt.Errorf("%w: position %d carries the entry's hash", ErrEntryServed, idx)
+	}
+	if at, ok := servedElsewhere(positions, idx, v.p.entry); ok {
+		return wording.VerifyServedEntryElsewhere(idx, at), fmt.Errorf("%w: position %d carries the entry, the proof names position %d",
+			ErrEntryServed, at, idx)
+	}
 	switch pos.Kind {
 	case wire.KindAbsent:
 		v.absent = true
 		return wording.VerifyServedAbsent(n, idx), nil
 	case wire.KindFull:
-		if pos.Leaf == v.p.entry {
-			return wording.VerifyServedEntry(idx), fmt.Errorf("%w: position %d carries the entry in full", ErrEntryServed, idx)
-		}
 		return wording.VerifyServedOtherEntry(n, idx), nil
 	default: // wire.KindHash, the only other kind DecodeResponse returns
-		if pos.Hash == commit.LeafHash(v.p.entry) {
-			return wording.VerifyServedEntryHash(idx), fmt.Errorf("%w: position %d carries the entry's hash", ErrEntryServed, idx)
-		}
 		return wording.VerifyServedOtherHash(n, idx), nil
 	}
+}
+
+// servedElsewhere returns the first position other than idx that carries the
+// entry in full or as its hash. A block holds each txid once, so an honest
+// omission never finds one.
+func servedElsewhere(ps []wire.Position, idx uint32, entry canonical.Leaf) (uint32, bool) {
+	h := commit.LeafHash(entry)
+	for i, p := range ps {
+		if uint32(i) == idx {
+			continue
+		}
+		if p.Kind == wire.KindFull && p.Leaf == entry || p.Kind == wire.KindHash && p.Hash == h {
+			return uint32(i), true
+		}
+	}
+	return 0, false
 }
 
 // window is step 8. An absent position breaks the retention rule only while

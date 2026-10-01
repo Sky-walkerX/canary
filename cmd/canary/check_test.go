@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -13,10 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sky-walkerX/canary/commit"
 	"github.com/Sky-walkerX/canary/evidence"
 	"github.com/Sky-walkerX/canary/internal/core/coretest"
 	"github.com/Sky-walkerX/canary/internal/state"
 	"github.com/Sky-walkerX/canary/internal/ui/wording"
+	"github.com/Sky-walkerX/canary/ladder"
 	"github.com/Sky-walkerX/canary/wire"
 	btcwire "github.com/btcsuite/btcd/wire"
 )
@@ -32,25 +36,30 @@ func TestCheckUsageErrors(t *testing.T) {
 		want string
 	}{
 		{"no server", []string{core}, wording.CheckNoIndexer},
-		{"no pin", []string{"--indexer", "http://h:1=honest", core}, wording.CheckMissingPin("honest")},
+		{"no pin", []string{"--indexer", "https://h:1=honest", core}, wording.CheckMissingPin("honest")},
 		{"bad indexer", []string{"--indexer", "honest", core}, wording.CheckBadIndexer("honest")},
 		{"not http", []string{"--indexer", "ftp://h=honest", core}, wording.CheckBadIndexer("ftp://h=honest")},
-		{"bad label", []string{"--indexer", "http://h:1=Honest", "--pubkey", "Honest=" + good, core}, wording.CheckBadLabel("Honest")},
-		{"long label", []string{"--indexer", "http://h:1=" + strings.Repeat("a", 33), core}, wording.CheckBadLabel(strings.Repeat("a", 33))},
-		{"label twice", []string{"--indexer", "http://h:1=a", "--indexer", "http://h:2=a", core}, wording.CheckDuplicateLabel("a")},
-		{"pin form", []string{"--indexer", "http://h:1=a", "--pubkey", "a", core}, wording.CheckBadPubkeyFlag("a")},
-		{"pin hex", []string{"--indexer", "http://h:1=a", "--pubkey", "a=xyz", core}, wording.CheckBadPubkey("a")},
-		{"pin uppercase", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + strings.ToUpper(good), core}, wording.CheckBadPubkey("a")},
-		{"pin off the curve", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + strings.Repeat("ff", 32), core}, wording.CheckBadPubkey("a")},
-		{"pin unknown label", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + good, "--pubkey", "b=" + good, core}, wording.CheckPubkeyUnknownLabel("b")},
-		{"pinned twice", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + good, "--pubkey", "a=none", core}, wording.CheckDuplicatePubkey("a")},
-		{"no core", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + good}, wording.CheckNoCore},
-		{"bad core", []string{"--indexer", "http://h:1=a", "--pubkey", "a=" + good, "--core-rest", "nope"}, wording.CheckBadCore("nope")},
-		{"bad from", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core, "--from", "-1"}, wording.CheckBadHeight("--from", "-1")},
-		{"bad to", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core, "--to", "x"}, wording.CheckBadHeight("--to", "x")},
-		{"bad expect", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core, "--expect", "abc"}, wording.CheckBadExpect("abc")},
-		{"expect twice", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core, "--expect", hexKey, "--expect", hexKey + "@" + hexKey}, wording.CheckDuplicateExpect(hexKey)},
-		{"stray argument", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core, "extra"}, wording.CLIUnexpectedArgument("extra")},
+		{"plain http to another computer", []string{"--indexer", "http://h:1=a", "--pubkey", "a=none", core}, wording.CheckIndexerPlainHTTP("http://h:1=a")},
+		{"plain http to a private address", []string{"--indexer", "http://192.168.1.5:8081=a", "--pubkey", "a=none", core}, wording.CheckIndexerPlainHTTP("http://192.168.1.5:8081=a")},
+		{"bad label", []string{"--indexer", "https://h:1=Honest", "--pubkey", "Honest=" + good, core}, wording.CheckBadLabel("Honest")},
+		{"long label", []string{"--indexer", "https://h:1=" + strings.Repeat("a", 33), core}, wording.CheckBadLabel(strings.Repeat("a", 33))},
+		{"label twice", []string{"--indexer", "https://h:1=a", "--indexer", "https://h:2=a", core}, wording.CheckDuplicateLabel("a")},
+		{"pin form", []string{"--indexer", "https://h:1=a", "--pubkey", "a", core}, wording.CheckBadPubkeyFlag("a")},
+		{"pin hex", []string{"--indexer", "https://h:1=a", "--pubkey", "a=xyz", core}, wording.CheckBadPubkey("a")},
+		{"pin uppercase", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + strings.ToUpper(good), core}, wording.CheckBadPubkey("a")},
+		{"pin off the curve", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + strings.Repeat("ff", 32), core}, wording.CheckPubkeyNotOnCurve("a")},
+		{"pin all zeros", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + strings.Repeat("00", 32), core}, wording.CheckPubkeyNotOnCurve("a")},
+		{"one key for two servers", []string{"--indexer", "https://h:1=a", "--indexer", "https://h:2=b", "--pubkey", "a=" + good, "--pubkey", "b=" + good, core}, wording.CheckPubkeyShared("b", "a")},
+		{"pin unknown label", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + good, "--pubkey", "b=" + good, core}, wording.CheckPubkeyUnknownLabel("b")},
+		{"pinned twice", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + good, "--pubkey", "a=none", core}, wording.CheckDuplicatePubkey("a")},
+		{"no core", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + good}, wording.CheckNoCore},
+		{"bad core", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + good, "--core-rest", "nope"}, wording.CheckBadCore("nope")},
+		{"core over plain http to another computer", []string{"--indexer", "https://h:1=a", "--pubkey", "a=" + good, "--core-rest", "http://node.lan:8332/rest"}, wording.CheckCorePlainHTTP("http://node.lan:8332/rest")},
+		{"bad from", []string{"--indexer", "https://h:1=a", "--pubkey", "a=none", core, "--from", "-1"}, wording.CheckBadHeight("--from", "-1")},
+		{"bad to", []string{"--indexer", "https://h:1=a", "--pubkey", "a=none", core, "--to", "x"}, wording.CheckBadHeight("--to", "x")},
+		{"bad expect", []string{"--indexer", "https://h:1=a", "--pubkey", "a=none", core, "--expect", "abc"}, wording.CheckBadExpect("abc")},
+		{"expect twice", []string{"--indexer", "https://h:1=a", "--pubkey", "a=none", core, "--expect", hexKey, "--expect", hexKey + "@" + hexKey}, wording.CheckDuplicateExpect(hexKey)},
+		{"stray argument", []string{"--indexer", "https://h:1=a", "--pubkey", "a=none", core, "extra"}, wording.CLIUnexpectedArgument("extra")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,12 +77,105 @@ func TestCheckUsageErrors(t *testing.T) {
 
 // Canary splits --indexer on the last =, so a URL may carry = itself.
 func TestCheckSplitsIndexerOnTheLastEquals(t *testing.T) {
-	cfg, msg := parseCheck([]string{"--indexer", "http://h:1/x?a=b=honest", "--pubkey", "honest=none", "--core-rest", "http://c/rest"})
+	cfg, msg := parseCheck([]string{"--indexer", "https://h:1/x?a=b=honest", "--pubkey", "honest=none", "--core-rest", "https://c/rest"})
 	if msg != "" {
 		t.Fatal(msg)
 	}
-	if len(cfg.servers) != 1 || cfg.servers[0].url != "http://h:1/x?a=b" || cfg.servers[0].label != "honest" {
+	if len(cfg.servers) != 1 || cfg.servers[0].url != "https://h:1/x?a=b" || cfg.servers[0].label != "honest" {
 		t.Errorf("servers = %+v", cfg.servers)
+	}
+}
+
+// Canary judges a list that has no valid receipt on the bytes that arrived.
+// So those bytes must be the ones the server sent. Plain http to another
+// computer lets anyone on the path strip the receipt and change the list,
+// and change what Core says. Canary takes https anywhere, and plain http
+// only to this computer.
+func TestCheckTakesHTTPSOrPlainHTTPToThisComputer(t *testing.T) {
+	accepted := []string{
+		"https://h:1", "https://203.0.113.7:8081", "http://127.0.0.1:1", "http://127.8.9.10:1",
+		"http://[::1]:1", "http://localhost:1", "http://LocalHost:1", "http://localhost",
+	}
+	refused := []string{
+		"http://h:1", "http://10.0.0.1:1", "http://203.0.113.7:8081", "http://0.0.0.0:1",
+		"http://localhost.example:1", "http://127.0.0.1.nip.io:1", "http://[::ffff:10.0.0.1]:1",
+	}
+	for _, u := range accepted {
+		if _, msg := parseCheck([]string{"--indexer", u + "=a", "--pubkey", "a=none", "--core-rest", u + "/rest"}); msg != "" {
+			t.Errorf("%s: %s", u, msg)
+		}
+	}
+	for _, u := range refused {
+		_, msg := parseCheck([]string{"--indexer", u + "=a", "--pubkey", "a=none", "--core-rest", "http://127.0.0.1:1/rest"})
+		if want := wording.CheckIndexerPlainHTTP(u + "=a"); msg != want {
+			t.Errorf("--indexer %s: %q, want %q", u, msg, want)
+		}
+		_, msg = parseCheck([]string{"--indexer", "https://h:1=a", "--pubkey", "a=none", "--core-rest", u + "/rest"})
+		if want := wording.CheckCorePlainHTTP(u + "/rest"); msg != want {
+			t.Errorf("--core-rest %s: %q, want %q", u, msg, want)
+		}
+	}
+}
+
+// A redirect is held to the same rule, so a server cannot send Canary off to
+// fetch its answer over plain http from another computer.
+func TestCheckFollowsRedirectsOnlyToHTTPSOrThisComputer(t *testing.T) {
+	cases := []struct {
+		to     string
+		hops   int
+		follow bool
+	}{
+		{"https://h/tweaks/x", 1, true},
+		{"http://127.0.0.1:1/tweaks/x", 1, true},
+		{"http://localhost:1/tweaks/x", 1, true},
+		{"http://h/tweaks/x", 1, false},
+		{"http://192.168.1.5/tweaks/x", 1, false},
+		{"https://h/tweaks/x", 10, false},
+	}
+	for _, c := range cases {
+		req, err := http.NewRequest(http.MethodGet, c.to, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		via := make([]*http.Request, c.hops)
+		if err := checkRedirect(req, via); (err == nil) != c.follow {
+			t.Errorf("redirect to %s after %d hops: err %v, want follow %v", c.to, c.hops, err, c.follow)
+		}
+	}
+}
+
+// End to end: an indexer on this computer that redirects its list to plain
+// http elsewhere gets no list from Canary, and no accusation.
+func TestCheckRefusesARedirectToPlainHTTPElsewhere(t *testing.T) {
+	w := newWorld(t)
+	k := testKey(3)
+	away := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/tweaks/"+w.blockHash() {
+				http.Redirect(rw, r, "http://192.0.2.1:9"+r.URL.RequestURI(), http.StatusFound)
+				return
+			}
+			next.ServeHTTP(rw, r)
+		})
+	}
+	s := server{label: "away", url: startIndexer(t, w.rest, k, nil, away).URL, pubkey: pubHex(t, k)}
+	start := time.Now()
+	r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), s})...)
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("the run took %v: Canary followed the redirect", d)
+	}
+	f := loadState(t, w.statePath())
+	b := blockAt(t, f, w.height)
+	if p := serverIn(t, b, "away"); p.State != state.Unresolvable || p.Reason != state.ListNotServed {
+		t.Errorf("away = %s/%s, want unresolvable/list_not_served", p.State, p.Reason)
+	}
+	for _, x := range f.Findings {
+		if x.Kind == state.KindWithheld {
+			t.Errorf("finding %+v: a refused redirect must accuse nobody", x)
+		}
+	}
+	if !strings.Contains(r.stderr, "plain http") {
+		t.Errorf("stderr should name the refused redirect:\n%s", r)
 	}
 }
 
@@ -685,11 +787,14 @@ func resignTip(t *testing.T, sk [32]byte, blockHash string, tip uint32) func(htt
 }
 
 // A withholder can sign a tip that puts the hidden block past the window.
-// Core's chain contradicts any such tip far from Core's own, so the run names
-// the withholder with false_chain_claim. That holds for a tip too high for
-// Core's REST interface to read: Core refuses that request with 400, and the
-// refusal must not stop the run that names the withholder.
-func TestCheckFalseSignedTipNamesTheWithholder(t *testing.T) {
+// Core has no block at a height above its own tip, and a Core node that is
+// behind looks the same as a lie, so such a tip is never an accusation by
+// itself. The run must not stop either: Core's REST interface refuses a
+// height above 2^31 - 1 with 400, and that refusal must not end the run.
+// Here the honest server fills the gap, so the block reads Checked. With
+// the payment declared, the tripwire still names the withholder: Core shows
+// the payment's output unspent, so nothing excuses holding back its entry.
+func TestCheckSignedTipAboveCoreIsNotAnAccusation(t *testing.T) {
 	tests := []struct {
 		name string
 		tip  uint32
@@ -704,26 +809,245 @@ func TestCheckFalseSignedTipNamesTheWithholder(t *testing.T) {
 			k := testKey(2)
 			id := w.targetID()
 			liar := server{label: "withholder", url: startIndexer(t, w.rest, k, &id, resignTip(t, k, w.blockHash(), tt.tip)).URL, pubkey: pubHex(t, k)}
-			r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), liar})...)
-			wantExit(t, r, 1)
+			// The honest server signs the same tip over a full list. Nothing
+			// is excused, so nothing is said about its tip.
+			hk := testKey(1)
+			honest := server{label: "honest", url: startIndexer(t, w.rest, hk, nil, resignTip(t, hk, w.blockHash(), tt.tip)).URL, pubkey: pubHex(t, hk)}
 
+			r := runCLI(t, w.args([]server{honest, liar})...)
+			wantExit(t, r, 0)
 			f := loadState(t, w.statePath())
 			b := blockAt(t, f, w.height)
-			if s := serverIn(t, b, "withholder"); s.State != state.Compromised || s.Reason != state.FalseChainClaim {
-				t.Errorf("withholder = %s/%s, want compromised/false_chain_claim", s.State, s.Reason)
+			s := serverIn(t, b, "withholder")
+			if s.State != state.Resolved || s.Reason != state.FilledFromServer {
+				t.Errorf("withholder = %s/%s, want resolved/filled_from_server", s.State, s.Reason)
 			}
-			if b.State != state.Compromised || b.Reason != state.FalseChainClaim {
-				t.Errorf("block = %s/%s, want compromised/false_chain_claim", b.State, b.Reason)
+			if s.Tip == nil || s.Tip.Height != tt.tip {
+				t.Errorf("withholder's signed tip = %+v, want height %d recorded", s.Tip, tt.tip)
+			}
+			if b.State != state.Verified || len(f.Findings) != 0 {
+				t.Errorf("block = %s/%s, findings %+v, want verified and no finding", b.State, b.Reason, f.Findings)
+			}
+			// No accusation, but not silence either. The server's error line
+			// says that only an unconfirmed tip excused the gap.
+			note := wording.ServerTipAboveCore(w.height, tt.tip, w.tip, ladder.TipMargin)
+			if e := stateServer(t, f, "withholder").Error; e == nil || *e != note {
+				t.Errorf("withholder's error = %v, want %q", e, note)
+			}
+			if !strings.Contains(r.stderr, note) {
+				t.Errorf("stderr should say %q:\n%s", note, r)
+			}
+			if e := stateServer(t, f, "honest").Error; e != nil {
+				t.Errorf("honest server's error = %q, want none", *e)
+			}
+
+			r = runCLI(t, w.args([]server{honest, liar}, "--expect", w.txid()+"@"+w.blockHash())...)
+			wantExit(t, r, 1)
+			f = loadState(t, w.statePath())
+			b = blockAt(t, f, w.height)
+			if s := serverIn(t, b, "withholder"); s.State != state.Compromised || s.Reason != state.ExpectedPaymentNotInList {
+				t.Errorf("withholder = %s/%s, want compromised/expected_payment_not_in_list", s.State, s.Reason)
 			}
 			if len(f.Findings) != 1 {
 				t.Fatalf("findings = %+v, want one", f.Findings)
 			}
 			x := f.Findings[0]
-			if x.Kind != state.KindWithheld || x.Reason != state.FalseChainClaim || x.Servers[0].Label != "withholder" ||
-				x.Evidence != nil || x.Provable {
-				t.Errorf("finding = %+v, want a false_chain_claim against the withholder, not provable, with no file", x)
+			if x.Kind != state.KindWithheld || x.Reason != state.ExpectedPaymentNotInList || x.Servers[0].Label != "withholder" {
+				t.Errorf("finding = %+v, want expected_payment_not_in_list against the withholder", x)
 			}
 		})
+	}
+}
+
+// flipLastByte changes the last byte of one block's list on its way to
+// Canary and keeps the receipt the server signed, as a proxy or anyone on
+// the path could.
+func flipLastByte(blockHash string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/tweaks/"+blockHash {
+				next.ServeHTTP(w, r)
+				return
+			}
+			rec := httptest.NewRecorder()
+			next.ServeHTTP(rec, r)
+			for k, v := range rec.Header() {
+				w.Header()[k] = v
+			}
+			body := rec.Body.Bytes()
+			if len(body) > 0 {
+				body[len(body)-1] ^= 0x01
+			}
+			w.WriteHeader(rec.Code)
+			_, _ = w.Write(body)
+		})
+	}
+}
+
+// A list altered between the server and Canary must never name the server.
+// The receipt the server signed does not cover the bytes that arrived, so
+// Canary judges nothing from them. The block reads as if the list was not
+// served, with no warning and no evidence file, and the terminal says the
+// list was changed on the way.
+func TestCheckListAlteredInTransitAccusesNobody(t *testing.T) {
+	for _, alone := range []bool{false, true} {
+		name := "beside an honest server"
+		if alone {
+			name = "alone"
+		}
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t)
+			k := testKey(3)
+			proxied := server{label: "proxied", url: startIndexer(t, w.rest, k, nil, flipLastByte(w.blockHash())).URL, pubkey: pubHex(t, k)}
+			servers := []server{proxied}
+			if !alone {
+				servers = []server{w.honest(t, "honest", 1), proxied}
+			}
+			r := runCLI(t, w.args(servers, "--expect", w.txid()+"@"+w.blockHash())...)
+			wantExit(t, r, 0)
+
+			f := loadState(t, w.statePath())
+			b := blockAt(t, f, w.height)
+			p := serverIn(t, b, "proxied")
+			if p.State != state.Unresolvable || p.Reason != state.ListNotServed || p.Signed {
+				t.Errorf("proxied = %s/%s signed %v, want unresolvable/list_not_served, unsigned", p.State, p.Reason, p.Signed)
+			}
+			if len(f.Findings) != 0 {
+				t.Errorf("findings = %+v, want none", f.Findings)
+			}
+			want := wording.ServerListAltered(w.height)
+			last := f.Servers[len(f.Servers)-1]
+			if last.Error == nil || *last.Error != want {
+				t.Errorf("proxied error = %v, want %q", last.Error, want)
+			}
+			if !strings.Contains(r.stderr, want) {
+				t.Errorf("stderr should say %q:\n%s", want, r)
+			}
+			if _, err := os.Stat(w.evidenceDir()); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("evidence directory: %v, want none written", err)
+			}
+		})
+	}
+}
+
+// A list changed on the way names nobody, but it is a sign of trouble. A
+// later error from the same server must not hide it. The state file keeps
+// the first such sentence as the server's error, and the terminal prints
+// both.
+func TestCheckKeepsTheSignOfAnAlteredList(t *testing.T) {
+	w := newWorld(t)
+	k := testKey(3)
+	later := w.chain.Block(w.height + 2).BlockHash().String()
+	wrap := func(next http.Handler) http.Handler {
+		flip := flipLastByte(w.blockHash())(next)
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/tweaks/"+later {
+				rw.Header().Set("Content-Type", "application/json")
+				rw.WriteHeader(http.StatusInternalServerError)
+				_, _ = rw.Write([]byte(`{"error":{"code":"internal","message":"down"}}`))
+				return
+			}
+			flip.ServeHTTP(rw, r)
+		})
+	}
+	proxied := server{label: "proxied", url: startIndexer(t, w.rest, k, nil, wrap).URL, pubkey: pubHex(t, k)}
+	r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), proxied})...)
+
+	f := loadState(t, w.statePath())
+	altered, unanswered := wording.ServerListAltered(w.height), wording.ServerListUnanswered(w.height+2)
+	if e := stateServer(t, f, "proxied").Error; e == nil || *e != altered {
+		t.Errorf("proxied error = %v, want the first sign of trouble, %q", e, altered)
+	}
+	for _, want := range []string{altered, unanswered} {
+		if !strings.Contains(r.stderr, want) {
+			t.Errorf("stderr should say %q:\n%s", want, r)
+		}
+	}
+	if i, j := strings.Index(r.stderr, altered), strings.Index(r.stderr, unanswered); i > j {
+		t.Errorf("stderr should print the kept error before the last one:\n%s", r)
+	}
+	for _, x := range f.Findings {
+		if x.Kind == state.KindWithheld {
+			t.Errorf("finding %+v: an altered list must accuse nobody", x)
+		}
+	}
+}
+
+// declareDust answers /info with a policy that declares threshold, sends the
+// target's entry as a hash, and drops every receipt, as a server that signs
+// no receipts and claims a dust filter would.
+func declareDust(t *testing.T, w *world, threshold uint64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			rec := httptest.NewRecorder()
+			next.ServeHTTP(rec, r)
+			body := rec.Body.Bytes()
+			switch r.URL.Path {
+			case "/info":
+				var info map[string]any
+				if err := json.Unmarshal(body, &info); err != nil {
+					t.Errorf("read /info: %v", err)
+				}
+				info["policy"] = map[string]any{"prunes_spent": true, "dust_threshold_sat": threshold, "dust_configurable": false}
+				body, _ = json.Marshal(info)
+			case "/tweaks/" + w.blockHash():
+				ps, err := wire.DecodeResponse(body)
+				if err != nil {
+					t.Errorf("read the list: %v", err)
+				}
+				hashed := false
+				for i, p := range ps {
+					if p.Kind == wire.KindFull && p.Leaf.TxID == w.targetID() {
+						ps[i] = wire.Position{Kind: wire.KindHash, Hash: commit.LeafHash(p.Leaf)}
+						hashed = true
+					}
+				}
+				if !hashed {
+					t.Error("test setup: the list does not carry the target in full")
+				}
+				if body, err = wire.EncodeResponse(ps); err != nil {
+					t.Errorf("write the list: %v", err)
+				}
+			}
+			for k, v := range rec.Header() {
+				switch http.CanonicalHeaderKey(k) {
+				case "X-Canary-Receipt", "Content-Length":
+				default:
+					rw.Header()[k] = v
+				}
+			}
+			rw.WriteHeader(rec.Code)
+			_, _ = rw.Write(body)
+		})
+	}
+}
+
+// Without a valid receipt, Canary judges a list by the dust threshold the
+// server's /info declares. When only that unsigned number excuses holding
+// back a declared payment that Core shows unspent, Canary accuses nobody.
+// But the server's error line says so, naming the threshold.
+func TestCheckSaysWhenOnlyTheDeclaredDustThresholdExcuses(t *testing.T) {
+	const threshold uint64 = 1 << 60
+	w := newWorld(t)
+	k := testKey(2)
+	s := server{label: "unsigned", url: startIndexer(t, w.rest, k, nil, declareDust(t, w, threshold)).URL, pubkey: pubHex(t, k)}
+	r := runCLI(t, w.args([]server{w.honest(t, "honest", 1), s}, "--expect", w.txid()+"@"+w.blockHash())...)
+	wantExit(t, r, 0)
+
+	f := loadState(t, w.statePath())
+	b := blockAt(t, f, w.height)
+	if u := serverIn(t, b, "unsigned"); u.State != state.Resolved || u.Reason != state.HashRetained || u.Signed {
+		t.Errorf("unsigned = %s/%s signed %v, want resolved/hash_retained, unsigned", u.State, u.Reason, u.Signed)
+	}
+	if len(f.Findings) != 0 {
+		t.Errorf("findings = %+v, want none", f.Findings)
+	}
+	note := wording.ServerPaymentDustExcused(w.height, w.txid(), threshold)
+	if e := stateServer(t, f, "unsigned").Error; e == nil || *e != note {
+		t.Errorf("unsigned server's error = %v, want %q", e, note)
+	}
+	if !strings.Contains(r.stderr, note) {
+		t.Errorf("stderr should say %q:\n%s", note, r)
 	}
 }
 

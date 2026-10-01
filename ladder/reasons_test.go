@@ -146,6 +146,19 @@ func reasonCases() []reasonCase {
 			blockState: state.Unresolvable, blockReason: state.TipUnconfirmed,
 		},
 		{
+			// Core may be behind, so a tip it has not reached is never a
+			// false claim, however far ahead.
+			reason: state.TipUnconfirmed, name: "the receipt signs a tip far past Core's",
+			build: func(t *testing.T) Block {
+				f := newFixture(t, 250)
+				L := leaves(4, "a")
+				return f.block(f.srv("w", newKey(t, 2), L, absentAt(full(L), 1),
+					signedTip(400, sha256.Sum256([]byte("fake tip")))))
+			},
+			server: "w", state: state.Unresolvable, want: state.TipUnconfirmed,
+			blockState: state.Unresolvable, blockReason: state.TipUnconfirmed,
+		},
+		{
 			reason: state.TipUnconfirmed, name: "signed tip a few blocks ahead of Core",
 			build: func(t *testing.T) Block {
 				f := newFixture(t, deep)
@@ -373,12 +386,12 @@ func reasonCases() []reasonCase {
 			blockState: state.Compromised, blockReason: state.FalseChainClaim,
 		},
 		{
-			reason: state.FalseChainClaim, name: "the receipt overstates the tip far past Core's",
+			reason: state.FalseChainClaim, name: "a signed tip Core holds another block for, far below Core's tip",
 			build: func(t *testing.T) Block {
-				f := newFixture(t, 250)
+				f := newFixture(t, deep)
 				L := leaves(4, "a")
 				return f.block(f.srv("w", newKey(t, 2), L, absentAt(full(L), 1),
-					signedTip(400, sha256.Sum256([]byte("fake tip")))))
+					signedTip(deep+wire.RetentionWindow, sha256.Sum256([]byte("fake tip")))))
 			},
 			server: "w", state: state.Compromised, want: state.FalseChainClaim,
 		},
@@ -468,7 +481,20 @@ func reasonCases() []reasonCase {
 			blockState: state.Compromised, blockReason: state.ExpectedPaymentNotInList,
 		},
 		{
-			reason: state.ExpectedPaymentNotInList, name: "an unspent output below the declared dust threshold is hash only",
+			// Only a list with no valid receipt falls back to the declared,
+			// unsigned threshold.
+			reason: state.ExpectedPaymentNotInList, name: "unsigned list, an unspent output below the declared dust threshold is hash only",
+			build: func(t *testing.T) Block {
+				f := newFixture(t, recent)
+				L := leaves(4, "a")
+				f.payments = []Payment{{Entry: L[2], Outputs: []Output{unspent(300)}}}
+				return f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2), noReceipt(),
+					withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: 1000})))
+			},
+			server: "w", state: state.Resolved, want: state.HashRetained,
+		},
+		{
+			reason: state.ExpectedPaymentNotInList, name: "a receipted list is judged by the signed threshold, not the declared one",
 			build: func(t *testing.T) Block {
 				f := newFixture(t, recent)
 				L := leaves(4, "a")
@@ -476,7 +502,19 @@ func reasonCases() []reasonCase {
 				return f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2),
 					withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: 1000})))
 			},
-			server: "w", state: state.Resolved, want: state.HashRetained,
+			server: "w", state: state.Compromised, want: state.ExpectedPaymentNotInList,
+		},
+		{
+			reason: state.ListNotServed, name: "a list altered after the server signed it",
+			build: func(t *testing.T) Block {
+				f := newFixture(t, recent)
+				L := leaves(4, "a")
+				s := f.srv("a", newKey(t, 1), L, full(L))
+				s.List.Body = encode(t, absentAt(full(L), 1))
+				return f.block(s)
+			},
+			server: "a", state: state.Unresolvable, want: state.ListNotServed,
+			blockState: state.Unresolvable, blockReason: state.ListNotServed,
 		},
 
 		// the warning

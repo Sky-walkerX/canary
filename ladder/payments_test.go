@@ -1,10 +1,13 @@
 package ladder
 
 import (
+	"math"
 	"testing"
 
+	"github.com/Sky-walkerX/canary/canonical"
 	"github.com/Sky-walkerX/canary/internal/state"
 	"github.com/Sky-walkerX/canary/policy"
+	"github.com/Sky-walkerX/canary/wire"
 )
 
 // paymentOutcome returns the server's outcome for its only declared payment.
@@ -67,13 +70,14 @@ func TestPaymentLeftOutWhereTheRuleForbidsItIsWithheld(t *testing.T) {
 	}
 }
 
-// The dust test is "at or above" the declared threshold. An unspent output
-// worth exactly the threshold is not dust, so pruning cannot explain it.
+// The dust test is "at or above" the threshold. An unspent output worth
+// exactly the threshold is not dust, so pruning cannot explain it. The list
+// carries no receipt, so the declared threshold is the one that applies.
 func TestUnspentOutputAtTheDustThresholdIsNotDust(t *testing.T) {
 	f := newFixture(t, recent)
 	L := leaves(4, "a")
 	f.payments = []Payment{{Entry: L[2], Outputs: []Output{unspent(1000)}}}
-	w := byLabel(t, evaluate(t, f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2),
+	w := byLabel(t, evaluate(t, f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2), noReceipt(),
 		withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: 1000})))), "w")
 	if w.State != state.Compromised || w.Reason != state.ExpectedPaymentNotInList {
 		t.Errorf("w = %s/%s, want compromised/expected_payment_not_in_list", w.State, w.Reason)
@@ -96,5 +100,93 @@ func TestPaymentCarriedInFullIsFoundDespiteAnUnfilledGap(t *testing.T) {
 	}
 	if got := paymentOutcome(t, w); got != PaymentFound {
 		t.Errorf("payment outcome = %s, want found", got)
+	}
+}
+
+// /info is unsigned, so a dust threshold declared there cannot excuse an entry
+// held back from a list that came with a valid receipt. canary check asks for
+// no threshold, and the receipt signs the threshold the server applied: 0. A
+// withholder that declares a huge threshold is still named by the tripwire.
+func TestReceiptDustThresholdOutranksTheDeclaredOne(t *testing.T) {
+	huge := withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: math.MaxUint64})
+	cases := []struct {
+		name   string
+		height uint32
+		served func(L []canonical.Leaf) []wire.Position
+	}{
+		{"the entry sent as a hash", recent, func(L []canonical.Leaf) []wire.Position { return hashAt(full(L), 2) }},
+		{"the entry absent past the window", deep, func(L []canonical.Leaf) []wire.Position { return absentAt(full(L), 2) }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t, c.height)
+			L := leaves(4, "a")
+			f.payments = []Payment{{Entry: L[2], Outputs: []Output{unspent(10000)}}}
+			w := byLabel(t, evaluate(t, f.block(f.srv("w", newKey(t, 2), L, c.served(L), huge))), "w")
+			if !w.Signed || w.Receipt == nil || w.Receipt.DustSat != 0 {
+				t.Fatalf("test setup: signed %v, receipt %+v, want a valid receipt for dust 0", w.Signed, w.Receipt)
+			}
+			if w.State != state.Compromised || w.Reason != state.ExpectedPaymentNotInList {
+				t.Errorf("w = %s/%s, want compromised/expected_payment_not_in_list", w.State, w.Reason)
+			}
+			if got := paymentOutcome(t, w); got != PaymentWithheld {
+				t.Errorf("payment outcome = %s, want withheld", got)
+			}
+		})
+	}
+}
+
+// Without a receipt nothing signed says which threshold the server applied.
+// Canary then falls back to the threshold the server declared, an unsigned
+// claim, so that a server with a real dust filter is not accused.
+func TestUnsignedListFallsBackToTheDeclaredDustThreshold(t *testing.T) {
+	f := newFixture(t, recent)
+	L := leaves(4, "a")
+	f.payments = []Payment{{Entry: L[2], Outputs: []Output{unspent(300)}}}
+	w := byLabel(t, evaluate(t, f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2), noReceipt(),
+		withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: 1000})))), "w")
+	if w.State != state.Resolved || w.Reason != state.HashRetained {
+		t.Errorf("w = %s/%s, want resolved/hash_retained", w.State, w.Reason)
+	}
+	if got := paymentOutcome(t, w); got != PaymentHashOnly {
+		t.Errorf("payment outcome = %s, want hash_only", got)
+	}
+	if !w.Payments[0].DustExcused {
+		t.Error("DustExcused = false: only the declared threshold excused an unspent output, and the result must say so")
+	}
+}
+
+// DustExcused marks only the case where the declared threshold was the
+// excuse: an unsigned list, and an output Core shows unspent below that
+// threshold. Pruning explains a payment whose outputs are all spent, and a
+// receipted list is judged by the threshold its receipt signs.
+func TestDustExcusedOnlyWhenTheDeclaredThresholdExcuses(t *testing.T) {
+	declared := withPolicy(&policy.Policy{Network: regtest, PrunesSpent: true, DustThresholdSat: 1000})
+	cases := []struct {
+		name    string
+		outputs []Output
+		opts    []opt
+		outcome string
+		excused bool
+	}{
+		{"unsigned, unspent below the threshold", []Output{unspent(300)}, []opt{noReceipt(), declared}, PaymentHashOnly, true},
+		{"unsigned, every output spent", []Output{spent(300)}, []opt{noReceipt(), declared}, PaymentHashOnly, false},
+		{"unsigned, unspent above the threshold", []Output{unspent(5000)}, []opt{noReceipt(), declared}, PaymentWithheld, false},
+		{"unsigned, no threshold declared", []Output{spent(300)}, []opt{noReceipt(), prunes()}, PaymentHashOnly, false},
+		{"receipted, unspent below the declared threshold", []Output{unspent(300)}, []opt{declared}, PaymentWithheld, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t, recent)
+			L := leaves(4, "a")
+			f.payments = []Payment{{Entry: L[2], Outputs: c.outputs}}
+			w := byLabel(t, evaluate(t, f.block(f.srv("w", newKey(t, 2), L, hashAt(full(L), 2), c.opts...))), "w")
+			if got := paymentOutcome(t, w); got != c.outcome {
+				t.Errorf("payment outcome = %s, want %s", got, c.outcome)
+			}
+			if got := w.Payments[0].DustExcused; got != c.excused {
+				t.Errorf("DustExcused = %v, want %v", got, c.excused)
+			}
+		})
 	}
 }

@@ -18,7 +18,7 @@
     "from": 0,
     "to": 351
   },
-  "evidence_dir": "demo-out/evidence",
+  "evidence_dir": "evidence",
   "servers": [
     {
       "label": "honest",

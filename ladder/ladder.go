@@ -18,7 +18,7 @@ const (
 	windowInside                    // inside the window: an omission
 	windowFalseClaim                // excused by a signed chain claim Core contradicts
 	windowConfirmed                 // outside, and Core confirms the server's claim
-	windowUnconfirmed               // outside, by a signed tip Core cannot confirm yet
+	windowUnconfirmed               // outside by a tip Core cannot confirm or refute: a signed one, or for an unsigned list, one Core may lag
 	windowOutside                   // outside by Core's own view, for an unsigned list
 )
 
@@ -144,16 +144,34 @@ func firstSteps(b Block, s Server) (*eval, error) {
 		return e, nil
 	}
 
-	// Step 3. Receipt. A failure leaves the list unsigned, not rejected.
+	// Step 3. Receipt. A receipt that does not verify under the pin leaves
+	// the list unsigned, not rejected. An unsigned list is judged on what
+	// arrived. That is safe because canary check reads servers over https,
+	// or plain http to this computer only, so nobody else can strip or swap
+	// a receipt on the way.
+	//
+	// A receipt that does verify, but for other bytes or another request, is
+	// different. The server signed what it sent, and this is not it. Someone
+	// between the server and Canary changed the list, or the server sent the
+	// wrong receipt. Judging those bytes would let a third party make Canary
+	// accuse an honest server. So the list counts as not served, and nothing
+	// names the server, not even a warning. A withholder gains nothing new by
+	// sending such a pair: refusing the record already leaves no warning.
 	if s.List.Receipt != "" {
 		rc, err := wire.DecodeReceiptHeader(s.List.Receipt)
 		if err == nil {
 			req := wire.ReceiptRequest{Network: b.Core.Network, BlockHash: b.Hash, DustSat: DustSat}
 			err = wire.VerifyReceipt(rc, *s.Pubkey, req, s.List.Body)
 		}
-		if err != nil {
+		switch {
+		case errors.Is(err, wire.ErrReceiptMismatch):
+			r.ReceiptErr = fmt.Errorf("ladder: list altered: %w", err)
+			r.ListAltered = true
+			e.stop(state.Unresolvable, state.ListNotServed)
+			return e, nil
+		case err != nil:
 			r.ReceiptErr = fmt.Errorf("ladder: receipt rejected: %w", err)
-		} else {
+		default:
 			r.Signed, r.Receipt = true, &rc
 		}
 	}
@@ -191,11 +209,12 @@ func firstSteps(b Block, s Server) (*eval, error) {
 
 	// Step 5. Window. A result here stands whatever filling finds.
 	if counts.Absent > 0 {
-		w, err := retention(b, rec, r.Receipt)
+		w, err := retention(b, rec, r.Receipt, s.Tip)
 		if err != nil {
 			return nil, err
 		}
 		e.window = w
+		r.TipUnconfirmed = w == windowUnconfirmed
 		switch w {
 		case windowInside:
 			r.State, r.Reason = state.Compromised, state.AbsentInWindow
@@ -228,14 +247,37 @@ func countPositions(ps []wire.Position) state.Positions {
 // the window, that settles it, whatever Core says. Only when they put it
 // outside does Canary check the server's chain claim against Core.
 //
+// The check is one-sided. Core can contradict a claim only about a height it
+// has reached. A signed tip above Core's tip may be a lie, or Core may be
+// behind, and Canary can't tell the two apart. So it never accuses on such a
+// tip: the gap reads Can't be checked unless something fills it. It accuses
+// only when Core holds a different block at the signed height, more than
+// TipMargin blocks below Core's tip, or when the record names a height that
+// Core's block with that hash does not have. A lagging node therefore never
+// makes Canary accuse an honest server.
+//
 // Without a receipt there is no signed tip. Depth then comes from Core's tip
-// and Core's height for the block, and no chain claim exists to check.
-func retention(b Block, rec feed.Commitment, rc *wire.Receipt) (window, error) {
+// and Core's height for the block, and no chain claim exists to check. Core
+// may still be behind the server, so an absence that Core's tip puts inside
+// the window may be one the server's tip permits. Canary allows for that in
+// two ways. It accuses only below depth 144 - TipMargin by Core's tip,
+// enough for a node a few blocks behind. And it measures again from the tip
+// the server's /info declared, when that tip is higher. That tip is
+// unsigned, so it can excuse an absence and never convict. Either way an
+// excused absence reads unconfirmed, as for a signed tip above Core's.
+func retention(b Block, rec feed.Commitment, rc *wire.Receipt, declared *uint32) (window, error) {
 	if rc == nil {
-		if wire.InsideRetentionWindow(b.Core.TipHeight, b.Height) {
+		if !wire.InsideRetentionWindow(b.Core.TipHeight, b.Height) {
+			return windowOutside, nil
+		}
+		tip := int64(b.Core.TipHeight) + TipMargin
+		if declared != nil {
+			tip = max(tip, int64(*declared))
+		}
+		if tip-int64(b.Height) < wire.RetentionWindow {
 			return windowInside, nil
 		}
-		return windowOutside, nil
+		return windowUnconfirmed, nil
 	}
 	if wire.InsideRetentionWindow(rc.TipHeight, rec.BlockHeight) {
 		return windowInside, nil
@@ -253,23 +295,21 @@ func retention(b Block, rec feed.Commitment, rc *wire.Receipt) (window, error) {
 	if err != nil {
 		return 0, fmt.Errorf("ladder: check the signed tip: Core at height %d: %w", rc.TipHeight, err)
 	}
-	if ok && h == rc.TipHash {
+	switch {
+	case ok && h == rc.TipHash:
 		return windowConfirmed, nil
+	case !ok:
+		// Core has no block at that height yet. It may be behind.
+		return windowUnconfirmed, nil
 	}
-	// Near Core's tip, a reorg or a node a block behind can explain a tip
-	// Core does not know. Further off, nothing does.
-	if distance(rc.TipHeight, b.Core.TipHeight) > TipMargin {
+	// Core holds another block at the signed height. Near Core's tip a reorg
+	// explains that. More than TipMargin blocks below it, nothing does. The
+	// tip Core had when the run began is the measure, so a node that moved
+	// on during the run never makes a claim look older than it is.
+	if int64(b.Core.TipHeight)-int64(rc.TipHeight) > TipMargin {
 		return windowFalseClaim, nil
 	}
 	return windowUnconfirmed, nil
-}
-
-func distance(a, b uint32) int64 {
-	d := int64(a) - int64(b)
-	if d < 0 {
-		return -d
-	}
-	return d
 }
 
 // finishRoot records step 7's result. A result from steps 4 or 5 stands.
@@ -381,7 +421,10 @@ func (e *eval) checkPayments(b Block) {
 	var found state.Reason
 	for _, p := range b.Payments {
 		outcome, reason := e.payment(p)
-		e.res.Payments = append(e.res.Payments, PaymentResult{TxID: p.Entry.TxID, Outcome: outcome, Reason: reason})
+		e.res.Payments = append(e.res.Payments, PaymentResult{
+			TxID: p.Entry.TxID, Outcome: outcome, Reason: reason,
+			DustExcused: outcome == PaymentHashOnly && e.unspentAbove(p, 0),
+		})
 		if reason != "" && found == "" {
 			found = reason
 		}
@@ -431,19 +474,39 @@ func (e *eval) payment(p Payment) (string, state.Reason) {
 }
 
 // unspentAboveDust reports whether Core shows one of the payment's taproot
-// outputs unspent at or above the server's declared dust threshold. Then
+// outputs unspent at or above the dust threshold the server applied. Then
 // pruning cannot explain a list that holds back the entry.
 func (e *eval) unspentAboveDust(p Payment) bool {
-	var dust uint64
-	if e.in.Policy != nil {
-		dust = e.in.Policy.DustThresholdSat
-	}
+	return e.unspentAbove(p, e.dustThreshold())
+}
+
+// unspentAbove reports whether Core shows one of the payment's taproot
+// outputs unspent at or above dust. With dust 0, any unspent output counts.
+// A hash_only payment with one is excused by the declared threshold alone.
+func (e *eval) unspentAbove(p Payment, dust uint64) bool {
 	for _, o := range p.Outputs {
 		if o.Unspent && o.ValueSat >= dust {
 			return true
 		}
 	}
 	return false
+}
+
+// dustThreshold is the dust threshold the server applied to its list. A valid
+// receipt signs it, and canary check asks every server for DustSat, so a
+// receipted list has that threshold whatever /info declares. /info is
+// unsigned, and a withholder could declare a threshold that excuses any
+// entry. Only a list with no valid receipt falls back to the declared
+// threshold. That rests on an unsigned declaration, and it keeps a server
+// with a real dust filter, and no receipts, from being accused.
+func (e *eval) dustThreshold() uint64 {
+	if e.res.Signed && e.res.Receipt != nil {
+		return e.res.Receipt.DustSat
+	}
+	if e.in.Policy != nil {
+		return e.in.Policy.DustThresholdSat
+	}
+	return 0
 }
 
 // crossCheck runs step 8. It lists every pair of servers whose signed roots

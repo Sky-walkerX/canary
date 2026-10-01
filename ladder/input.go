@@ -10,9 +10,10 @@ import (
 // Every receipt must sign this value.
 const DustSat uint64 = 0
 
-// TipMargin is how many blocks a server's signed tip may sit from Core's tip
-// and still pass as a reorg or a lagging node. A tip further off that Core
-// cannot find is a false chain claim.
+// TipMargin is how far below Core's tip a signed tip on another block may sit
+// and still pass as a reorg. Core holding another block at a height more
+// than TipMargin below its tip makes the tip a false chain claim. A signed
+// tip above Core's tip is never one, because Core may be behind.
 const TipMargin = 6
 
 // Block is everything the ladder needs to judge one block. It names the block
@@ -43,8 +44,9 @@ type Core struct {
 	// name the same network.
 	Network canonical.Network
 
-	// TipHeight is the height of Core's best block. It measures depth for an
-	// unsigned list and for warnings.
+	// TipHeight is the height of Core's best block when the run began. It
+	// measures depth for an unsigned list and for warnings, and how far
+	// below Core's tip a contradicted signed tip sits.
 	TipHeight uint32
 
 	// Chain answers questions about Core's active chain. The ladder asks it
@@ -73,13 +75,19 @@ type Server struct {
 	Pubkey *[32]byte
 
 	// Policy is what the server's /info declared. Nil when /info did not
-	// answer. It is unsigned in v1, so it only ever raises a warning.
+	// answer. It is unsigned in v1, so it never accuses. It raises a
+	// warning, and its dust threshold can excuse an entry held back from a
+	// list with no valid receipt. A receipted list is judged by the
+	// threshold its receipt signs.
 	Policy *policy.Policy
 
 	// Tip is the server's best height as Canary last saw it, from a receipt
 	// or from /info. Nil when unknown. A tip below the block means the
 	// server has not indexed it yet, unless the server signed a record for a
-	// higher block in this run. That signature outranks an unsigned tip.
+	// higher block in this run. That signature outranks an unsigned tip. For
+	// a list with no valid receipt, a tip above Core's can also excuse an
+	// absent position near the window's edge, because Core may be behind. It
+	// never makes one an omission.
 	Tip *uint32
 
 	// Unreachable is true when the record request got no answer, or an
@@ -127,8 +135,8 @@ type Payment struct {
 	Entry canonical.Leaf
 
 	// Outputs lists the payment's taproot outputs as Core sees them now. An
-	// unspent output at or above the server's dust threshold means pruning
-	// cannot explain a missing entry.
+	// unspent output at or above the dust threshold the server applied means
+	// pruning cannot explain a missing entry.
 	Outputs []Output
 }
 

@@ -83,6 +83,14 @@ type serverRun struct {
 	// last error. The terminal still says the server's policy is unknown.
 	infoErr    string
 	infoDetail string
+
+	// The first sign of trouble that names nobody: a list changed on the
+	// way, a signed tip far above Core's that excused a gap, or a payment
+	// only the declared dust threshold excused. A later error must not hide
+	// it, so the state file keeps it as the server's error, and the terminal
+	// prints it before the last error.
+	keptErr    string
+	keptDetail string
 }
 
 // note keeps sentence as the server's last error, and err's text as its
@@ -92,6 +100,24 @@ func (s *serverRun) note(sentence string, err error) {
 	if err != nil {
 		s.lastDetail = err.Error()
 	}
+}
+
+// keep notes sentence like note, and keeps the first such sentence apart,
+// so that no later error replaces it.
+func (s *serverRun) keep(sentence string, err error) {
+	s.note(sentence, err)
+	if s.keptErr == "" {
+		s.keptErr, s.keptDetail = s.lastErr, s.lastDetail
+	}
+}
+
+// stateError is the server's error for the state file: the first sign of
+// trouble that names nobody, or else the last error.
+func (s *serverRun) stateError() string {
+	if s.keptErr != "" {
+		return s.keptErr
+	}
+	return s.lastErr
 }
 
 // notAsked notes that Canary stopped asking the server. The detail stays
@@ -134,7 +160,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	if msg != "" {
 		return c.usage(msg)
 	}
-	hc := &http.Client{Timeout: requestTimeout}
+	hc := &http.Client{Timeout: requestTimeout, CheckRedirect: checkRedirect}
 	client, err := core.New(cfg.coreREST, hc)
 	if err != nil {
 		return c.usage(wording.CheckBadCore(cfg.coreREST))
@@ -434,8 +460,10 @@ const maxCoreHeight = math.MaxInt32
 // server's signed receipt, so the server picks it. Core answers a height
 // above maxCoreHeight with 400, not 404, and that error would stop the run
 // and blame Core. So Canary answers that height itself: no block is there.
-// It does not answer locally for every height above this run's tip, because
-// Core may reach that height during a long run and confirm an honest tip.
+// The ladder reads no block as a tip Core has not reached, never as a false
+// claim. It does not answer locally for every height above this run's tip,
+// because Core may reach that height during a long run and confirm an
+// honest tip.
 func (x coreChain) ActiveHash(height uint32) ([32]byte, bool, error) {
 	if height > maxCoreHeight {
 		return [32]byte{}, false, nil
@@ -576,19 +604,44 @@ func (ch *checker) noteServers(b chainBlock, res ladder.BlockResult) {
 				s.best = &rc
 			}
 		}
-		if sr.ReceiptErr != nil {
+		switch {
+		case sr.ListAltered:
+			// The pinned key signed the receipt, for other bytes or another
+			// request. The sentence names the path, not the server.
+			s.keep(wording.ServerListAltered(b.height), sr.ReceiptErr)
+		case sr.ReceiptErr != nil:
 			s.note(wording.ServerReceiptRejected(b.height), sr.ReceiptErr)
 		}
 		if sr.ListErr != nil {
 			s.note(wording.ServerListRejected(b.height), sr.ListErr)
 		}
+		if ch.tipAboveCore(b, sr) {
+			s.keep(wording.ServerTipAboveCore(b.height, sr.Receipt.TipHeight, ch.tip.Height, ladder.TipMargin), nil)
+		}
+		for _, p := range sr.Payments {
+			if p.DustExcused && s.info != nil && s.info.policy != nil {
+				s.keep(wording.ServerPaymentDustExcused(b.height, core.DisplayHex(p.TxID), s.info.policy.DustThresholdSat), nil)
+			}
+		}
 	}
+}
+
+// tipAboveCore reports whether a signed tip more than TipMargin blocks above
+// Core's tip was all that excused an absent position, in a block that Core's
+// own tip puts inside the window. Canary can't tell a lagging node from a
+// false tip, so it accuses nobody. It says so instead, because a gap that
+// another server filled otherwise leaves no trace.
+func (ch *checker) tipAboveCore(b chainBlock, sr ladder.ServerResult) bool {
+	return sr.TipUnconfirmed && sr.Signed && sr.Receipt != nil &&
+		int64(sr.Receipt.TipHeight)-int64(ch.tip.Height) > ladder.TipMargin &&
+		wire.InsideRetentionWindow(ch.tip.Height, b.height)
 }
 
 // printServerErrors puts each server's last error on stderr, with the Go
 // error's own text under it. The state file keeps the plain sentence only.
 // When a later error replaced a failed /info as the last error, the /info
-// error comes first, because it is why the server's policy is unknown.
+// error comes first, because it is why the server's policy is unknown. The
+// first sign of trouble that names nobody comes next, for the same reason.
 func (ch *checker) printServerErrors() {
 	line := func(text, detail string) {
 		fmt.Fprintf(ch.cmd.stderr, "canary %s: %s\n", ch.cmd.name, text)
@@ -599,6 +652,9 @@ func (ch *checker) printServerErrors() {
 	for _, s := range ch.runs {
 		if s.infoErr != "" && s.infoErr != s.lastErr {
 			line(wording.CheckServerInfoError(s.cfg.label, s.infoErr), s.infoDetail)
+		}
+		if s.keptErr != "" && s.keptErr != s.lastErr {
+			line(wording.CheckServerInfoError(s.cfg.label, s.keptErr), s.keptDetail)
 		}
 		if s.lastErr != "" {
 			line(wording.CheckServerLastError(s.cfg.label, s.lastErr), s.lastDetail)
@@ -693,8 +749,7 @@ func (ch *checker) serverStates() []state.Server {
 			p := s.info.policy
 			st.Policy = &state.Policy{PrunesSpent: p.PrunesSpent, DustThresholdSat: p.DustThresholdSat, DustConfigurable: p.DustConfigurable}
 		}
-		if s.lastErr != "" {
-			e := s.lastErr
+		if e := s.stateError(); e != "" {
 			st.Error = &e
 		}
 		out = append(out, st)

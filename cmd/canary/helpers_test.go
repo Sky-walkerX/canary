@@ -241,6 +241,18 @@ func serverIn(t testing.TB, b state.Block, label string) state.BlockServer {
 	return state.BlockServer{}
 }
 
+// stateServer returns the state file's entry for one server.
+func stateServer(t testing.TB, f *state.File, label string) state.Server {
+	t.Helper()
+	for _, s := range f.Servers {
+		if s.Label == label {
+			return s
+		}
+	}
+	t.Fatalf("the state file has no server %s", label)
+	return state.Server{}
+}
+
 // fixClock makes the command's clock read at, for the rest of the test.
 func fixClock(t testing.TB, at time.Time) {
 	t.Helper()

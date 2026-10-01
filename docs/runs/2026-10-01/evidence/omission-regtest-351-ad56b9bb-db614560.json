@@ -1,0 +1,69 @@
+{
+  "format": "canary-evidence/1",
+  "claim": "omission",
+  "accused": "db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c",
+  "network": {
+    "name": "regtest",
+    "magic": 3669344250
+  },
+  "block": {
+    "hash": "72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a",
+    "height": 351
+  },
+  "commitment_event": {
+    "kind": 1352,
+    "id": "8424252c01bbc3a0c88d36c5fde63a4fcebcbccce4393195428004a2865be423",
+    "pubkey": "db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c",
+    "created_at": 1790858114,
+    "tags": [
+      [
+        "b",
+        "72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a"
+      ],
+      [
+        "height",
+        "351"
+      ],
+      [
+        "n",
+        "5"
+      ],
+      [
+        "network",
+        "3669344250"
+      ],
+      [
+        "policy_ref",
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      [
+        "root",
+        "b6c2e6acdd97c6203169c969bfa170c7464d1cbc2a43308aee53f26ecf95ee42"
+      ]
+    ],
+    "content": "b6c2e6acdd97c6203169c969bfa170c7464d1cbc2a43308aee53f26ecf95ee42",
+    "sig": "85ce07ce0cbdae1abb6521db887eeb3e740b32f643bfe14c687a270508bfe292ec84451755b5310511f5cc59ae947e0abd0494200f521ea786e0acbecba8979a"
+  },
+  "receipt": "01fabfb5da018ad5415e1ad1e99931113eee687b262af862df645494190fd733862f7980ef7200000000000000005f0100008ad5415e1ad1e99931113eee687b262af862df645494190fd733862f7980ef72aa84dfe3a252b758fbb45918be924ea5a1988e39063c43024a464591282a03b46cf7d1b47fd0a2c107cdcf00ad88f7850a14a1d0418cb7d4b851ad03fec7ae6394190fec1b6ab403731a5f14ddca76ef58ea30e3a013f6b1aef95eb8e394dff8",
+  "served_base64": "BQAAAAMBdcYMOLeGJnP3mHop502630Fq3NEq2IcUJwi57G2tTYACmSEoCNbiwkPW8txZDU2ULH8mx5i4SzFSwYSUp/Zxl5gBw+/4f8TILPEAJhl8gpoFmDPHMxA4BYxJDN2QataToCECnUC2+ujD+ZQPEnI2AVEQXtvKQZ8VMt2a+eMNAVuigwoB4kZUnIFLZWs9W4J6h3kESic8GRnKkdzlBp+K9ZFeeAsC+CWWjK9J7QP3dHtoJgqWojdmGuO5GsTUEDKtBDqlSTUB9I6c21E/h2b2qLUBlmopbOPNYnu8wLd1UUMRDR/oh48CTk1nU4PbgYC2/wMbo8xzElvRONuAg+apjNSUcCTaPAM=",
+  "missing": {
+    "txid": "ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e",
+    "tweak": "037c993b89cdbd9cf802b467dc8be4839f4c82d6c8745bb938b8438166d924980e"
+  },
+  "proof": {
+    "index": 0,
+    "n": 5,
+    "siblings": [
+      "205ef638135aa4621be05b6e725d13cc13ee9348bc25543856592dfea593e7d9",
+      "c2ea317c6123146ac4092c87f56eb905bbe64dbb03af8962bb27847964e3c410",
+      "449c543efbd4b3ab71a95067818611e8e168ea4ad7a1fdf654e18ba827f23e5e"
+    ]
+  },
+  "context": {
+    "server_label": "withholder",
+    "server_url": "http://127.0.0.1:28482",
+    "found_by": "other_server",
+    "written_by": "canary 0.1.0+3a1417f",
+    "written_at": "2026-10-01T12:35:15Z"
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -53,6 +54,24 @@ func offlineChild() int {
 // errNoNetworkCut means this platform has no way, known to these tests, to
 // cut a process off from the network.
 var errNoNetworkCut = errors.New("no network cut on this platform")
+
+// sandboxExitOSErr is sandbox-exec's exit code when it cannot apply its
+// profile, as inside a process that is already sandboxed.
+const sandboxExitOSErr = 71
+
+// networkCutRefused reports whether the child never ran because the
+// operating system refused the cut: sandbox-exec could not apply its
+// profile, or the child could not cut itself off.
+func networkCutRefused(r result) bool {
+	return r.code == exitOfflineSetup ||
+		r.code == sandboxExitOSErr && strings.Contains(r.stderr, "sandbox_apply")
+}
+
+// networkCutRequired reports whether a refused cut fails the test instead of
+// skipping it. CI sets CI=true, so the cut stays enforced there.
+func networkCutRequired() bool {
+	return os.Getenv("CI") != "" || os.Getenv("CANARY_REQUIRE_OFFLINE") == "1"
+}
 
 // runOffline runs canary with args in a child process that the operating
 // system cuts off from the network. Before the command runs, the child dials
@@ -101,10 +120,15 @@ func runOffline(t *testing.T, args ...string) result {
 	case err != nil:
 		t.Fatalf("start the offline child: %v", err)
 	}
-	switch r.code {
-	case exitOfflineSetup:
+	switch {
+	case networkCutRefused(r) && !networkCutRequired():
+		t.Skipf("can't apply an operating-system network cut in this environment, which is likely sandboxed already. "+
+			"Set CANARY_REQUIRE_OFFLINE=1 to fail instead:\n%s", r)
+	case r.code == exitOfflineSetup:
 		t.Fatalf("the child could not cut itself off from the network:\n%s", r)
-	case exitOfflineDialed:
+	case networkCutRefused(r):
+		t.Fatalf("the operating system refused the network cut:\n%s", r)
+	case r.code == exitOfflineDialed:
 		t.Fatalf("the network cut did not hold:\n%s", r)
 	}
 	if n := accepted.Load(); n != 0 {

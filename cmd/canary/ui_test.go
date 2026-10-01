@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -113,4 +115,102 @@ func TestUICannotBindABusyPort(t *testing.T) {
 	if !strings.Contains(r.stderr, wording.UICantListen(addr)) {
 		t.Errorf("stderr lacks the listen failure:\n%s", r)
 	}
+}
+
+// copyFile copies src to dst, creating dst's directory.
+func copyFile(t *testing.T, src, dst string) {
+	t.Helper()
+	b, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// setEvidenceDir rewrites the state file's evidence_dir.
+func setEvidenceDir(t *testing.T, path, dir string) {
+	t.Helper()
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(readFile(t, path), &m); err != nil {
+		t.Fatal(err)
+	}
+	v, _ := json.Marshal(dir)
+	m["evidence_dir"] = v
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checksOut reports whether a finding page shows its evidence file checking
+// out. The page prints the verdict without its full stop.
+func checksOut(page string) bool {
+	return strings.Contains(page, ">"+strings.TrimSuffix(wording.VerifyChecksOut, ".")+"<") &&
+		!strings.Contains(page, wording.EvidenceNotFound("").Title)
+}
+
+// The recorded run in docs/runs/2026-10-01 names its evidence directory
+// relative to its own state file, so it works from any clone. canary ui reads
+// a relative evidence_dir against the state file's directory, not against
+// the directory canary ui runs in. A later state file that names another
+// directory, as canary check writes it, takes over without a restart.
+func TestUIReadsARelativeEvidenceDirAgainstTheStateFile(t *testing.T) {
+	const (
+		run  = "../../docs/runs/2026-10-01"
+		name = "omission-regtest-351-ad56b9bb-db614560.json"
+		id   = "79ec3cb71656"
+	)
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "run", "state.json")
+	copyFile(t, filepath.Join(run, "state.json"), statePath)
+	copyFile(t, filepath.Join("../../evidence", name), filepath.Join(dir, "run", "evidence", name))
+	setEvidenceDir(t, statePath, "evidence")
+	if _, err := os.Stat(filepath.Join("evidence", name)); err == nil {
+		t.Fatal("test setup: the evidence file must not sit under the working directory")
+	}
+
+	base, stop := uiServer(t, statePath)
+	code, body := get(t, base+"evidence/"+name)
+	if code != http.StatusOK || body != string(readFile(t, filepath.Join(dir, "run", "evidence", name))) {
+		t.Errorf("GET /evidence/%s = %d, want the file", name, code)
+	}
+	code, body = get(t, base+"findings/"+id)
+	if code != http.StatusOK || !checksOut(body) {
+		t.Errorf("GET /findings/%s = %d, want the finding with its evidence checking out:\n%.400s", id, code, body)
+	}
+
+	// canary check writes an absolute path. The dashboard follows it.
+	elsewhere := filepath.Join(dir, "elsewhere")
+	copyFile(t, filepath.Join(dir, "run", "evidence", name), filepath.Join(elsewhere, name))
+	if err := os.Remove(filepath.Join(dir, "run", "evidence", name)); err != nil {
+		t.Fatal(err)
+	}
+	setEvidenceDir(t, statePath, elsewhere)
+	future := time.Now().Add(time.Minute)
+	if err := os.Chtimes(statePath, future, future); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := get(t, base+"evidence/"+name); code != http.StatusOK {
+		t.Errorf("after the state file named an absolute directory, GET /evidence/%s = %d, want 200", name, code)
+	}
+	wantExit(t, stop(), 0)
+}
+
+// The committed run itself checks out in the dashboard, read from where it
+// sits in the repository.
+func TestUIShowsTheRecordedRunsEvidence(t *testing.T) {
+	base, stop := uiServer(t, "../../docs/runs/2026-10-01/state.json")
+	code, body := get(t, base+"findings/79ec3cb71656")
+	if code != http.StatusOK || !checksOut(body) {
+		t.Errorf("GET the recorded run's finding = %d, want its evidence checking out:\n%.400s", code, body)
+	}
+	wantExit(t, stop(), 0)
 }

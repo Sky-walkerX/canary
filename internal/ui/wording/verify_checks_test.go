@@ -12,9 +12,9 @@ func verifyCheckTexts() []string {
 		VerifyBlockOK(205, "regtest", 3669344250), VerifyBlockOK(205, "unknown", 7), VerifyBlockBad,
 		VerifyInclusionOK(1, 3), VerifyInclusionBad(1, 3), VerifyInclusionWrongSize(1, 3), VerifyInclusionWrongSize(4, 3),
 		VerifyReceiptOK(137), VerifyReceiptMalformed, VerifyReceiptWrongKey, VerifyReceiptOtherNetwork,
-		VerifyReceiptOtherBlock, VerifyReceiptOtherResource, VerifyReceiptOtherBody(137),
+		VerifyReceiptOtherBlock, VerifyReceiptOtherResource, VerifyReceiptOtherBody(137), VerifyReceiptDust(546),
 		VerifyServedAbsent(3, 1), VerifyServedOtherEntry(3, 1), VerifyServedOtherHash(3, 1), VerifyServedMalformed,
-		VerifyServedWrongSize(2, 3), VerifyServedEntry(1), VerifyServedEntryHash(1),
+		VerifyServedWrongSize(2, 3), VerifyServedEntry(1), VerifyServedEntryHash(1), VerifyServedEntryElsewhere(1, 2),
 		VerifyWindowInside(212, 7, 144), VerifyWindowInside(212, 1, 144), VerifyWindowAboveTip(200, 144),
 		VerifyWindowOutside(400, 195, 144), VerifyWindowNotNeeded(1),
 	}

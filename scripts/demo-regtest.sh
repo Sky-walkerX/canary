@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # demo-regtest.sh runs Canary's v1 demo end to end on a real local regtest node.
 #
-# It starts a throwaway bitcoind, makes one taproot payment, and runs two
-# reference indexers against it: an honest one, and one told to withhold that
-# payment's entry while still signing it into the block's record. Then it runs
-# canary check, canary verify and canary status.
+# It starts a throwaway bitcoind, makes five taproot payments in one block, and
+# runs two reference indexers against it: an honest one, and one told to
+# withhold the 1 BTC payment's entry while still signing it into the block's
+# record. Then it runs canary check, canary verify and canary status.
 #
 # Usage: scripts/demo-regtest.sh [--act5] [OUTPUT_DIR]
+#        scripts/demo-regtest.sh --help
 #
 # --act5 adds the demo's last act, a block that can't be checked. Before the
 # main payment it makes an early payment and mines 150 blocks, so that block
@@ -19,8 +20,10 @@
 #
 # OUTPUT_DIR defaults to ./demo-out. It must be empty or not exist yet. The
 # state file, the evidence file, the indexer logs and each command's output go
-# there. Everything else lives in a temporary directory that is removed on
-# exit, including both indexers' secret keys.
+# there. The script creates it only once bitcoind is up, so a run that fails to
+# build or start leaves nothing behind and can simply be run again. Everything
+# else lives in a temporary directory that is removed on exit, including both
+# indexers' secret keys.
 #
 # Needs Bitcoin Core v30 or later (brew install bitcoin), Go and curl.
 #
@@ -51,6 +54,14 @@ RETENTION_WINDOW=144
 ACT5_DEPTH=150
 
 USAGE="Usage: scripts/demo-regtest.sh [--act5] [OUTPUT_DIR]"
+
+# print_help prints the comment block at the top of this file, from the first
+# line after the shebang to the line before set -euo pipefail.
+print_help() {
+	sed -n '2,/^set -euo pipefail$/{
+/^#/s/^# \{0,1\}//p
+}' "${BASH_SOURCE[0]}"
+}
 
 # Set as the run goes. The cleanup reads them, so each starts empty.
 TMP=""
@@ -178,6 +189,10 @@ main() {
 	for arg in "$@"; do
 		case $arg in
 		--act5) act5=yes ;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
 		-*) fail "Unknown option $arg. $USAGE" ;;
 		*)
 			[ -z "$out" ] || fail "Give at most one output directory. $USAGE"
@@ -210,8 +225,12 @@ main() {
 	if [ -e "$out" ] && [ -n "$(ls -A "$out" 2>/dev/null)" ]; then
 		fail "The output directory $out is not empty. Remove it, or give another directory."
 	fi
-	mkdir -p "$out/logs"
-	out=$(cd "$out" && pwd)
+	# The directory is created only once bitcoind is up, so make the path
+	# absolute now: the build below changes directory.
+	case $out in
+	/*) ;;
+	*) out=$PWD/${out#./} ;;
+	esac
 	say "Output goes to $out"
 
 	trap cleanup EXIT
@@ -248,6 +267,11 @@ main() {
 	[ -n "$ready" ] || fail "bitcoind did not answer RPC within $WAIT_SECONDS seconds."
 	local rest="http://127.0.0.1:$RPC_PORT/rest"
 	say "Bitcoin Core REST is at $rest"
+
+	# Everything before this point either succeeded or left no output, so a
+	# failed build or start can be retried with the same directory.
+	mkdir -p "$out/logs"
+	out=$(cd "$out" && pwd)
 
 	step "Creating a wallet and mining 200 blocks"
 	cli createwallet demo >/dev/null

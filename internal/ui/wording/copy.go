@@ -896,8 +896,8 @@ var verifyCodes = map[string]string{
 	"signer_mismatch":    "A key other than the accused server's signed the record.",
 	"block_mismatch":     "The record, the file and the served list disagree about the block, its height, its network or its size.",
 	"proof_invalid":      "The Merkle proof does not carry the entry to the signed root.",
-	"receipt_invalid":    "The receipt's signature, network, block, resource or body digest does not match.",
-	"entry_served":       "The served list carries the entry, or its correct hash, at that position.",
+	"receipt_invalid":    "The receipt's signature, network, block, resource, dust threshold or body digest does not match.",
+	"entry_served":       "The served list carries the entry, or its correct hash, at that position or another.",
 	"not_in_window":      "The position is empty, but the block sat 144 or more blocks below the signed tip, where that is allowed.",
 }
 
@@ -1009,6 +1009,13 @@ const (
 	VerifyReceiptOtherResource = "The receipt covers something other than a tweak list."
 )
 
+// VerifyReceiptDust is the receipt step's text when the receipt signs a dust
+// threshold. A filtered list may leave entries out by design, so it cannot
+// show an omission.
+func VerifyReceiptDust(sat uint64) string {
+	return fmt.Sprintf("The receipt is for a list filtered at %d sat. An omission claim needs the full list, with no dust threshold.", sat)
+}
+
 // VerifyReceiptOtherBody is the receipt step's text when the receipt signs
 // different bytes than the file carries.
 func VerifyReceiptOtherBody(size int) string {
@@ -1051,6 +1058,13 @@ func VerifyServedWrongSize(got, n uint32) string {
 // the entry itself.
 func VerifyServedEntry(index uint32) string {
 	return fmt.Sprintf("Position %d of the served list carries the entry.", index)
+}
+
+// VerifyServedEntryElsewhere is the served_list step's text when the list
+// carries the entry, or its hash, at another position. The server served it,
+// so the file shows no omission.
+func VerifyServedEntryElsewhere(index, at uint32) string {
+	return fmt.Sprintf("The served list carries this entry at position %d, not at position %d.", at, index)
 }
 
 // VerifyServedEntryHash is the served_list step's text when the position
@@ -1164,9 +1178,9 @@ const (
 // Flags for each command, in the order the formats doc lists them.
 var (
 	CheckFlags = []FlagHelp{
-		{"indexer", "URL=label", "A server to check. Repeat it for each server. A label is up to 32 lowercase letters, digits and -."},
+		{"indexer", "URL=label", "A server to check. Repeat it for each server. The URL is https, or plain http to this computer. A label is up to 32 lowercase letters, digits and -."},
 		{"pubkey", "label=HEX", "Pins a server's 32-byte public key, one per server. Give label=none for a server that signs nothing. Canary never learns a key from a server."},
-		{"core-rest", "URL", "Bitcoin Core's REST address, for example http://127.0.0.1:18443/rest. Core must run with -rest=1."},
+		{"core-rest", "URL", "Bitcoin Core's REST address, for example http://127.0.0.1:18443/rest. It is https, or plain http to this computer. Core must run with -rest=1."},
 		{"from", "H", "First height to check. Default 0."},
 		{"to", "H", "Last height to check. Default Core's tip."},
 		{"expect", "TXID[@BLOCKHASH]", "A payment you made and expect each server to report, in display order. Repeatable. A bare TXID needs Core's -txindex=1."},
@@ -1198,6 +1212,15 @@ func CheckBadIndexer(v string) string {
 	return "--indexer " + strconv.Quote(v) + " is not URL=label with an http or https URL."
 }
 
+// CheckIndexerPlainHTTP is the usage error for an --indexer URL that uses
+// plain http to another computer. Canary judges a list with no valid receipt
+// on the bytes that arrived, so those bytes must be the ones the server sent.
+func CheckIndexerPlainHTTP(v string) string {
+	return "--indexer " + strconv.Quote(v) + " uses plain http to another computer. " +
+		"Anyone on the path could change a list and make Canary accuse an honest server. " +
+		"Use https, or plain http to this computer, such as 127.0.0.1."
+}
+
 // CheckBadLabel is the usage error for a label outside the allowed set.
 func CheckBadLabel(label string) string {
 	return "Label " + strconv.Quote(label) + " must be 1 to 32 lowercase letters, digits or -."
@@ -1219,6 +1242,20 @@ func CheckBadPubkey(label string) string {
 	return "The --pubkey for " + label + " is not a 32-byte public key written as 64 lowercase hex characters."
 }
 
+// CheckPubkeyNotOnCurve is the usage error for a pin written correctly that
+// names no public key.
+func CheckPubkeyNotOnCurve(label string) string {
+	return "The --pubkey for " + label + " is 64 hex characters, but not a public key: it is not a point on secp256k1. " +
+		"Copy the pubkey the indexer prints when it starts."
+}
+
+// CheckPubkeyShared is the usage error for one key pinned to two servers.
+// Canary would count one key's records as two servers agreeing.
+func CheckPubkeyShared(label, other string) string {
+	return "Server " + label + " has the same --pubkey as server " + other + ". " +
+		"Canary would count one key's records as two servers agreeing. Give each server its own key."
+}
+
 // CheckPubkeyUnknownLabel is the usage error for a pin no server uses.
 func CheckPubkeyUnknownLabel(label string) string {
 	return "--pubkey names " + label + ", but no --indexer has that label."
@@ -1238,6 +1275,15 @@ func CheckMissingPin(label string) string {
 // CheckBadCore is the usage error for a --core-rest value that is not a URL.
 func CheckBadCore(v string) string {
 	return "--core-rest " + strconv.Quote(v) + " is not a URL like http://127.0.0.1:18443/rest."
+}
+
+// CheckCorePlainHTTP is the usage error for a --core-rest URL that uses plain
+// http to another computer. Canary takes Core's word for the chain and the
+// payments, so nobody else may be able to change it.
+func CheckCorePlainHTTP(v string) string {
+	return "--core-rest " + strconv.Quote(v) + " uses plain http to another computer. " +
+		"Anyone on the path could change what your node says and make Canary accuse an honest server. " +
+		"Use https, or reach Core on this computer, for example through an SSH tunnel to 127.0.0.1."
 }
 
 // CheckBadHeight is the usage error for a --from or --to that is not a
@@ -1400,7 +1446,8 @@ func CheckSaved(path string) string {
 	return "Results saved to " + path + "."
 }
 
-// A server's last error, as the state file records it. Each is a plain
+// A server's error, as the state file records it: the last one, unless an
+// earlier sign of trouble that names nobody outranks it. Each is a plain
 // sentence. The Go error's own text goes to the terminal after
 // CheckServerLastError and CLIDetails, never into the state file.
 
@@ -1462,6 +1509,32 @@ func ServerReceiptRejected(height uint32) string {
 	return fmt.Sprintf("The receipt for block %d's list failed Canary's checks.", height)
 }
 
+// ServerListAltered is a server's error when the list that arrived does not
+// match the receipt the server signed for it. It names the path, not the
+// server, because the server's signature covers what it sent.
+func ServerListAltered(height uint32) string {
+	return fmt.Sprintf("Its list for block %d does not match the receipt it signed. "+
+		"Something between the server and Canary may have changed the list, so Canary did not judge it.", height)
+}
+
+// ServerTipAboveCore is a server's error when its receipt signed a tip more
+// than margin blocks above Core's, and only that tip excused an absent
+// position. Core may be behind, so Canary accuses nobody, but it says so.
+func ServerTipAboveCore(height, tip, coreTip uint32, margin int) string {
+	return fmt.Sprintf("Its receipt for block %d's list signs tip %d, more than %d blocks above your node's tip %d. "+
+		"Only that tip excuses an entry the list left out. "+
+		"Your node may be behind, or the server signed a tip no node has seen.", height, tip, margin, coreTip)
+}
+
+// ServerPaymentDustExcused is a server's error when only the dust threshold
+// its unsigned /info declares excused holding back a declared payment that
+// Core shows unspent. txid is in display order.
+func ServerPaymentDustExcused(height uint32, txid string, dust uint64) string {
+	return fmt.Sprintf("Its list for block %d did not carry your payment %s in full, though your node shows an output of it unspent. "+
+		"Only the dust threshold its /info declares, %d sat, excuses that. "+
+		"The list had no valid receipt and /info is unsigned, so this is not an accusation.", height, txid, dust)
+}
+
 // ServerListRejected is a server's error when a list could not be matched to
 // its record.
 func ServerListRejected(height uint32) string {
@@ -1474,9 +1547,11 @@ func CheckServerLastError(label, sentence string) string {
 	return "Last error from " + label + ": " + sentence
 }
 
-// CheckServerInfoError introduces a server's /info error on the terminal,
+// CheckServerInfoError introduces a server's earlier error on the terminal,
 // when a later error replaced it as the server's last error. It comes before
-// CheckServerLastError, so the reader still learns the policy is unknown.
+// CheckServerLastError. It carries a failed /info, so the reader still learns
+// the policy is unknown, and the first sign of trouble that names nobody,
+// such as a list changed on the way.
 func CheckServerInfoError(label, sentence string) string {
 	return "Error from " + label + ": " + sentence
 }
@@ -1502,6 +1577,7 @@ func StatusNewer(path, found string) string {
 const (
 	VerifyReasonMissing     = "there is no file at this path"
 	VerifyReasonNotOpened   = "the system would not let Canary open it"
+	VerifyReasonDirectory   = "it is a directory, not an evidence file. Give one omission-….json file from inside it"
 	VerifyReasonMalformed   = "it is not valid canary-evidence/1"
 	VerifyReasonUnsupported = "it is not canary-evidence/1 with the omission claim"
 )

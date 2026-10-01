@@ -73,6 +73,21 @@ type ServerResult struct {
 	Receipt    *wire.Receipt
 	ReceiptErr error
 
+	// ListAltered is true when the pinned key signed the receipt, but for
+	// other bytes or another request: another block, network or dust
+	// threshold. Something between the server and Canary changed the list,
+	// or the server sent the wrong receipt. Either way the bytes are not what
+	// the server signed for this request, so Canary judged nothing from them
+	// and the list reads as not served, with no warning.
+	ListAltered bool
+
+	// TipUnconfirmed is true when the retention rule found an absent
+	// position past the window only by a tip Core could neither confirm nor
+	// refute. For a receipted list that is the signed tip. It stays true when
+	// another source filled the gap, so canary check can still say that the
+	// tip excused it.
+	TipUnconfirmed bool
+
 	// ListErr says why the list could not be matched to the record: it
 	// failed the reader rules, or its length differs from n.
 	ListErr error
@@ -148,4 +163,11 @@ type PaymentResult struct {
 	// empty for every other outcome, and for a withheld payment whose gap the
 	// retention rule already named in the window step.
 	Reason state.Reason
+
+	// DustExcused is true when only the dust threshold the server's /info
+	// declares excused holding the entry back. The list had no valid receipt,
+	// and Core shows an output of the payment unspent below that threshold,
+	// so pruning cannot explain it. /info is unsigned, so this never accuses.
+	// canary check says so on the server's error line instead.
+	DustExcused bool
 }

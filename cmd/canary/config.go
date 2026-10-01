@@ -2,7 +2,11 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"flag"
+	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -92,6 +96,9 @@ func (v *checkFlags) config(pos []string) (cfg checkConfig, msg string) {
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return cfg, wording.CheckBadIndexer(raw)
 		}
+		if !localOrTLS(u) {
+			return cfg, wording.CheckIndexerPlainHTTP(raw)
+		}
 		if !labelRE.MatchString(label) {
 			return cfg, wording.CheckBadLabel(label)
 		}
@@ -102,8 +109,12 @@ func (v *checkFlags) config(pos []string) (cfg checkConfig, msg string) {
 		cfg.servers = append(cfg.servers, serverConfig{label: label, url: base})
 	}
 
-	// Canary never learns a key from a server. Every server needs a pin.
+	// Canary never learns a key from a server. Every server needs a pin, and
+	// no two servers may share one. One key's records counted twice would
+	// read as two servers agreeing, and findings, keyed by pubkey, would
+	// merge.
 	pinned := map[string]bool{}
+	keyOf := map[[32]byte]string{}
 	for _, raw := range v.pubkeys {
 		label, value, ok := strings.Cut(raw, "=")
 		if !ok {
@@ -120,10 +131,17 @@ func (v *checkFlags) config(pos []string) (cfg checkConfig, msg string) {
 		if value == "none" {
 			continue
 		}
-		key, ok := parsePubkey(value)
-		if !ok {
+		key, err := parsePubkey(value)
+		switch {
+		case errors.Is(err, errNotOnCurve):
+			return cfg, wording.CheckPubkeyNotOnCurve(label)
+		case err != nil:
 			return cfg, wording.CheckBadPubkey(label)
 		}
+		if other, dup := keyOf[key]; dup {
+			return cfg, wording.CheckPubkeyShared(label, other)
+		}
+		keyOf[key] = label
 		cfg.servers[i].pubkey = &key
 	}
 	for _, s := range cfg.servers {
@@ -137,6 +155,9 @@ func (v *checkFlags) config(pos []string) (cfg checkConfig, msg string) {
 	}
 	if _, err := core.New(v.coreREST, nil); err != nil {
 		return cfg, wording.CheckBadCore(v.coreREST)
+	}
+	if u, err := url.Parse(v.coreREST); err != nil || !localOrTLS(u) {
+		return cfg, wording.CheckCorePlainHTTP(v.coreREST)
 	}
 	cfg.coreREST = v.coreREST
 
@@ -191,19 +212,64 @@ func (v *checkFlags) config(pos []string) (cfg checkConfig, msg string) {
 	return cfg, ""
 }
 
+// localOrTLS reports whether Canary may read u: https to any host, or plain
+// http to this computer. canary check judges a list with no valid receipt on
+// the bytes that arrived, and takes Core's word for the chain. Over plain
+// http to another computer, anyone on the path could strip a receipt and
+// change a list, or change what Core says, and so make Canary accuse an
+// honest server.
+func localOrTLS(u *url.URL) bool {
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		host := u.Hostname()
+		if strings.EqualFold(host, "localhost") {
+			return true
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	}
+	return false
+}
+
+// maxRedirects is how many redirects one request may follow, as Go's
+// default.
+const maxRedirects = 10
+
+// checkRedirect holds a redirect to the rule the flags follow. A server that
+// redirects to plain http on another computer would have its answer travel
+// where anyone could change it, so Canary does not follow.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if !localOrTLS(req.URL) {
+		return fmt.Errorf("canary: redirect to %s: plain http to another computer", req.URL.Redacted())
+	}
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("canary: stopped after %d redirects", maxRedirects)
+	}
+	return nil
+}
+
+// Why a pin fails to parse.
+var (
+	errNotHex     = errors.New("canary: pubkey: not 64 lowercase hex characters")
+	errNotOnCurve = errors.New("canary: pubkey: not a point on secp256k1")
+)
+
 // parsePubkey reads a pinned key: 64 lowercase hex characters that name a
-// point on the curve, as an x-only BIP-340 key.
-func parsePubkey(s string) ([32]byte, bool) {
+// point on the curve, as an x-only BIP-340 key. The error says which of the
+// two the value fails, so the usage error can say what to fix.
+func parsePubkey(s string) ([32]byte, error) {
 	var key [32]byte
 	if len(s) != 64 || strings.Trim(s, "0123456789abcdef") != "" {
-		return key, false
+		return key, errNotHex
 	}
 	b, _ := hex.DecodeString(s)
 	if _, err := schnorr.ParsePubKey(b); err != nil {
-		return key, false
+		return key, fmt.Errorf("%w: %v", errNotOnCurve, err)
 	}
 	copy(key[:], b)
-	return key, true
+	return key, nil
 }
 
 // pubkeyHex returns a pin as the state file writes it, or nil for none.

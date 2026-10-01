@@ -74,6 +74,11 @@ func readEvidence(path string) (b []byte, reason string, err error) {
 		return nil, wording.VerifyReasonNotOpened, err
 	}
 	defer f.Close()
+	// The evidence directory is an easy thing to pass by mistake, and
+	// reading it fails with an error that reads like a permissions problem.
+	if info, err := f.Stat(); err == nil && info.IsDir() {
+		return nil, wording.VerifyReasonDirectory, nil
+	}
 	b, err = io.ReadAll(io.LimitReader(f, maxEvidenceFile+1))
 	if err != nil {
 		return nil, wording.VerifyReasonNotOpened, err

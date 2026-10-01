@@ -57,9 +57,25 @@ func wantChecksOut(t *testing.T, b []byte) VerifyReport {
 	return rep
 }
 
+// The scenario's record carries a fixed created_at, so every build of it
+// gives the same event id. With the clock's time instead, two builds a
+// second boundary apart differ, and a test that compares them fails at
+// random.
+func TestScenarioRecordIsFixed(t *testing.T) {
+	s := newScenario()
+	a := s.event(t)
+	if a.CreatedAt != scenarioCreatedAt {
+		t.Errorf("created_at = %d, want the fixed %d", a.CreatedAt, scenarioCreatedAt)
+	}
+	if b := s.event(t); a.ID != b.ID {
+		t.Errorf("two builds of the scenario's record have ids %s and %s", a.ID, b.ID)
+	}
+}
+
 func TestScenarioChecksOut(t *testing.T) {
 	s := newScenario()
-	rep := wantChecksOut(t, s.json(t))
+	f := s.file(t)
+	rep := wantChecksOut(t, marshal(t, f))
 
 	pub := pubOf(t, s.recordKey)
 	if rep.Accused == nil || rep.Accused.Pubkey != hex.EncodeToString(pub[:]) || !strings.HasPrefix(rep.Accused.Npub, "npub1") {
@@ -81,7 +97,7 @@ func TestScenarioChecksOut(t *testing.T) {
 	if rep.Format == nil || *rep.Format != Format || rep.Claim == nil || *rep.Claim != ClaimOmission {
 		t.Errorf("format/claim = %v/%v", rep.Format, rep.Claim)
 	}
-	if rep.CommitmentEventID == nil || *rep.CommitmentEventID != s.file(t).CommitmentEvent.ID {
+	if rep.CommitmentEventID == nil || *rep.CommitmentEventID != f.CommitmentEvent.ID {
 		t.Errorf("commitment_event_id = %v", rep.CommitmentEventID)
 	}
 	want := []string{
@@ -341,6 +357,8 @@ func failCases() []failCase {
 			step: "receipt", code: CodeReceiptInvalid, err: ErrReceiptInvalid, text: wording.VerifyReceiptOtherNetwork},
 		{name: "receipt for another resource", file: fromScenario(func(s *scenario) { s.receipt.Resource = 0x02 }),
 			step: "receipt", code: CodeReceiptInvalid, err: ErrReceiptInvalid, text: wording.VerifyReceiptOtherResource},
+		{name: "receipt for a dust-filtered list", file: fromScenario(func(s *scenario) { s.receipt.DustSat = 10000 }),
+			step: "receipt", code: CodeReceiptInvalid, err: ErrReceiptInvalid, text: wording.VerifyReceiptDust(10000)},
 		{name: "receipt over other bytes", file: fromScenario(func(s *scenario) {
 			s.keepDigest = true
 			s.receipt.BodySHA256 = sha256.Sum256([]byte("another list"))
@@ -381,6 +399,20 @@ func failCases() []failCase {
 		{name: "position carries the entry's hash", file: fromScenario(func(s *scenario) {
 			s.served[1] = wire.Position{Kind: wire.KindHash, Hash: commit.LeafHash(s.leaves[1])}
 		}), step: "served_list", code: CodeEntryServed, err: ErrEntryServed, text: wording.VerifyServedEntryHash(1)},
+		{name: "entry served at another position", file: fromScenario(func(s *scenario) {
+			s.served = []wire.Position{
+				{Kind: wire.KindFull, Leaf: s.leaves[0]},
+				{Kind: wire.KindFull, Leaf: s.leaves[2]},
+				{Kind: wire.KindFull, Leaf: s.leaves[1]},
+			}
+		}), step: "served_list", code: CodeEntryServed, err: ErrEntryServed, text: wording.VerifyServedEntryElsewhere(1, 2)},
+		{name: "entry's hash served at another position", file: fromScenario(func(s *scenario) {
+			s.served = []wire.Position{
+				{Kind: wire.KindHash, Hash: commit.LeafHash(s.leaves[1])},
+				{Kind: wire.KindAbsent},
+				{Kind: wire.KindFull, Leaf: s.leaves[2]},
+			}
+		}), step: "served_list", code: CodeEntryServed, err: ErrEntryServed, text: wording.VerifyServedEntryElsewhere(1, 0)},
 
 		// window
 		{name: "block outside the window", file: fromScenario(func(s *scenario) { s.receipt.TipHeight = s.height + wire.RetentionWindow }),

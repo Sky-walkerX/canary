@@ -9,6 +9,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.2.0
 	github.com/nbd-wtf/go-nostr v0.52.3
 	github.com/setavenger/go-bip352 v0.1.8
+	github.com/yuin/goldmark v1.7.13
 )
 
 require (

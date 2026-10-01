@@ -2,6 +2,16 @@
 
 {{define "glyph"}}<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-{{.}}"></use></svg>{{end}}
 
+{{/* wordmark is Canary's name on its perch line, linking home. */}}
+{{define "wordmark"}}<a class="wordmark" href="/">Canary</a>{{end}}
+
+{{/* themeToggle cycles automatic, light and dark. It stays hidden until the
+     page script runs, because switching needs the script. */}}
+{{define "themeToggle"}}<button type="button" class="btn theme-toggle" data-theme-toggle hidden
+  data-label-auto="{{themeLabel "auto"}}" data-label-light="{{themeLabel "light"}}" data-label-dark="{{themeLabel "dark"}}">
+  {{template "icon" "theme"}}<span data-theme-label>{{themeLabel "auto"}}</span>
+</button>{{end}}
+
 {{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="#i-{{.}}"></use></svg>{{end}}
 
 {{/* stateBadge takes a wording.StateText. */}}

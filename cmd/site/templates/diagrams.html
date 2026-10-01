@@ -1,0 +1,118 @@
+{{/* Hand-drawn versions of the Mermaid diagrams in docs/how-canary-works.md.
+     They are HTML, so they reflow at any width and need no script. Every
+     label in a diagram's Mermaid source must appear here, and the source must
+     match the hash in cmd/site/diagrams.go, or the build fails: change a
+     diagram in the docs, then change its drawing to match. The labels shared
+     with the docs are written here. The drawing's own words come from
+     wording.Site.Diagram, which each template receives as its data. */}}
+
+{{/* diagram-parts: "The parts". Solid boxes and lines exist in v1; dashed
+     ones come after it, as the doc says under the diagram. */}}
+{{define "diagram-parts"}}<figure class="flow flow-parts">
+<div class="flow-lanes">
+  <section class="flow-lane" aria-labelledby="flow-lane-v1">
+    <p class="flow-lane-title" id="flow-lane-v1">v1, built and tested on regtest</p>
+    <ol class="flow-steps">
+      <li class="flow-step">
+        <div class="flow-node flow-store"><span class="flow-name">Bitcoin Core</span> <span class="flow-note">your own node</span></div>
+        <p class="flow-edge">blocks and spent outputs, {{.ToEachIndexer}}</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-pair">
+          <div class="flow-node"><span class="flow-name">Reference indexer A</span></div>
+          <div class="flow-node"><span class="flow-name">Reference indexer B</span></div>
+        </div>
+        <p class="flow-edge">signed record, tweak list, receipt</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node flow-main"><span class="flow-name"><code>canary check</code></span> <span class="flow-note">{{.CoreAlsoSends}} block hashes, tip, declared payment</span></div>
+        <p class="flow-edge">{{.Writes}}</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node flow-file"><span class="flow-name">State file and evidence files</span></div>
+        <p class="flow-edge">{{.FilesGoTo}}</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-pair">
+          <div class="flow-node flow-stack"><span class="flow-name"><code>canary status</code></span> <span class="flow-name"><code>canary ui</code></span></div>
+          <div class="flow-node"><span class="flow-name"><code>canary verify</code></span> <span class="flow-note">offline, anyone</span></div>
+        </div>
+      </li>
+    </ol>
+  </section>
+  <section class="flow-lane flow-later" aria-labelledby="flow-lane-later">
+    <p class="flow-lane-title" id="flow-lane-later">After v1</p>
+    <ol class="flow-steps">
+      <li class="flow-step">
+        <div class="flow-node"><span class="flow-name">Light wallet</span> <span class="flow-note">blindbit-scan, Dana</span></div>
+        <p class="flow-edge">tweak requests</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node"><span class="flow-name">Canary proxy</span></div>
+        <p class="flow-edge">{{.PassesOn}}</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node flow-ref"><span class="flow-name">Reference indexer A</span></div>
+      </li>
+    </ol>
+    <ol class="flow-steps">
+      <li class="flow-step">
+        <div class="flow-node flow-ref"><span class="flow-name">Reference indexer A</span></div>
+        <p class="flow-edge">{{.Publishes}}</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node"><span class="flow-name">Nostr relays</span></div>
+        <p class="flow-edge">records by block hash</p>
+      </li>
+      <li class="flow-step">
+        <div class="flow-node flow-ref"><span class="flow-name"><code>canary check</code></span></div>
+      </li>
+    </ol>
+  </section>
+</div>
+</figure>{{end}}
+
+{{/* diagram-checks: "The checks, for one server and one block". A decision
+     chart that runs in one order, so it reads as a numbered list. */}}
+{{define "diagram-checks"}}<figure class="flow flow-checks">
+<p class="checks-start"><span class="flow-node flow-store">Block hash, from your Core node</span></p>
+<ol class="checks">
+  <li class="check">
+    <p class="check-q">Did the server sign a record for this block?</p>
+    <p class="check-exit"><span class="check-if">{{.IfNo}}</span>{{template "stateBadge" (state "unverified")}}</p>
+  </li>
+  <li class="check">
+    <p class="check-q">Did it serve the tweak list?</p>
+    <p class="check-exit"><span class="check-if">{{.IfNo}}</span>{{template "stateBadge" (state "unresolvable")}}</p>
+  </li>
+  <li class="check-group">
+    <p class="check-group-title">The block check</p>
+    <ol class="checks">
+      <li class="check">
+        <p class="check-q">Does the list decode to exactly n positions?</p>
+        <p class="check-exit"><span class="check-if">{{.IfNo}}</span>{{template "stateBadge" (state "compromised")}}</p>
+      </li>
+      <li class="check">
+        <p class="check-q">Any position sent as nothing inside the 144-block window? If so, note an omission. {{.GoOn}}</p>
+      </li>
+      <li class="check">
+        <p class="check-q">Fill each gap from another server or from a payment you declared.</p>
+      </li>
+      <li class="check">
+        <p class="check-q">Is every position now full, a hash or filled?</p>
+        <p class="check-exit"><span class="check-if">{{.IfNoOmission}}</span>{{template "stateBadge" (state "compromised")}}</p>
+        <p class="check-exit"><span class="check-if">{{.IfNoNoOmission}}</span>{{template "stateBadge" (state "unresolvable")}}</p>
+      </li>
+      <li class="check">
+        <p class="check-q">Does the recomputed root equal the signed root?</p>
+        <p class="check-exit"><span class="check-if">{{.IfNo}}</span>{{template "stateBadge" (state "compromised")}}</p>
+      </li>
+    </ol>
+  </li>
+  <li class="check">
+    <p class="check-q">Omission noted, or a declared payment missing?</p>
+    <p class="check-exit"><span class="check-if">{{.IfYes}}</span>{{template "stateBadge" (state "compromised")}}</p>
+    <p class="check-exit"><span class="check-if">{{.IfNo}}</span><span class="check-ok">{{template "stateBadge" (state "verified")}}, {{.Or}} {{template "stateBadge" (state "resolved")}}</span></p>
+  </li>
+</ol>
+</figure>{{end}}

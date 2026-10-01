@@ -1,6 +1,8 @@
 package wording
 
 import (
+	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -85,6 +87,7 @@ func allText() []string {
 		out = append(out, KindLabel(kind))
 		for _, r := range rs {
 			out = append(out, FindingSentence(kind, r, []string{"honest", "withholder"}),
+				FindingHeadline(kind, r, []string{"honest", "withholder"}),
 				FindingDoesNotShow(kind, r),
 				FindingStatusLine(kind, r, []string{"withholder"}, 205, strings.Repeat("ab", 32)))
 			for _, p := range []bool{true, false} {
@@ -273,5 +276,138 @@ func TestNotFoundPagesEchoOnlyWhatTheCallerPasses(t *testing.T) {
 	}
 	if b := FindingNotFound("827a8d3f502e").Body; !strings.Contains(b, "827a8d3f502e") {
 		t.Errorf("FindingNotFound lost the id: %q", b)
+	}
+}
+
+// TestFindingHeadlineNamesTheServer keeps a user-chosen label, often lower
+// case, from opening a heading bare. Screens say "Server withholder left out…",
+// while canary status keeps the line the formats document pins.
+func TestFindingHeadlineNamesTheServer(t *testing.T) {
+	tests := []struct {
+		kind, reason string
+		servers      []string
+		want         string
+	}{
+		{"withheld", "absent_in_window", []string{"withholder"}, "Server withholder left out an entry it had signed for."},
+		{"withheld", "false_chain_claim", []string{"withholder"}, "Server withholder left out an entry and excused it with a chain claim your node contradicts."},
+		{"disagree", "records_differ", []string{"honest", "withholder"}, "Servers honest and withholder signed different records for the same block."},
+		{"disagree", "records_differ", []string{"honest"}, "Server honest and a server signed different records for the same block."},
+		{"warning", "list_not_served", []string{"withholder"}, "Server withholder signed a record for this block, then did not serve its list."},
+		{"withheld", "absent_in_window", nil, "A server left out an entry it had signed for."},
+		{"withheld", "absent_in_window", []string{""}, "A server left out an entry it had signed for."},
+	}
+	for _, tt := range tests {
+		if got := FindingHeadline(tt.kind, tt.reason, tt.servers); got != tt.want {
+			t.Errorf("FindingHeadline(%s, %s, %q)\n got  %q\n want %q", tt.kind, tt.reason, tt.servers, got, tt.want)
+		}
+	}
+	if got := FindingSentence("withheld", "absent_in_window", []string{"withholder"}); got != "withholder left out an entry it had signed for." {
+		t.Errorf("FindingSentence changed the pinned status wording: %q", got)
+	}
+}
+
+// siteText collects every string in the site's wording, so the honesty and
+// sentence-length rules cover the public site too.
+func siteText() []string {
+	var out []string
+	var walk func(v reflect.Value)
+	walk = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.String:
+			out = append(out, v.String())
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				walk(v.Field(i))
+			}
+		}
+	}
+	walk(reflect.ValueOf(Site))
+	out = append(out, Site.TamperNote(1843, "proof.siblings[0]", "3", "2"))
+	return out
+}
+
+func TestSiteWordingIsComplete(t *testing.T) {
+	var walk func(name string, v reflect.Value)
+	walk = func(name string, v reflect.Value) {
+		switch v.Kind() {
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				walk(name+"."+v.Type().Field(i).Name, v.Field(i))
+			}
+		case reflect.Slice:
+			if v.Len() == 0 {
+				t.Errorf("%s is empty", name)
+			}
+			for i := 0; i < v.Len(); i++ {
+				walk(fmt.Sprintf("%s[%d]", name, i), v.Index(i))
+			}
+		case reflect.String:
+			if v.String() == "" {
+				t.Errorf("%s is empty", name)
+			}
+		}
+	}
+	walk("Site", reflect.ValueOf(Site))
+	for _, p := range []SitePage{Site.Home, Site.HowItWorks, Site.FAQ, Site.Glossary, Site.Runs, Site.NotFound} {
+		if p.Title == "" || p.Description == "" {
+			t.Errorf("site page %+v lacks a title or a description", p)
+		}
+		if n := len(p.Description); n > 160 {
+			t.Errorf("description of %q is %d characters, over the 160 a search result shows", p.Title, n)
+		}
+	}
+	note := Site.TamperNote(1843, "proof.siblings[0]", "3", "2")
+	for _, want := range []string{"1843", "proof.siblings[0]", `"2"`, `"3"`} {
+		if !strings.Contains(note, want) {
+			t.Errorf("tamper note %q lacks %q", note, want)
+		}
+	}
+}
+
+// TestSiteNeverPromisesAnEvidenceFile keeps the site to what canary check
+// does: it writes an evidence file only when it recovered the left-out entry
+// and the file checks out. Otherwise the omission is known, not provable.
+func TestSiteNeverPromisesAnEvidenceFile(t *testing.T) {
+	for _, s := range siteText() {
+		low := strings.ToLower(s)
+		if strings.Contains(low, "writes an evidence file") && !strings.Contains(low, "when it can recover the entry") {
+			t.Errorf("%q promises an evidence file for every omission", s)
+		}
+	}
+}
+
+// TestSiteTableLabel names a doc table after the heading above it.
+func TestSiteTableLabel(t *testing.T) {
+	if got := Site.TableLabel(""); got != Site.DocTable {
+		t.Errorf("TableLabel(\"\") = %q, want %q", got, Site.DocTable)
+	}
+	if got, want := Site.TableLabel("The six states"), Site.DocTable+": The six states"; got != want {
+		t.Errorf("TableLabel = %q, want %q", got, want)
+	}
+}
+
+func TestSiteHonestyRules(t *testing.T) {
+	banned := []string{
+		"trustless", "secure", "guarantee", "hidden payment", "protecting", "!", "§",
+		"rung", "t_base", "relay", "—", "timestamp",
+	}
+	// A sentence can end inside a closing quote.
+	split := regexp.MustCompile(`[.?]"?\s+`)
+	for _, s := range siteText() {
+		low := strings.ToLower(s)
+		for _, b := range banned {
+			if strings.Contains(low, b) {
+				t.Errorf("%q contains %q", s, b)
+			}
+		}
+		for _, sentence := range split.Split(s, -1) {
+			if n := len(strings.Fields(sentence)); n > 30 {
+				t.Errorf("%d words: %q", n, sentence)
+			}
+		}
 	}
 }

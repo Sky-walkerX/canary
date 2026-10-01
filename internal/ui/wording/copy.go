@@ -194,10 +194,34 @@ func serverName(names []string, i int) string {
 	return "A server"
 }
 
-// FindingSentence returns the headline for a finding. servers holds the
-// labels of the servers it names: one, or two for a disagreement.
+// FindingSentence returns the sentence for a finding, as canary status prints
+// it. servers holds the labels of the servers it names: one, or two for a
+// disagreement. The sentence opens with the bare label, as the formats
+// document pins for the terminal. Screens use FindingHeadline instead.
 func FindingSentence(kind, reason string, servers []string) string {
-	s := serverName(servers, 0)
+	return findingSentence(kind, reason, serverName(servers, 0), serverName(servers, 1))
+}
+
+// FindingHeadline returns the headline a screen shows for a finding. A label
+// is a name the user chose, often lower case, so the headline introduces it:
+// "Server withholder left out an entry it had signed for."
+func FindingHeadline(kind, reason string, servers []string) string {
+	first, second := "A server", "a server"
+	if len(servers) > 0 && servers[0] != "" {
+		first = "Server " + servers[0]
+	}
+	if len(servers) > 1 && servers[1] != "" {
+		second = "server " + servers[1]
+		if kind == "disagree" && servers[0] != "" {
+			first, second = "Servers "+servers[0], servers[1]
+		}
+	}
+	return findingSentence(kind, reason, first, second)
+}
+
+// findingSentence builds a finding's sentence from the phrases that name its
+// first and second server.
+func findingSentence(kind, reason, s, second string) string {
 	switch kind {
 	case "withheld":
 		switch reason {
@@ -214,7 +238,7 @@ func FindingSentence(kind, reason string, servers []string) string {
 		}
 		return s + " withheld data it had signed for."
 	case "disagree":
-		return s + " and " + serverName(servers, 1) + " signed different records for the same block."
+		return s + " and " + second + " signed different records for the same block."
 	case "warning":
 		switch reason {
 		case "no_record_for_block":
@@ -399,7 +423,7 @@ func VerdictDisputed(n int) Verdict {
 }
 
 // VerdictWithheldOne is the verdict for one withheld finding in one block.
-// sentence is FindingSentence for it.
+// sentence is FindingHeadline for it.
 func VerdictWithheldOne(sentence string, height uint32, provableShort string) Verdict {
 	return Verdict{
 		Headline: sentence,
@@ -609,6 +633,13 @@ func UpdateNewFindings(n int) string {
 func UpdateLost(since string) string {
 	return strings.Replace(UpdateLostPattern, "{time}", since, 1)
 }
+
+// Labels for the theme button, which cycles automatic, light and dark.
+const (
+	ThemeAuto  = "Theme: automatic"
+	ThemeLight = "Theme: light"
+	ThemeDark  = "Theme: dark"
+)
 
 // Framing is the one-line claim the dashboard footer carries.
 const Framing = "Canary holds tweak servers to what they signed. It does not remove the need to trust one."
@@ -1439,4 +1470,264 @@ func UIBadAddr(addr string) string {
 // UICantListen is the error when the listen address cannot be bound.
 func UICantListen(addr string) string {
 	return "Can't listen on " + addr + "."
+}
+
+// Public site wording. cmd/site renders the public site from these, with the
+// same partials as the dashboard, so the two speak with one voice.
+
+// SitePage is the title and description one site page carries in its head,
+// for the browser tab, search results and link previews.
+type SitePage struct {
+	Title       string
+	Description string
+}
+
+// SiteItem is one labelled line: a claim and its limit, or a kind of proof
+// and what it covers.
+type SiteItem struct {
+	Label string
+	Text  string
+}
+
+// SiteText holds every word the public site shows, apart from the pages it
+// renders from the docs.
+type SiteText struct {
+	Home, HowItWorks, FAQ, Glossary, Runs, NotFound SitePage
+
+	// Header and footer.
+	NavLabel, NavHowItWorks, NavFAQ, NavGlossary, NavRuns string
+	SkipLink                                              string
+	FooterSource, FooterLicense, FooterNoRequests         string
+
+	// The home page opens with the claim, the problem in one line, and the
+	// conditions the claim needs.
+	Claim, Lede, Conditions string
+
+	// The evidence checker. Its script fills the result area later.
+	// CheckerInBrowser and CheckerPrivacy describe that script, so the page
+	// renders them hidden and the script reveals them when it runs. The
+	// NoEvidence variants replace their namesakes when no file is published.
+	CheckerTitle, CheckerIntro, CheckerInBrowser                string
+	CheckerChoose, CheckerTryReal, CheckerTryTampered           string
+	CheckerNoEvidence, CheckerPending, CheckerPendingNoEvidence string
+	CheckerNoScript, CheckerNoScriptNoEvidence                  string
+	CheckerDownloadReal, CheckerDownloadTampered                string
+	CheckerStepsIntro, CheckerPrivacy                           string
+
+	ProblemTitle string
+	Problem      []string
+	Quote        string
+
+	HowTitle, HowIntro string
+	HowSteps           []string
+	StatesIntro        string
+	HowLink            string
+	LowerBound         string
+
+	ProvesTitle, ProvesIntro string
+	Proves                   []SiteItem
+
+	LimitsTitle, LimitsIntro        string
+	LimitsClaimHead, LimitsStopHead string
+	Limits                          []SiteItem
+	LimitsLink                      string
+
+	RunTitle, RunIntro, RunNeeds, RunAfter       string
+	RunIntroNoEvidence, RunAfterNoEvidence       string
+	RunFilePlaceholder, RunPlaceholderNote       string
+	RunCloneLabel, RunBuildLabel, RunVerifyLabel string
+
+	RunsEmpty, RunsAbout, RunsAction string
+
+	NotFoundBody, NotFoundHome string
+
+	OnThisPage, DocSource string
+
+	// DocTable names a table in a page built from the docs. See TableLabel.
+	DocTable string
+
+	Diagram SiteDiagramText
+}
+
+// SiteDiagramText is the site's own wording in its drawings of the docs'
+// diagrams. The labels a drawing shares with its Mermaid source stay in the
+// drawing, where a test holds them to the docs.
+type SiteDiagramText struct {
+	// The parts, and what flows between them.
+	ToEachIndexer, CoreAlsoSends, Writes, FilesGoTo, PassesOn, Publishes string
+
+	// The checks, and where each answer leads.
+	IfNo, IfYes, IfNoOmission, IfNoNoOmission, GoOn, Or string
+}
+
+// Site is the public site's wording.
+var Site = SiteText{
+	Home: SitePage{
+		Title:       "Canary: hold tweak servers to what they signed",
+		Description: "Canary checks a silent-payments server's tweak list against the record the same server signed, and names the server when they differ.",
+	},
+	HowItWorks: SitePage{
+		Title:       "How Canary works",
+		Description: "What a tweak server signs and serves, the checks Canary runs on one block, a worked example, the six states and the limits.",
+	},
+	FAQ: SitePage{
+		Title:       "Questions and answers",
+		Description: "Plain answers to the questions reviewers ask about Canary: prior art, collusion, proof, and what version 1 does not cover.",
+	},
+	Glossary: SitePage{
+		Title:       "Glossary",
+		Description: "Every term Canary's docs and screens use, from canonical set to tweak list, with the name the design uses for it.",
+	},
+	Runs: SitePage{
+		Title:       "Recorded runs",
+		Description: "Recorded runs of canary check on regtest. None is published yet.",
+	},
+	NotFound: SitePage{
+		Title:       "Page not found",
+		Description: "This site has no page at this address.",
+	},
+
+	NavLabel:         "Main",
+	NavHowItWorks:    "How it works",
+	NavFAQ:           "FAQ",
+	NavGlossary:      "Glossary",
+	NavRuns:          "Recorded runs",
+	SkipLink:         "Skip to content",
+	FooterSource:     "Source code",
+	FooterLicense:    "MIT License",
+	FooterNoRequests: "This site makes no outside requests.",
+
+	Claim: "Canary names the silent-payments server that leaves out an entry it signed for.",
+	Lede: "A light wallet can't tell \"nobody paid you\" from \"the server left your payment out.\" " +
+		"Canary checks the tweak list a server sends against the record the same server signed for that block. " +
+		"When they differ, it names the server and the block.",
+	Conditions: "It makes a server accountable. It does not remove the need to trust one. " +
+		"The claim needs at least one honest server that publishes signed records, and a path to those records that nobody censors. " +
+		"Version 1 is built and tested on regtest only.",
+
+	CheckerTitle: "Check an evidence file",
+	CheckerIntro: "An evidence file holds a server's signed record, the exact bytes it served and its signature over them. " +
+		"canary verify checks it with no network, and trusts nothing the file says about itself.",
+	CheckerInBrowser:          "This page runs the same check in your browser.",
+	CheckerChoose:             "Choose an evidence file",
+	CheckerTryReal:            "Try the real evidence file",
+	CheckerTryTampered:        "Try a tampered copy",
+	CheckerNoEvidence:         "The real evidence file comes from the recorded run, which is not published yet.",
+	CheckerPending:            "The checker that runs in this page is not built yet. Until it is, download a file and run canary verify on it.",
+	CheckerPendingNoEvidence:  "The checker that runs in this page is not built yet. Until it is, run canary verify on an evidence file your own canary check wrote.",
+	CheckerNoScript:           "Without JavaScript, download the file and run canary verify on it in a terminal.",
+	CheckerNoScriptNoEvidence: "Without JavaScript, run canary verify in a terminal on an evidence file your own canary check wrote.",
+	CheckerDownloadReal:       "Download the real file",
+	CheckerDownloadTampered:   "Download the tampered copy",
+	CheckerStepsIntro:         "The check runs these eight steps in order, and stops at the first that fails.",
+	CheckerPrivacy:            "The file stays in your browser.",
+
+	ProblemTitle: "The problem",
+	Problem: []string{
+		"A silent-payments light wallet asks a server for the tweaks it scans with, because it lacks the data to compute them. " +
+			"If the server leaves out the tweak for your payment, the wallet shows the balance it would show if nobody had paid you. There is no error.",
+		"A server can't tell which transactions pay you without your scan key. So hiding one payment takes outside knowledge of it, and the sender always has that knowledge.",
+	},
+	Quote: "The exchange that pays you can also run the server that tells you whether you were paid.",
+
+	HowTitle: "How it works",
+	HowIntro: "Honest servers filter differently, so comparing what two servers send raises false alarms. " +
+		"Canary asks each server to sign for the complete list, then lets it serve less.",
+	HowSteps: []string{
+		"When a server indexes a block, it signs a record: the entry count and a Merkle root over every eligible transaction.",
+		"It serves a tweak list with exactly that many positions. Each carries the entry, its hash or nothing, and a receipt signs the exact bytes.",
+		"Canary fills every gap it can from another server or a payment you declared. Only then does it recompute the root and compare it with the signed one.",
+		"An entry sent as nothing while the block is less than 144 blocks deep is an omission. " +
+			"Canary names the server and, when it can recover the entry, writes an evidence file.",
+	},
+	StatesIntro: "Every block ends in one of six states, shown as a symbol, a word and a colour together.",
+	HowLink:     "Follow one block through every check",
+	LowerBound:  "A balance computed over blocks you could not check is a lower bound, not a balance.",
+
+	ProvesTitle: "What it proves, and what it does not",
+	ProvesIntro: "Canary separates knowing from proving to others. You know whatever your own check saw. " +
+		"Someone else can confirm a finding only from signed data they check themselves.",
+	Proves: []SiteItem{
+		{Label: "Others can check it", Text: "A server signed for an entry, then sent nothing for it inside the 144-block window and signed a receipt for what it sent. " +
+			"canary verify checks the evidence file offline."},
+		{Label: "Others see inclusion only", Text: "The same omission without a receipt. The file shows that the server signed for the entry, not what it sent."},
+		{Label: "Only you know it", Text: "A false chain claim, a declared payment left out, or a list of the wrong length. Version 1 has no evidence format for these."},
+		{Label: "Two servers, nobody accused", Text: "Servers disagree means two servers signed different roots for the same block. At least one is wrong, and Canary does not say which."},
+		{Label: "No accusation", Text: "Can't be checked is neither a pass nor an accusation. A warning names a server that did something odd, and proves nothing."},
+	},
+
+	LimitsTitle:     "Limits of version 1",
+	LimitsIntro:     "Each claim stops somewhere, and the limit belongs next to it.",
+	LimitsClaimHead: "What Canary says",
+	LimitsStopHead:  "Where it stops",
+	Limits: []SiteItem{
+		{Label: "A block reads Checked", Text: "Canary checked the tweak list, not the output data a wallet matches against. " +
+			"A server can send the right tweak and hide the output, and the block still reads Checked. Output keys in the entry are planned for version 2."},
+		{Label: "A server that serves less than it signed for gets named", Text: "Not when it sends the entry's hash under a declared pruning policy. The block then reads Checked, gap filled."},
+		{Label: "Omission is detected", Text: "Only when you run canary check. Version 1 has no wallet in the loop, so nothing stops a wallet from using a block Canary flagged."},
+		{Label: "Detection works", Text: "Version 1 runs on regtest only, against its own reference indexer, which shares the checker's canonical package. No deployed server speaks this protocol yet."},
+		{Label: "Several servers catch a lying one", Text: "If every server colludes, only a tripwire helps, and only for payments you know exist."},
+		{Label: "Records are public", Text: "Version 1 fetches each server's records from that server over HTTP, and publishes them nowhere else yet."},
+		{Label: "A lying server gets caught", Text: "Canary looks for entries left out, never for fake ones. Adding fake entries is a different attack."},
+	},
+	LimitsLink: "Every limit, with the reasoning",
+
+	RunTitle: "Run it yourself",
+	RunIntro: "Build Canary once with a network. Then turn the network off and check the evidence file in the repository. " +
+		"canary verify opens no connection.",
+	RunNeeds: "You need git and Go.",
+	RunAfter: "For the real file, canary verify prints \"Checks out.\" For a tampered copy, it names the step that failed.",
+	RunIntroNoEvidence: "Build Canary once with a network. Then turn the network off and check an evidence file your own canary check wrote. " +
+		"canary verify opens no connection.",
+	RunAfterNoEvidence: "For a file that checks out, canary verify prints \"Checks out.\" For one that does not, it names the step that failed.",
+	RunFilePlaceholder: "FILE",
+	RunPlaceholderNote: "FILE stands for the path to an evidence file. The recorded run's file is not published yet.",
+	RunCloneLabel:      "Copy the clone command",
+	RunBuildLabel:      "Copy the build command",
+	RunVerifyLabel:     "Copy the verify command",
+
+	RunsEmpty: "No recorded run is published yet.",
+	RunsAbout: "A recorded run is one real canary check on regtest, against two reference indexers, one of them told to withhold an entry. " +
+		"Its page will show the results as they were, with the time of the run and the SHA-256 of its state file. It is a recording, not a live view.",
+	RunsAction: "Until then, run it yourself",
+
+	NotFoundBody: "This site has no page at this address. The link may be old, or mistyped.",
+	NotFoundHome: "Go to the home page",
+
+	OnThisPage: "On this page",
+	DocSource:  "This page is built from a file in the repository",
+
+	DocTable: "Table",
+
+	Diagram: SiteDiagramText{
+		ToEachIndexer:  "to each indexer",
+		CoreAlsoSends:  "Bitcoin Core also sends it",
+		Writes:         "writes",
+		FilesGoTo:      "the state file to the first, an evidence file to the second",
+		PassesOn:       "passes them on",
+		Publishes:      "publishes its signed records",
+		IfNo:           "If no",
+		IfYes:          "If yes",
+		IfNoOmission:   "If no, with an omission noted",
+		IfNoNoOmission: "If no, with no omission noted",
+		GoOn:           "Either way, go on.",
+		Or:             "or",
+	},
+}
+
+// TableLabel names a doc table for screen readers, after the heading above
+// it when there is one.
+func (s SiteText) TableLabel(heading string) string {
+	if heading == "" {
+		return s.DocTable
+	}
+	return s.DocTable + ": " + heading
+}
+
+// TamperNote says exactly which byte the tampered copy changes. offset counts
+// from 1, the way cmp reports a difference, and field names the JSON value
+// that holds the byte.
+func (s SiteText) TamperNote(offset int, field, from, to string) string {
+	return fmt.Sprintf("The tampered copy changes one byte of the real file. Byte %d, inside %s, reads %q where the real file has %q.",
+		offset, field, to, from)
 }

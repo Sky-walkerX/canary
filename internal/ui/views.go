@@ -113,6 +113,15 @@ type copyData struct {
 
 var funcs = template.FuncMap{
 	"copyOf": func(value, label string) copyData { return copyData{Value: value, Label: label} },
+	"themeLabel": func(mode string) string {
+		switch mode {
+		case "light":
+			return wording.ThemeLight
+		case "dark":
+			return wording.ThemeDark
+		}
+		return wording.ThemeAuto
+	},
 }
 
 // hashView renders a hex value in groups of four.
@@ -285,7 +294,7 @@ func newFindingRow(x state.Finding, loc *time.Location, known map[string]bool) f
 		Kind:       x.Kind,
 		KindLabel:  wording.KindLabel(x.Kind),
 		Glyph:      findingGlyph(x.Kind),
-		Sentence:   wording.FindingSentence(x.Kind, string(x.Reason), labels(x.Servers)),
+		Sentence:   wording.FindingHeadline(x.Kind, string(x.Reason), labels(x.Servers)),
 		Block:      blockLink{Height: x.Block.Height, Hash: x.Block.Hash},
 		BlockKnown: known[x.Block.Hash],
 		Provable:   wording.ProvableShort(x.Kind, x.Provable, x.Evidence != nil),
@@ -375,7 +384,7 @@ func buildVerdict(f *state.File) (wording.Verdict, *wording.StateText) {
 			if len(one) == 1 {
 				x := one[0]
 				return wording.VerdictWithheldOne(
-					wording.FindingSentence(x.Kind, string(x.Reason), labels(x.Servers)),
+					wording.FindingHeadline(x.Kind, string(x.Reason), labels(x.Servers)),
 					x.Block.Height,
 					wording.ProvableShort(x.Kind, x.Provable, x.Evidence != nil),
 				), badgeFor(state.Compromised)

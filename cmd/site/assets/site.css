@@ -1,0 +1,629 @@
+/*
+ * Canary public site. It extends the dashboard's design system, loaded
+ * before it (tokens.css, then ui.css), with the site's own layouts: the
+ * claim, the evidence checker, the home page's bands and the pages built
+ * from the docs.
+ *
+ * The same rules hold. Flat surfaces and 1px rules, radii of 2 to 4px, no
+ * gradients or shadows. Canary yellow is Canary's own voice and never a
+ * state. The perch, the line the wordmark sits on, carries the page titles.
+ */
+
+/* Header: the site has no network badge, so its grid has no badge area. */
+.site-header-row {
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "mark nav toggle";
+}
+@media (max-width: 899px) {
+  .site-header-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "mark toggle"
+      "nav nav";
+  }
+}
+/* Four links fit one row at 360px when they step down a size. */
+@media (max-width: 479px) {
+  .site-header-row .nav ul { gap: var(--space-1) 14px; }
+  .site-header-row .nav a { font-size: var(--text-s); }
+}
+
+.nobr { white-space: nowrap; }
+
+/* Titles sit on a perch, as the wordmark does. The run-on past the last
+   letter stays inside the column at every width. */
+.page-title,
+.hero-claim {
+  position: relative;
+  width: fit-content;
+  text-wrap: balance;
+}
+.page-title {
+  font-size: clamp(2rem, 1.55rem + 1.8vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  max-width: calc(100% - 32px);
+  padding-bottom: 14px;
+}
+.page-title::after,
+.hero-claim::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -32px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--perch);
+}
+
+/* Home: the claim */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+}
+/* The claim takes the whole column, so its perch runs the column's width. */
+.hero-claim {
+  width: auto;
+  font-size: clamp(2.125rem, 1.35rem + 3.3vw, 3.625rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  padding-bottom: var(--space-5);
+}
+.hero-claim::after { right: 0; height: 4px; }
+.hero-lede { font-size: var(--text-l); max-width: 56ch; }
+.hero-conditions { color: var(--ink-muted); max-width: 56ch; }
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    grid-template-areas:
+      "claim claim"
+      "lede conditions";
+    column-gap: var(--space-7);
+    row-gap: var(--space-6);
+  }
+  .hero-claim { grid-area: claim; }
+  .hero-lede { grid-area: lede; }
+  .hero-conditions {
+    grid-area: conditions;
+    align-self: start;
+    padding-left: var(--space-5);
+    border-left: var(--rule-width) solid var(--rule-strong);
+  }
+}
+
+/* Home: the evidence checker, the one thing on the page to use. */
+
+.checker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: var(--space-7);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--ink);
+  border-radius: var(--radius-m);
+  scroll-margin-top: var(--space-4);
+}
+/* The bar is Canary speaking, in its own colour, as the dashboard's update
+   bar does. */
+.checker-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--canary);
+  color: var(--on-canary);
+  border-bottom: var(--rule-width) solid var(--on-canary);
+  border-radius: 3px 3px 0 0;
+}
+.checker-title { font-size: var(--text-xl); }
+.checker-bar .checker-privacy { color: var(--on-canary); font-weight: 600; }
+/* The checker script reveals these. Until it runs they stay out of sight,
+   whatever display another rule gives them. */
+[data-checker-live][hidden] { display: none; }
+.checker-main {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  padding: var(--space-5) var(--space-4);
+}
+.checker-intro { max-width: 58ch; }
+
+.drop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  padding: var(--space-4);
+  background: var(--bg);
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: var(--radius-m);
+  text-align: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+.drop:hover { border-color: var(--ink); }
+.drop-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.drop-label .icon { transform: rotate(180deg); }
+/* The input covers the whole drop zone, so a click or a dropped file lands
+   on it, and it keeps its own focus. */
+.drop-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.drop:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--bg), 0 0 0 6px var(--canary);
+}
+.drop:has(:disabled) { color: var(--ink-muted); cursor: not-allowed; }
+.drop:has(:disabled):hover { border-color: var(--rule-strong); }
+.drop:has(:disabled) .drop-input { cursor: not-allowed; }
+
+.checker-tries { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.checker-tries .btn { font-size: var(--text-m); min-height: 44px; padding-inline: var(--space-4); }
+.tamper-note { font-size: var(--text-s); max-width: 58ch; }
+.checker-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checker-downloads .download { font-family: var(--font-sans); }
+.checker-privacy { font-size: var(--text-s); color: var(--ink-muted); }
+
+.checker-result {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-5) var(--space-4);
+  background: var(--bg);
+  border-top: var(--rule-width) solid var(--rule-strong);
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+}
+.checker-pending {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3);
+  font-size: var(--text-s);
+  font-weight: 600;
+  border: var(--rule-width) solid var(--rule-strong);
+  border-radius: var(--radius-m);
+}
+.checker-pending .icon { width: 18px; height: 18px; }
+.checker-steps-intro { font-size: var(--text-s); color: var(--ink-muted); }
+.checker-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: vstep;
+  border-top: var(--rule-width) solid var(--rule);
+  font-size: var(--text-s);
+}
+.checker-steps li {
+  counter-increment: vstep;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  padding-block: 7px;
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+.checker-steps li::before {
+  content: counter(vstep);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.checker-noscript {
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--rule-width) solid var(--rule-strong);
+}
+
+@media (min-width: 900px) {
+  .checker { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .checker-bar { padding: var(--space-3) var(--space-6); }
+  .checker-main, .checker-result { padding: var(--space-6); }
+  .checker-result {
+    border-top: 0;
+    border-left: var(--rule-width) solid var(--rule-strong);
+    border-radius: 0 0 var(--radius-m) 0;
+  }
+}
+
+/* Home: bands. The heading takes the left column on wide screens. */
+
+.band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-7);
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: var(--rule-width) solid var(--rule);
+}
+.band-head { font-size: var(--text-xl); }
+.band-body {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  max-width: 46rem;
+  min-width: 0;
+}
+@media (min-width: 1040px) {
+  .band { grid-template-columns: 15rem minmax(0, 1fr); }
+}
+
+.pull {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-5);
+  border-left: 4px solid var(--perch);
+}
+.pull p {
+  max-width: 30ch;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.how-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5) var(--space-6);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.how-steps li {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--ink);
+}
+.how-n { font-size: var(--text-l); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+@media (min-width: 720px) {
+  .how-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.states-intro { margin-top: var(--space-4); font-weight: 600; }
+.state-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--rule-width) solid var(--rule);
+}
+.state-grid li {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding-block: var(--space-3);
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+.state-grid p { font-size: var(--text-s); color: var(--ink-muted); }
+@media (min-width: 720px) {
+  .state-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-6); }
+}
+.band-body .lower-bound { margin-top: var(--space-2); max-width: none; }
+
+.more { font-weight: 700; }
+
+.band-body .facts { margin-top: var(--space-1); }
+.proves dd { display: block; }
+
+.limits tbody th { font-weight: 700; color: var(--ink); }
+@media (min-width: 720px) {
+  .limits tbody th { width: 36%; }
+  .limits td { min-width: 24ch; }
+}
+@media (max-width: 719px) {
+  .limits tbody td { padding-top: 0; }
+}
+
+.run-steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: run;
+}
+.run-steps li {
+  counter-increment: run;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  align-items: start;
+}
+.run-steps li::before {
+  content: counter(run);
+  padding-top: var(--space-3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.run-steps .command { margin-top: 0; max-width: none; }
+/* A command wraps at every width, so no part of it hides under the copy
+   button or past the edge. */
+.run-steps .command pre { white-space: pre-wrap; overflow-wrap: anywhere; padding-block: 3px; }
+.run-steps var { font-style: italic; font-weight: 700; }
+.run-steps .run-placeholder {
+  grid-column: 2;
+  margin-top: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-s);
+}
+/* On a phone the command takes the full width, with the copy button under
+   it. */
+@media (max-width: 719px) {
+  .run-steps .command { flex-direction: column; align-items: stretch; }
+  .run-steps .copy-btn { align-self: flex-end; }
+}
+.run-note { color: var(--ink-muted); font-size: var(--text-s); }
+
+/* Pages built from the docs */
+
+.doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6) var(--space-7);
+  padding-top: var(--space-4);
+}
+.toc {
+  padding: var(--space-4);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+}
+.toc-title { margin-bottom: var(--space-2); font-size: var(--text-s); color: var(--ink-muted); }
+.toc ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.toc a {
+  display: block;
+  padding: 3px 0;
+  font-size: var(--text-s);
+  font-weight: 600;
+  text-decoration: none;
+}
+.toc a:hover { text-decoration: underline; }
+@media (min-width: 1040px) {
+  .doc.has-toc {
+    grid-template-columns: 13rem minmax(0, 1fr);
+    grid-template-areas:
+      "head head"
+      "toc body";
+  }
+  .doc.has-toc .doc-head { grid-area: head; }
+  .doc.has-toc .doc-body { grid-area: body; }
+  .doc.has-toc .toc {
+    grid-area: toc;
+    position: sticky;
+    top: var(--space-5);
+    align-self: start;
+    max-height: calc(100vh - 2 * var(--space-5));
+    overflow-y: auto;
+    padding: 0 0 0 var(--space-4);
+    border: 0;
+    border-left: var(--rule-width) solid var(--rule);
+    border-radius: 0;
+  }
+}
+
+.doc-body { min-width: 0; max-width: 52rem; }
+.doc-body > * { margin-block: 0; }
+.doc-body > * + * { margin-top: var(--space-4); }
+.doc-body p,
+.doc-body li { max-width: 68ch; }
+.doc-body h2 {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: var(--rule-width) solid var(--rule);
+}
+.doc-body h3 {
+  margin-top: var(--space-7);
+  padding-top: var(--space-4);
+  border-top: var(--rule-width) solid var(--rule);
+}
+.doc-body h2 + h3 { margin-top: var(--space-5); padding-top: 0; border-top: 0; }
+/* A doc's own rule already separates what follows it. */
+.doc-body hr + :is(h2, h3) { margin-top: 0; padding-top: 0; border-top: 0; }
+.doc-body :is(h2, h3) + * { margin-top: var(--space-3); }
+.doc-body :is(h2, h3) { scroll-margin-top: var(--space-4); }
+/* A heading reached by its link wears Canary's marker. */
+.doc-body :is(h2, h3):target {
+  text-decoration-line: underline;
+  text-decoration-color: var(--canary);
+  text-decoration-thickness: 0.4em;
+  text-underline-offset: -0.2em;
+  text-decoration-skip-ink: none;
+}
+.doc-body ul,
+.doc-body ol { padding-left: 1.4em; }
+.doc-body li + li { margin-top: var(--space-2); }
+.doc-body li > p + p { margin-top: var(--space-2); }
+.doc-body code {
+  padding: 0 4px;
+  font-size: 0.875em;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-s);
+  overflow-wrap: anywhere;
+}
+.doc-body pre {
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  font-size: var(--text-s);
+  line-height: 1.6;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+}
+.doc-body pre code { padding: 0; font-size: inherit; background: none; border: 0; }
+.doc-body blockquote {
+  margin-inline: 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-5);
+  border-left: 4px solid var(--perch);
+}
+.doc-body blockquote p { font-size: var(--text-l); font-weight: 600; line-height: 1.4; }
+.doc-body hr { margin-block: var(--space-6); border: 0; border-top: var(--rule-width) solid var(--rule); }
+.doc-body th,
+.doc-body td { min-width: 9ch; }
+.doc-body td code,
+.doc-body th code { white-space: nowrap; }
+.doc-table { max-width: none; }
+
+.doc-source {
+  margin-top: var(--space-8) !important;
+  padding-top: var(--space-4);
+  border-top: var(--rule-width) solid var(--rule);
+  font-size: var(--text-s);
+  color: var(--ink-muted);
+}
+.doc-source a { color: var(--ink-muted); }
+
+/* Jump lists: a doc's own index of the page. */
+
+.jump-set {
+  display: grid;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+}
+@media (min-width: 720px) {
+  .jump-set:has(.jump + .jump) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.jump-label { margin-bottom: var(--space-1); font-size: var(--text-s); font-weight: 700; }
+.jump-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-4);
+  margin: 0;
+  padding: 0 !important;
+  list-style: none;
+  font-size: var(--text-s);
+}
+.doc-body .jump-list li + li { margin-top: 0; }
+.jump-list a { display: inline-block; padding-block: 3px; }
+
+/* Drawings of the docs' diagrams */
+
+.flow { margin-inline: 0; }
+.doc-body .flow ol { padding-left: 0; }
+.doc-body .flow li + li { margin-top: 0; }
+
+.flow-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+@media (min-width: 720px) {
+  .flow-lanes { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
+}
+.flow-lane-title { margin-bottom: var(--space-3); font-size: var(--text-s); font-weight: 700; color: var(--ink-muted); }
+.flow-steps { margin: 0; list-style: none; }
+.flow-steps + .flow-steps { margin-top: var(--space-6); }
+.flow-node {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-m);
+}
+.flow-name { font-weight: 700; }
+.doc-body .flow-name code { padding: 0; font-size: 0.95em; background: none; border: 0; }
+.flow-note { font-size: var(--text-s); color: var(--ink-muted); }
+.flow-store { border-style: double; border-width: 4px; }
+/* canary check is Canary itself, so it speaks in Canary's colour. */
+.flow-main { background: var(--canary); color: var(--on-canary); border-color: var(--on-canary); }
+.flow-main .flow-note { color: var(--on-canary); }
+.flow-ref { color: var(--ink-muted); border-color: var(--rule-strong); }
+.flow-pair { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.flow-stack { flex-direction: column; align-items: flex-start; }
+.flow-edge {
+  position: relative;
+  margin: 0 0 0 18px;
+  padding: var(--space-2) 0 14px var(--space-4);
+  font-size: var(--text-s);
+  color: var(--ink-muted);
+  border-left: 1.5px solid var(--ink);
+}
+.flow-edge::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  bottom: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--ink);
+}
+.flow-later .flow-node:not(.flow-ref) { border-style: dashed; }
+.flow-later .flow-edge { border-left-style: dashed; }
+
+.checks-start { margin: 0 0 var(--space-2); }
+.checks { margin: 0; list-style: none; counter-reset: check; border-top: var(--rule-width) solid var(--rule); }
+.checks .checks { counter-reset: none; margin-top: var(--space-2); border-top: 0; }
+.check {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: var(--space-3) 0 var(--space-3) 2.75rem;
+  border-bottom: var(--rule-width) solid var(--rule);
+  counter-increment: check;
+}
+.check::before {
+  content: counter(check);
+  position: absolute;
+  left: 0;
+  top: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: var(--text-s);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-s);
+}
+.check-q { font-weight: 700; }
+.check-exit { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-3); font-size: var(--text-s); }
+.check-if { color: var(--ink-muted); }
+.check-ok .badge { vertical-align: -3px; }
+.check-group {
+  margin-block: var(--space-3);
+  padding: var(--space-3) 0 0 var(--space-4);
+  border-left: 3px solid var(--ink);
+}
+.check-group-title { font-size: var(--text-s); font-weight: 700; color: var(--ink-muted); }
+.check-group .check:last-child { border-bottom: 0; }
+
+/* Recorded runs and other short pages */
+
+.page-intro { display: grid; gap: var(--space-4); max-width: 60ch; padding-top: var(--space-4); }
+.page-intro .error-links { margin-top: var(--space-2); }
+
+/* Footer */
+
+.site-footer-row { display: grid; gap: var(--space-3); padding-block: var(--space-6) var(--space-7); }
+.footer-framing { font-size: var(--text-m); font-weight: 700; color: var(--ink); }
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

@@ -49,3 +49,8 @@ demo-out/
 
 # Public site output, built by go run ./cmd/site
 /site/dist/
+
+# Binaries built at the repository root by the README commands
+/canary
+/canary-indexer
+/canary-uidev

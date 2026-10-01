@@ -16,6 +16,17 @@ filling gaps, and working out which of two servers lied.
 
 ---
 
+## 1 October 2026: where the real run's files live, and what a record costs
+
+The first run on a real Bitcoin Core node, on Core v31.1.0 in regtest mode, wrote an
+evidence file, two state files, each command's output and two indexer logs. A review then
+measured the signed record in that evidence file.
+
+| Decision | Why |
+|---|---|
+| **The committed evidence file lives in `evidence/`, beside the Go package. The run record lives in `docs/runs/2026-10-01`** | `TestCommittedEvidenceChecksOut` reads every `omission-*.json` beside the package, so a format change that breaks the reader's path fails CI. The README, the site and the video name `evidence/<file>`, and `cmd/site -evidence` refuses a file outside that directory. The run's output, state files and logs sit in `docs/runs/2026-10-01`, with local paths removed |
+| **A signed record is about 690 bytes, not about 200.** The record for block 351 in the committed evidence file is 691 bytes as the server serves it | The design summary, its cost section, the README and the FAQ all said about 200 bytes, an understatement by about 3.5 times. Records for all of mainnet come to about 666 MB (965,000 blocks × 690 bytes). The 36 bytes per block a server must keep, about 35 MB, did not change. This is the same kind of error as the storage and overhead figures the 7 Sep review caught: a number a skeptic recomputes. The 8 Sep entry below that says "about 200 bytes" is kept as it was written |
+
 ## 1 October 2026: what one server can cost a run
 
 A review found that a server whose records verify could still stall `canary check` or

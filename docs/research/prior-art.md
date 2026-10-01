@@ -200,7 +200,9 @@ nothing but false alarms.
 - **Live evidence, 30 Sep.** For mainnet block 969,300, silentpayments.dev returned 220
   tweaks from its full index and 184 from its filtered endpoint. Cake Wallet's server
   returned 141. All 141 appear in the list of 220. A raw comparison cannot tell whether
-  the missing 79 were filtered or hidden.
+  the missing 79 were filtered or hidden. This was a one-off measurement. Only the counts
+  were kept, not the request URLs or the responses, so the repository cannot reproduce
+  it.
 
 Any workable design must therefore define a complete list for each block.
 

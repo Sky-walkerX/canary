@@ -24,18 +24,17 @@ per track, $1,000.
   docs, and the developer reviews them.
 
 Repo: `github.com/Sky-walkerX/canary`. It stays **private** until submission, because
-publishing early hands the idea to competitors. It goes public, with an MIT `LICENSE`,
-on 5 Oct.
+publishing early hands the idea to competitors. It goes public on 5 Oct. The MIT
+`LICENSE` is already committed.
 
 ## Current state on 2026-10-01
 
 **The design is approved and implementation is under way.** The approval gate passed on
 8 Sep. Write code test-first, within the approved 30 Sep plan.
 
-**Source of truth for scope:** the approved plan at
-`/Users/skywalker/.claude/plans/pasted-content-id-0f6e-refactor-all-compiled-engelbart.md`.
-It lives outside the repo. The scored feature roadmap, with the v1 cut line and the v2
-themes, is `docs/roadmap/2026-09-30-feature-roadmap.md`.
+**Source of truth for scope:** the approved 30 Sep plan. It is private to the developer
+and is not in the repo. In the repo, the scored feature roadmap,
+`docs/roadmap/2026-09-30-feature-roadmap.md`, carries the v1 cut line and the v2 themes.
 
 **Every part of the v1 detection loop is built and tested, and on 1 Oct it ran end to end
 on a real Bitcoin Core v31.1.0 node in regtest mode.** The tests still use a synthetic
@@ -53,17 +52,18 @@ interface does.
 | `cmd/canary`: `check`, `verify`, `status`, `ui` | Built and tested. `check --expect` is the v1 tripwire, tweak check only |
 | `internal/ui`, the local dashboard (`canary ui`) | Built and tested. `go run -tags uidev ./cmd/canary-uidev` shows it on sample data |
 | `cmd/site`, the public site generator | Built and tested. It copies the browser checker into the site's hashed asset folder. With `-evidence` it publishes that file and a copy with one proof hash flipped, which fails at the inclusion step |
-| `cmd/verify-wasm`, the browser checker | Built and tested. `make wasm` gives 8,676,080 bytes raw (8.68 MB), 2.66 MB at gzip -9. Run in Node, it gives "Checks out." for the committed evidence file and makes no network call |
-| End-to-end gate, `TestGate` in `cmd/canary/gate_test.go` | Passes. Two reference indexers on a 209-block synthetic chain, one withholding a taproot payment. `canary check` names the server, block and txid; the evidence file verifies in a process the operating system cuts off from the network (run on macOS; the Linux amd64 and arm64 version builds and vets but has not run yet); six one-byte tamperings each fail at their step; the dashboard shows the finding |
+| `cmd/verify-wasm`, the browser checker | Built and tested. At `d52477d` on Go 1.26.4, `make wasm` gives 8,679,120 bytes raw (8.68 MB), 2.66 MB at gzip -9. Run in Node, it gives "Checks out." for the committed evidence file and makes no network call |
+| End-to-end gate, `TestGate` in `cmd/canary/gate_test.go` | Passes. Two reference indexers on a 209-block synthetic chain, one withholding a taproot payment. `canary check` names the server, block and txid; the evidence file verifies in a process the operating system cuts off from the network (run on macOS; the Linux version runs in CI on ubuntu-latest amd64 and has passed on every push since it landed in `6c95886`; not run on Linux arm64); six one-byte tamperings each fail at their step; the dashboard shows the finding |
 | A run on a real Bitcoin Core regtest node | Done on 1 Oct: `scripts/demo-regtest.sh --act5` on Core v31.1.0. Block 351 held five taproot payments. The withholder, key `db614560…`, left `ad56b9bb…e21e` out of its served list while signing it into its record. `canary check` over blocks 0 to 351, both servers pinned and the payment declared, gave 351 Checked · 1 Data withheld and named the withholder. Act 5: block 201 checked with the withholder alone reads Can't be checked, `gap_unfilled`, no accusation. Records came over HTTP; nothing went to Nostr relays. Output, state files and logs are in `docs/runs/2026-10-01` |
-| The committed real evidence file and its CI test | Done. `evidence/omission-regtest-351-ad56b9bb-db614560.json`, 2,722 bytes, SHA-256 `aea26b9b…9710`. `TestCommittedEvidenceChecksOut` in `evidence/committed_test.go` verifies every committed `omission-*.json`. CI passed on `2679bc4`, the commit that added it |
-| Recorded-run page and README screenshots | In progress in a sibling worktree. The README already points at `docs/media/dashboard-overview.png` and `docs/media/site-checker-real.png`. The site's Recorded runs page still says no run is published |
+| The committed real evidence file and its CI test | Done. `evidence/omission-regtest-351-ad56b9bb-db614560.json`, 2,722 bytes, SHA-256 `aea26b9b…9710`. `TestCommittedEvidenceChecksOut` in `evidence/committed_test.go` verifies every committed `omission-*.json`. CI passed on `2679bc4`, the commit that added it, and on every push since |
+| Recorded-run pages and README screenshots | Done. `go run ./cmd/site` reads `docs/runs` and builds pages for the 1 Oct run from its state files. The screenshots in `docs/media` come from that run |
 | Video, public deploy | Not done. The site builds and serves locally; deploying it needs `npx wrangler login` first |
 
-Tests on 1 Oct: `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again
-with `-race`. That is 403 top-level tests plus one fuzz test's seeds, and 782 passing cases
-with subtests. Recount before quoting; other tracks merge into `main`. Everything up to
-`2679bc4` is pushed, and CI passed on it. The MIT `LICENSE` is committed.
+Tests on 1 Oct, at `d52477d`: `go test ./... -count=1` passed in all 19 packages on Go
+1.26.4, and again with `-race`. That is 413 top-level tests, one of them a fuzz test with
+four seeds, and 791 passing cases with subtests. Recount before quoting; other tracks
+merge into `main`. Everything up to `d52477d` is pushed, and CI passed on every push of
+1 Oct.
 
 **Next tasks:**
 
@@ -307,7 +307,9 @@ Each has its full reason, and its history, in [docs/decisions.md](docs/decisions
   the fact, with no signatures.
 - **Live evidence for comparing committed lists, not served ones (30 Sep).** For mainnet
   block 969,300, silentpayments.dev returned 220 tweaks (full index) and 184 (filtered
-  endpoint), and Cake's server returned 141. All 141 are in the 220.
+  endpoint), and Cake's server returned 141. All 141 are in the 220. It was a one-off
+  measurement. Only the counts were kept, not the URLs or responses, so the repo cannot
+  reproduce it. Say so wherever it is quoted.
 - **Core PR #28241** (SP index) closed unmerged Feb 2025. Its "consistency check" means
   test-vector validation, not client-side detection. No collision.
 - **Delving thread 891** (Jun 2024) is the canonical light-client discussion. harding's

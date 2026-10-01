@@ -160,7 +160,8 @@ the morning.
       git ls-remote --tags origin v0.1.0
       ```
 
-- [ ] Optional: a GitHub release on the same tag.
+- [ ] A GitHub release on the same tag. The dashboard's footer links "Release notes" to
+      the repository's releases page, so without a release that link opens an empty page.
 
       ```sh
       gh release create v0.1.0 --verify-tag --title "Canary v0.1.0" \

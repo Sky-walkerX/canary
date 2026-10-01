@@ -96,8 +96,10 @@ In the design: leaf.
 ### Event
 
 A signed [Nostr](#nostr) message. Canary's [signed records](#signed-record) are events of
-kind 1352. That is a regular kind, which relays keep as it was published. Canary never
-uses a replaceable kind, since a server could then overwrite an old record in place. The
+kind 1352. That is a regular kind, so no later event can overwrite one in place. Canary
+never uses a replaceable kind, since a server could then overwrite an old record. A
+server can still send a NIP-09 deletion request, which many relays honour, so the design
+relies on copies that clients and other relays keep. v1 publishes no events to relays. The
 `b` tag holds the block hash in display order, and relays index it so a client can fetch
 records by block hash. The event's `created_at` time is set by the signer and can be
 backdated.
@@ -234,10 +236,11 @@ Bitcoin networks. Mainnet is the real one. Signet is a public test network where
 designated signer authorizes each block, so proof-of-work gives it no integrity. Regtest
 is a private chain on your own machine, where you mine blocks on command.
 
-Canary v1 is built and tested on regtest only. `canary check` accepts other networks and
-prints a notice that v1 was not tested on them. Canary identifies each network by its
-4-byte message-start magic, which keeps two custom signets apart. Regtest's magic is
-`fabfb5da`, written 3669344250 in JSON and in Nostr tags.
+Canary v1 is built and tested on regtest only. `canary check` accepts regtest and mainnet
+only. On mainnet it prints a notice that v1 is tested on regtest only. It refuses signet
+and every other chain until a flag can name the network. Canary identifies each network
+by its 4-byte message-start magic, which keeps two custom signets apart. Regtest's magic
+is `fabfb5da`, written 3669344250 in JSON and in Nostr tags.
 
 ### Relay
 
@@ -276,7 +279,8 @@ A server's signed statement about one block: the entry count `n` and the
 [Merkle root](#merkle-root) over the [canonical set](#canonical-set). It is a Nostr
 [event](#event) of kind 1352, served at `GET /commitment/{blockhash}`. A server signs it
 once, when it indexes the block, and never signs a second one for the same block. Two
-records for one block from one key contradict each other.
+records for one block from one key contradict each other. A record is about 690 bytes of
+JSON. The 1 Oct run's record for block 351 is 691 bytes.
 
 In the design: commitment.
 

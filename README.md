@@ -3,9 +3,10 @@
 **A silent-payments light wallet cannot tell "nobody paid you" from "the server left
 your payment out."** Canary checks the tweak list a server sends against a list that the
 same server signed and published for that block. When what the server sent contradicts
-what it signed, Canary names the server and the block. On 1 Oct 2026 it did that against
-a real Bitcoin Core node in regtest mode, and the evidence file from that run is in this
-repository.
+what it signed, Canary names the server and the block. On 1 Oct 2026 it did that in a run
+on a real Bitcoin Core node in regtest mode. The server it named was the project's own
+reference indexer, switched to withhold one payment. The evidence file from that run is in
+this repository.
 
 Canary does not make tweak sourcing trustless. It makes it *accountable*, under the two
 conditions in the [security claim](#security-claim).
@@ -77,7 +78,7 @@ indexer logs are in [docs/runs/2026-10-01](docs/runs/2026-10-01/).
 
 ![The browser checker on the recorded run's evidence file](docs/media/site-checker-real.png)
 
-*The browser checker on a copy of the site built on this computer, checking the same
+*The browser checker on a copy of the site built and served locally, checking the same
 evidence file. The site is not deployed yet.*
 
 ---
@@ -111,31 +112,32 @@ Go and serve the way Bitcoin Core's REST interface does.
 | Browser checker, `cmd/verify-wasm` | Built and tested | Runs the same evidence check in a browser. The module is 8.68 MB, or 2.66 MB with gzip |
 | A run on a real Bitcoin Core regtest node | Done on 1 Oct | `scripts/demo-regtest.sh --act5` ran end to end on Bitcoin Core v31.1.0. Its output, state files and logs are in [docs/runs/2026-10-01](docs/runs/2026-10-01/) |
 | The real evidence file | Committed | `evidence/omission-regtest-351-ad56b9bb-db614560.json`, from that run. `TestCommittedEvidenceChecksOut` verifies it on every CI run |
-| Recorded-run page on the site | In progress | The site's Recorded runs page still says no run is published |
+| Recorded-run pages on the site | Built and tested | `go run ./cmd/site` reads `docs/runs` and builds pages for the 1 Oct run from its state files. They exist only in a local build until the site is deployed |
 | Video, public site | Not done | No video is recorded yet, and the site is not deployed |
 
 One end-to-end test, `TestGate` in `cmd/canary`, runs the v1 demo in one process. It goes
 through the same code that the `canary` command and the reference indexer run. A synthetic
 chain of 209 blocks feeds two reference indexers. One of them leaves a taproot payment out
 of what it serves, while its signed record still includes it. The test checks four things,
-and all four pass on macOS:
+and all four pass on macOS and on Linux amd64:
 
 - `canary check` names the withholding server, the block and the txid, from that server's
   own signatures. Every block reads Checked for the honest server.
 - The evidence file verifies in a process that the operating system cuts off from the
-  network, so every connection is refused. This has run on macOS. The Linux version, for
-  amd64 and arm64, is written and builds, but has not run yet. Elsewhere the test skips
-  that step.
+  network, so every connection is refused. On macOS the cut is a sandbox profile. On Linux
+  it is a seccomp filter, and GitHub Actions runs that version on ubuntu-latest (amd64)
+  on every push. It has passed on every push since it landed in commit `6c95886`. It has
+  not run on Linux arm64. On other systems the test skips that step.
 - A one-byte change fails the check at the step that covers that byte. The test changes
   the record signature, the accused key, the block height, a proof hash, the receipt and
   the served list, one at a time.
 - The dashboard shows the finding under the server's name.
 
-On 1 Oct, `go test ./... -count=1` passed in all 19 packages on Go 1.26.4, and again with
-`-race`. That is 403 top-level tests and one fuzz test's seed inputs, none failing, and
-782 passing cases once subtests are counted. One of them verifies the committed evidence
-file. GitHub Actions runs `go vet` and `go test` on every push. The run for the commit
-that added the recorded run, on 1 Oct, passed.
+On 1 Oct, at commit `d52477d`, `go test ./... -count=1` passed in all 19 packages on Go
+1.26.4, and again with `-race`. That is 413 top-level tests, one of them a fuzz test run
+on its four seed inputs, and 791 passing cases once subtests are counted. None failed, and
+none skipped. One of them verifies the committed evidence file. GitHub Actions runs
+`go vet` and `go test` on Go 1.24 for every push, and every run on 1 Oct passed.
 
 Version 1 is built and tested on regtest only, a private local test network. `canary
 check` accepts regtest and mainnet only, and on mainnet it prints a notice that v1 is
@@ -248,9 +250,10 @@ SPCOMMIT hashes each block's unfiltered tweak list and chains the hashes block t
 It signs only the chain head, which the operator posts to Nostr every 6 hours as a kind-1
 note. As of 30 Sep we found no wallet that checks it.
 
-Canary adds three things. All three are built and tested, and the
-[recorded run](#what-happened-in-the-recorded-run) used each of them on a real Bitcoin Core
-node in regtest mode. The [status table](#status-1-october-2026) has the details.
+Canary adds three things. All three are built and tested. The
+[recorded run](#what-happened-in-the-recorded-run) used each of them with a real Bitcoin
+Core node in regtest mode, against the project's reference indexer. The
+[status table](#status-1-october-2026) has the details.
 
 - **A check at the client, one block at a time.** Each block gets its own signed Nostr
   event, found by block hash. A client can check one block without recomputing a chain.
@@ -293,6 +296,8 @@ alarms. On 30 Sep, two live servers returned three different lists for mainnet b
 969,300. silentpayments.dev returned 220 tweaks from its full index and 184 from its
 filtered endpoint, and Cake Wallet's server returned 141. All 141 appear in the list of
 220, and a raw comparison cannot tell whether the missing 79 were filtered or hidden.
+That was a one-off measurement. The repository keeps the three counts, not the requests
+or the responses, so nothing here re-runs it.
 
 So each server signs a [commitment](docs/glossary.md#commitment) to the *complete,
 unfiltered* list for every block, and serves whatever subset its policy allows. Two rules
@@ -304,9 +309,10 @@ follow:
 
 The checks, cheapest first:
 
-1. **Compare signed commitments across servers.** Each server publishes a signed Nostr
-   event of about 200 bytes per block. It carries a 32-byte Merkle root over the block's
-   complete list. If two servers sign different roots for the same block hash, at least
+1. **Compare signed commitments across servers.** Each server signs a Nostr event of
+   about 690 bytes per block. The recorded run's record for block 351 is 691 bytes. It
+   carries a 32-byte Merkle root over the block's complete list, and that root is what
+   Canary compares. If two servers sign different roots for the same block hash, at least
    one of them is lying. Canary cannot yet tell which, so it marks the block
    *disputed* and takes no automatic action.
 2. **Check what you were sent, filling gaps first.** Canary rebuilds the root from what a
@@ -379,6 +385,11 @@ never from `created_at`.
   the right tweak and drop the output, and v1 would still report the block as Checked.
   "Checked" means the tweak list was checked, never that payments were checked. Committing
   to outputs is planned after v1.
+- **It does not check a lone server's record for completeness.** With one server, a
+  record that already leaves out your entry passes, and the block reads Checked, reason
+  `own_record`. A second honest server turns that block into *Servers disagree*, with
+  nobody accused. A payment you declared with `--expect` names the server, but v1 cannot
+  prove that to others.
 - **It does not catch a hash-only entry under a pruning policy.** A server whose declared
   policy prunes spent entries may send just an entry's hash. The root still matches, so
   the block reads *Checked, gap filled*. If no other server sends the full entry, v1

@@ -1562,12 +1562,14 @@ type SiteText struct {
 	// CheckerInBrowser and CheckerPrivacy describe that script, so the page
 	// renders them hidden and the script reveals them when it runs.
 	// CheckerPending shows only when the site was built without the checker
-	// module. The Example variants replace their namesakes when the sample is
+	// module. With the module, CheckerWaiting holds the pending line until
+	// the script mounts, so it must stay true if the script never runs. The
+	// Example variants replace their namesakes when the sample is
 	// the formats document's example, not a file from the recorded run.
 	CheckerTitle, CheckerIntro, CheckerInBrowser     string
 	CheckerChoose, CheckerTryReal, CheckerTryExample string
 	CheckerTryTampered, CheckerSourceExample         string
-	CheckerPending, CheckerNoScript                  string
+	CheckerPending, CheckerNoScript, CheckerWaiting  string
 	CheckerDownloadReal, CheckerDownloadExample      string
 	CheckerDownloadTampered                          string
 	CheckerStepsIntro, CheckerPrivacy                string
@@ -1675,6 +1677,7 @@ var Site = SiteText{
 	CheckerPending: "This build of the site has no checker, so this page can't check files. " +
 		"Download a file and run canary verify on it in a terminal.",
 	CheckerNoScript:         "Without JavaScript, download a file and run canary verify on it in a terminal.",
+	CheckerWaiting:          "The checker needs JavaScript. Until it starts, download a file and run canary verify on it in a terminal.",
 	CheckerDownloadReal:     "Download the real file",
 	CheckerDownloadExample:  "Download the example file",
 	CheckerDownloadTampered: "Download the tampered copy",

@@ -7,16 +7,22 @@
 
 {{/* The evidence checker. checker.js, loaded only when the build has the
      module, wires these hooks: [data-checker-file] and the two
-     [data-checker-try] buttons, which it enables; data-evidence and
-     data-tampered, the files the buttons load; data-wasm-size and
-     data-wasm-build, the module's size and build line; the JSON block of
-     its words; [data-checker-result], where the report goes;
-     [data-checker-pending], the loading line it shows; and
-     [data-checker-live] and [data-checker-build], which it reveals once the
-     module is ready. The live elements say the browser runs the check, so
-     they stay hidden until it can. A build without the module keeps the
-     pending line in view, saying the page has no checker, and the
-     downloads work without a script. */}}
+     [data-checker-try] buttons, which it enables; [data-checker-control],
+     the drop zone and the row of buttons, which it reveals as the last step
+     of its mount; data-evidence and data-tampered, the files the buttons
+     load; data-wasm-size and data-wasm-build, the module's size and build
+     line; the JSON block of its words; [data-checker-result], where the
+     report goes; [data-checker-pending], the line it replaces with its own;
+     and [data-checker-live] and [data-checker-build], which it reveals once
+     the module is ready.
+
+     No control is in view before it can work. The controls wait hidden, so
+     a script that fails to load, or throws before it mounts, leaves the
+     pending line and the command in view, not dead controls. That line
+     covers a browser with JavaScript off as well. The live elements say the
+     browser runs the check, so they stay hidden until it can. A build
+     without the module renders no controls at all. Its pending line says
+     the page has no checker, and the downloads work without a script. */}}
 <section id="checker" class="checker" aria-labelledby="checker-h" data-checker data-evidence="{{.Checker.RealURL}}" data-tampered="{{.Checker.TamperedURL}}"{{with .Checker.Module}} data-wasm-size="{{.Size}}" data-wasm-build="{{.Build}}"{{end}}>
   {{with .Checker.Module}}<script type="application/json" data-checker-text>{{.Text}}</script>
   {{end}}<div class="checker-bar">
@@ -25,17 +31,17 @@
   </div>
   <div class="checker-main">
     <p class="checker-intro">{{$.Text.CheckerIntro}} <span data-checker-live hidden>{{$.Text.CheckerInBrowser}}</span></p>
-    <label class="drop">
+    {{if .Checker.Module}}<label class="drop" data-checker-control hidden>
       <span class="drop-label">{{template "icon" "download"}}<span>{{$.Text.CheckerChoose}}</span></span>
       <input class="drop-input" type="file" accept=".json,application/json" data-checker-file disabled>
     </label>
-    <div class="checker-samples">
+    {{end}}<div class="checker-samples">
       <p id="sample-source" class="sample-source">{{.Checker.Source}}</p>
-      <div class="checker-tries">
+      {{if .Checker.Module}}<div class="checker-tries" data-checker-control hidden>
         <button type="button" class="btn" data-checker-try="real" aria-describedby="sample-source" disabled>{{.Checker.TryLabel}}</button>
         <button type="button" class="btn" data-checker-try="tampered" aria-describedby="tamper-note" disabled>{{$.Text.CheckerTryTampered}}</button>
       </div>
-      <p id="tamper-note" class="tamper-note">{{.Checker.TamperNote}}</p>
+      {{end}}<p id="tamper-note" class="tamper-note">{{.Checker.TamperNote}}</p>
       <ul class="checker-downloads">
         <li><a class="download" href="{{.Checker.RealURL}}" download>{{template "icon" "download"}}<span>{{.Checker.DownloadLabel}}</span></a></li>
         <li><a class="download" href="{{.Checker.TamperedURL}}" download>{{template "icon" "download"}}<span>{{$.Text.CheckerDownloadTampered}}</span></a></li>
@@ -44,14 +50,14 @@
     {{with .Checker.Module}}<p class="checker-build" data-checker-build hidden>{{.Build}}</p>
   {{end}}</div>
   <div class="checker-result" data-checker-result aria-live="polite">
-    {{with .Checker.Module}}<p class="checker-pending" data-checker-pending hidden>{{template "icon" "info"}}<span>{{.Text.LoadingStart}}</span></p>{{else}}<p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{$.Text.CheckerPending}}</span></p>{{end}}
+    {{with .Checker.Module}}<p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{$.Text.CheckerWaiting}} <code>{{.Text.Command}}</code></span></p>{{else}}<p class="checker-pending" data-checker-pending>{{template "icon" "info"}}<span>{{$.Text.CheckerPending}}</span></p>{{end}}
     <p class="checker-steps-intro">{{$.Text.CheckerStepsIntro}}</p>
     <ol class="checker-steps">{{range .Steps}}
       <li>{{.}}</li>{{end}}
     </ol>
   </div>
-  <noscript><p class="checker-noscript">{{$.Text.CheckerNoScript}} <code>canary verify {{$.Text.RunFilePlaceholder}}</code></p></noscript>
-</section>
+  {{if not .Checker.Module}}<noscript><p class="checker-noscript">{{$.Text.CheckerNoScript}} <code>canary verify {{$.Text.RunFilePlaceholder}}</code></p></noscript>
+  {{end}}</section>
 
 <section class="band" aria-labelledby="problem-h">
   <h2 id="problem-h" class="band-head">{{$.Text.ProblemTitle}}</h2>

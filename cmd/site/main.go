@@ -14,10 +14,11 @@
 //
 // Then deploy site/dist to Cloudflare Pages.
 //
-// The home page's checker loads canary.wasm, which make wasm builds. Without
-// it the page says this build has no checker, and the generator says to run
-// make wasm. Until a run is recorded, the checker's sample is the formats
-// document's example evidence file, and the page says so.
+// The home page's checker loads canary.wasm, which make wasm builds. A
+// preview build without it gets a page that says it has no checker, and the
+// generator says to run make wasm. A build with -noindex=false refuses to
+// run without it. Until a run is recorded, the checker's sample is the
+// formats document's example evidence file, and the page says so.
 //
 // A build with -evidence, or with -noindex=false, publishes commands that a
 // fresh clone must be able to run. So it refuses an evidence file outside the
@@ -134,6 +135,11 @@ func repoRoot(docs string) string {
 // would fail in a fresh clone. Those commands build ./cmd/canary and verify
 // evidence/<name>, so both must be in the repository. A preview build, with
 // noindex and no evidence file, publishes neither and skips the check.
+//
+// A public build, with -noindex=false, must also ship the browser checker.
+// bin/ is not in git, so a fresh clone or a deploy that skips make wasm
+// would otherwise publish the site without it. A preview may go without the
+// checker, and its page says so.
 func checkPublishable(cfg config) error {
 	if cfg.Evidence == "" && cfg.NoIndex {
 		return nil
@@ -142,6 +148,11 @@ func checkPublishable(cfg config) error {
 	cmd := filepath.Join(root, "cmd", "canary")
 	if files, _ := filepath.Glob(filepath.Join(cmd, "*.go")); len(files) == 0 {
 		return fmt.Errorf("site: release build: %s holds no Go files, and the page tells readers to go build ./cmd/canary", cmd)
+	}
+	if !cfg.NoIndex {
+		if err := checkModuleBuilt(cfg.Wasm); err != nil {
+			return err
+		}
 	}
 	if cfg.Evidence == "" {
 		return nil
@@ -157,6 +168,20 @@ func checkPublishable(cfg config) error {
 	if got != want {
 		return fmt.Errorf("site: evidence: %s is not in %s, and the page tells readers to verify evidence/%s in their clone",
 			cfg.Evidence, want, filepath.Base(cfg.Evidence))
+	}
+	return nil
+}
+
+// checkModuleBuilt refuses a public build whose -wasm directory has no
+// canary.wasm. readModule later checks that the module is whole and built
+// from the checker's package.
+func checkModuleBuilt(dir string) error {
+	const fix = "Run make wasm first, then build the site again"
+	if dir == "" {
+		return fmt.Errorf("site: release build: no -wasm directory, so the site would ship without its checker. %s", fix)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "canary.wasm")); err != nil {
+		return fmt.Errorf("site: release build: no browser checker, so the site would ship without it: %w. %s", err, fix)
 	}
 	return nil
 }

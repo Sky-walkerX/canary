@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -136,7 +135,7 @@ func TestParseModule(t *testing.T) {
 }
 
 // TestParseModuleFromARealBuild builds a small program for the browser with
-// this test's own Go, and reads its release back. The stand-ins above are
+// the go command on PATH, and reads its release back. The stand-ins above are
 // only as good as this agreement.
 func TestParseModuleFromARealBuild(t *testing.T) {
 	if testing.Short() {
@@ -151,11 +150,23 @@ func TestParseModuleFromARealBuild(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The go command on PATH builds the module, and the same command says
+	// which release it is. runtime.GOROOT can name the toolchain that built
+	// this test instead, which need not be the one on PATH.
+	gocmd, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go command on PATH")
+	}
+	env := append(os.Environ(), "GOOS=js", "GOARCH=wasm", "GOWORK=off", "GOFLAGS=")
+	version := exec.Command(gocmd, "env", "GOVERSION")
+	version.Dir, version.Env = dir, env
+	v, err := version.Output()
+	if err != nil {
+		t.Fatalf("go env GOVERSION: %v", err)
+	}
 	out := filepath.Join(dir, "hello.wasm")
-	gocmd := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cmd := exec.Command(gocmd, "build", "-trimpath", "-ldflags=-s -w", "-o", out, ".")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", "GOWORK=off", "GOFLAGS=")
+	cmd.Dir, cmd.Env = dir, env
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, b)
 	}
@@ -167,7 +178,7 @@ func TestParseModuleFromARealBuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseModule on a real build: %v", err)
 	}
-	if want := goRelease(runtime.Version()); m.GoRelease != want {
+	if want := goRelease(strings.TrimSpace(string(v))); m.GoRelease != want {
 		t.Errorf("Go release %q, want %q", m.GoRelease, want)
 	}
 	if m.Path != "example.com/hello" {
@@ -240,10 +251,21 @@ func TestCheckerWithModule(t *testing.T) {
 			t.Errorf("the checker lacks %q", want)
 		}
 	}
-	// The pending line waits, hidden, for the script, which shows it while
-	// the module loads. The words for a site with no checker are gone.
-	if !regexp.MustCompile(`<p class="checker-pending" data-checker-pending hidden>`).MatchString(checker) {
-		t.Error("the pending line is not hidden until the script runs")
+	// Until the script runs, the pending line is in view. It says the
+	// checker needs JavaScript and gives the command, which stays true if
+	// the script never runs. The script replaces it once it mounts. That
+	// line covers a browser with JavaScript off, so no noscript repeats it.
+	if !regexp.MustCompile(`<p class="checker-pending" data-checker-pending>`).MatchString(checker) {
+		t.Error("the pending line is not in view before the script runs")
+	}
+	shown := visibleText(checker)
+	for _, want := range []string{wording.Site.CheckerWaiting, wording.Checker.Command} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("%q is not in view before the script runs", want)
+		}
+	}
+	if strings.Contains(checker, "<noscript>") {
+		t.Error("the checker repeats the pending line in a noscript element")
 	}
 	if strings.Contains(home, htmlText(wording.Site.CheckerPending)) {
 		t.Error("the page says it has no checker although the module was built")
@@ -342,6 +364,121 @@ func TestCheckerWithoutModule(t *testing.T) {
 	}
 }
 
+// controlElem matches a form control: something a reader would try to use.
+var controlElem = regexp.MustCompile(`<(input|button|textarea|select)\b`)
+
+// TestCheckerShowsNoDeadControls keeps controls that can't work out of view.
+// With the module, the file input and the two Try buttons wait in hidden
+// data-checker-control elements, which checker.js reveals as the last step
+// of its mount. So a script that fails to load, or throws before it mounts,
+// leaves the pending line and the command in view, not dead controls. A
+// build without the module renders no controls at all.
+func TestCheckerShowsNoDeadControls(t *testing.T) {
+	home := read(t, buildSite(t, withWasm(t, fakeWasm(goodWasm), fakeExec)), "index.html")
+	checker := section(t, home, "checker")
+	if n := len(controlElem.FindAllString(checker, -1)); n != 3 {
+		t.Errorf("the checker renders %d controls, want the file input and two Try buttons", n)
+	}
+	if m := controlElem.FindString(withoutHidden(checker)); m != "" {
+		t.Errorf("a control is in view before checker.js runs: %s", m)
+	}
+	for _, want := range []string{
+		`<label class="drop" data-checker-control hidden>`,
+		`<div class="checker-tries" data-checker-control hidden>`,
+	} {
+		if !strings.Contains(checker, want) {
+			t.Errorf("the checker lacks %q", want)
+		}
+	}
+
+	builds := map[string]func(*config){
+		"example":  nil,
+		"recorded": withEvidence(t, exampleEvidence),
+	}
+	for name, mutate := range builds {
+		dist := buildSite(t, mutate)
+		checker := section(t, read(t, dist, "index.html"), "checker")
+		if m := controlElem.FindString(checker); m != "" {
+			t.Errorf("%s: a build without the module renders a control that can never work: %s", name, m)
+		}
+		for _, hook := range []string{"data-checker-file", "data-checker-try", "data-checker-control"} {
+			if strings.Contains(checker, hook) {
+				t.Errorf("%s: a build without the module renders %s", name, hook)
+			}
+		}
+		// What works without the module stays: where the sample comes
+		// from, which byte the copy changes, and both downloads.
+		shown := visibleText(checker)
+		for _, want := range []string{wording.Site.CheckerPending, wording.Site.CheckerDownloadTampered} {
+			if !strings.Contains(shown, want) {
+				t.Errorf("%s: %q is not in view", name, want)
+			}
+		}
+		if n := strings.Count(checker, `" download>`); n != 2 {
+			t.Errorf("%s: the checker offers %d downloads, want 2", name, n)
+		}
+	}
+}
+
+// TestCheckerHooksMatchTheScript holds every hook the page renders for
+// checker.js to a selector the script uses, so a rename on one side can't
+// leave the other waiting on an element nothing touches.
+func TestCheckerHooksMatchTheScript(t *testing.T) {
+	js, err := fs.ReadFile(ui.Assets(), "checker/checker.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checker := section(t, read(t, buildSite(t, withWasm(t, fakeWasm(goodWasm), fakeExec)), "index.html"), "checker")
+	hooks := map[string]bool{}
+	for _, m := range regexp.MustCompile(`\s(data-checker-[a-z-]+)`).FindAllStringSubmatch(checker, -1) {
+		hooks[m[1]] = true
+	}
+	if !hooks["data-checker-control"] {
+		t.Fatal("the page renders no data-checker-control hook")
+	}
+	for h := range hooks {
+		if !strings.Contains(string(js), "["+h) {
+			t.Errorf("the page renders %s, which checker.js never selects", h)
+		}
+	}
+	// The controls appear only once mount has wired every handler, so the
+	// reveal is the last thing mount does.
+	mount := regexp.MustCompile(`(?s)\n  function mount\(root\) \{\n(.*?)\n  \}\n`).FindSubmatch(js)
+	if mount == nil {
+		t.Fatal("checker.js has no mount function")
+	}
+	reveal := bytes.LastIndex(mount[1], []byte("[data-checker-control]"))
+	for _, wiring := range []string{"addEventListener(", "function "} {
+		if at := bytes.LastIndex(mount[1], []byte(wiring)); at > reveal {
+			t.Errorf("mount reveals the controls before its last %q", wiring)
+		}
+	}
+}
+
+// TestReleaseBuildNeedsTheChecker refuses a release build without the
+// browser checker. bin/ is not in git, so a fresh clone or a deploy that
+// skips make wasm would otherwise publish the site with no checker. A
+// preview build may go without it, and its page says so.
+func TestReleaseBuildNeedsTheChecker(t *testing.T) {
+	public := func(c *config) { c.NoIndex = false }
+	for name, mutate := range map[string]func(*config){
+		"public":               public,
+		"public with evidence": both(withEvidence(t, exampleEvidence), public),
+		"public, loader only":  both(withWasm(t, nil, fakeExec), public),
+	} {
+		cfg := testConfig(t)
+		mutate(&cfg)
+		if err := build(cfg); err == nil || !strings.Contains(err.Error(), "make wasm") {
+			t.Errorf("%s: build gave %v, want a refusal that says to run make wasm", name, err)
+		}
+		if _, err := os.Stat(cfg.Out); err == nil {
+			t.Errorf("%s: a refused build still wrote its output directory", name)
+		}
+	}
+	dist := buildSite(t, both(withWasm(t, fakeWasm(goodWasm), fakeExec), public))
+	checkerAssets(t, read(t, dist, "index.html"))
+}
+
 func TestCheckerNeedsAWholeModule(t *testing.T) {
 	for name, mutate := range map[string]func(*config){
 		"no loader": withWasm(t, fakeWasm(goodWasm), ""),
@@ -395,7 +532,8 @@ func TestExampleSample(t *testing.T) {
 	if fixture, _ := os.ReadFile(exampleEvidence); !bytes.Equal(example, fixture) {
 		t.Fatal("the formats document's example and the test fixture differ")
 	}
-	dist := buildSite(t, nil)
+	// With the module, so the Try buttons and their labels are on the page.
+	dist := buildSite(t, withWasm(t, fakeWasm(goodWasm), fakeExec))
 	const name = "example-omission-regtest-205-01982d71-b1070620.json"
 	const tname = "example-omission-regtest-205-01982d71-b1070620-tampered.json"
 	real := read(t, dist, "evidence/"+name)
@@ -457,7 +595,7 @@ func TestExampleSample(t *testing.T) {
 }
 
 func TestRecordedSample(t *testing.T) {
-	dist := buildSite(t, withEvidence(t, exampleEvidence))
+	dist := buildSite(t, both(withEvidence(t, exampleEvidence), withWasm(t, fakeWasm(goodWasm), fakeExec)))
 	home := read(t, dist, "index.html")
 	checker := section(t, home, "checker")
 	// The fixture's context says canary check wrote it at 2026-10-03T08:32:11Z.
@@ -495,6 +633,21 @@ func TestRecordedSampleNeedsItsDate(t *testing.T) {
 	withEvidence(t, src)(&cfg)
 	if err := build(cfg); err == nil || !strings.Contains(err.Error(), "written_at") {
 		t.Errorf("a recorded file with no date gave %v", err)
+	}
+}
+
+// TestEvidenceThatIsNotJSON names the real problem when the -evidence file
+// does not parse, not the date the page would have read from it.
+func TestEvidenceThatIsNotJSON(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "omission-regtest-205-01982d71-b1070620.json")
+	if err := os.WriteFile(src, []byte("{\"format\": \"canary-evidence/1\",\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig(t)
+	withEvidence(t, src)(&cfg)
+	err := build(cfg)
+	if err == nil || !strings.Contains(err.Error(), "not JSON") || strings.Contains(err.Error(), "written_at") {
+		t.Errorf("an evidence file that is not JSON gave %v, want an error that says it is not JSON", err)
 	}
 }
 

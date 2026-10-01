@@ -25,10 +25,11 @@ type module struct {
 	Modified   bool   // built from a tree with uncommitted changes
 }
 
-// readModule reads the checker from the -wasm directory. A directory with
-// neither file gives a site without the checker, and a note telling the
-// builder to run make wasm. One file without the other is an error, because
-// the page would load a pair that can't work together.
+// readModule reads the checker from the -wasm directory. In a preview
+// build, a directory with neither file gives a site without the checker,
+// and a note telling the builder to run make wasm. checkPublishable has
+// already refused a public build without it. One file without the other is
+// an error, because the page would load a pair that can't work together.
 func (s *site) readModule() error {
 	dir := s.cfg.Wasm
 	wasmPath, execPath := filepath.Join(dir, "canary.wasm"), filepath.Join(dir, "wasm_exec.js")

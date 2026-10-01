@@ -1,0 +1,65 @@
+/*
+ * The browser checker: styles for the parts checker.js adds to a page's
+ * #checker section. The section's own layout belongs to the page. checker.js
+ * links this file itself when the page does not, so it needs no tag of its
+ * own. Every value is a design token from tokens.css.
+ */
+
+/* A file or text held over the checker. */
+.checker[data-dragover] {
+  outline: 2px dashed var(--ink);
+  outline-offset: 3px;
+}
+.checker[data-dragover] .drop {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+/* Loading progress, and what to do when the checker can't run. */
+.checker-extra { display: grid; gap: var(--space-3); justify-items: start; }
+.checker-extra:empty { display: none; }
+.checker-extra .command { margin-top: 0; width: 100%; }
+.checker-extra .btn { min-height: 44px; padding-inline: var(--space-4); }
+.checker-progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  accent-color: var(--ink);
+}
+
+/* Paste the file's text. */
+.checker-paste[open] { display: grid; gap: var(--space-2); }
+.checker-paste-label { font-size: var(--text-s); font-weight: 600; }
+.checker-paste-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 8rem;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading);
+  color: var(--ink);
+  background: var(--bg);
+  border: var(--rule-width) solid var(--rule-strong);
+  border-radius: var(--radius-m);
+  resize: vertical;
+}
+.checker-paste .btn { justify-self: start; min-height: 44px; padding-inline: var(--space-4); }
+.checker-paste-note { font-size: var(--text-s); }
+.checker-paste-note:empty { display: none; }
+
+/* One result: which file, then the report. */
+.checker-report { display: grid; gap: var(--space-3); min-width: 0; }
+.checker-source {
+  font-size: var(--text-s);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.checker-report .command { margin-top: 0; }
+
+/* Which commit and Go release built the module. */
+.checker-build {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}

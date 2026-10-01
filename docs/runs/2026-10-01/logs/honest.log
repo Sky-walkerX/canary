@@ -1,0 +1,7 @@
+canary-indexer: 2026/10/01 18:05:14 canary-indexer 0.1.0 (3a1417f)
+canary-indexer: 2026/10/01 18:05:14 pubkey 3d27ad6159f369d753e866befaadaba8963b9a8688701ad67e07dc3b4e0e525e, pin it with canary check --pubkey LABEL=3d27ad6159f369d753e866befaadaba8963b9a8688701ad67e07dc3b4e0e525e
+canary-indexer: 2026/10/01 18:05:14 npub npub185n66c2e7d5aw5lgv6l04tdt4ztrhx5x3pcp44n7qlwrknsw2f0q7nmlfk
+canary-indexer: 2026/10/01 18:05:14 reading Bitcoin Core at http://127.0.0.1:28443/rest every 1s
+canary-indexer: 2026/10/01 18:05:14 serving on http://127.0.0.1:28481
+canary-indexer: 2026/10/01 18:05:14 indexed heights 0 to 351, tip 72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a
+canary-indexer: 2026/10/01 18:05:16 stopping

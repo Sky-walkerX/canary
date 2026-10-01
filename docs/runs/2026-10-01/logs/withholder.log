@@ -1,0 +1,8 @@
+WARNING: --withhold-txid is set. This server leaves 2 transactions out of every list it serves, while its signed records still include them: ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e, b3d748316d7d1d7fcc64837a2d4ca459015bd8f7519f1c1ad73db4499c21cdb9. Use it for demos only.
+canary-indexer: 2026/10/01 18:05:14 canary-indexer 0.1.0 (3a1417f)
+canary-indexer: 2026/10/01 18:05:14 pubkey db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c, pin it with canary check --pubkey LABEL=db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c
+canary-indexer: 2026/10/01 18:05:14 npub npub1mds52czte6zyptktm5en26kez9k5jkmcpjt7xmhjznsn9ej46jxqdmqpte
+canary-indexer: 2026/10/01 18:05:14 reading Bitcoin Core at http://127.0.0.1:28443/rest every 1s
+canary-indexer: 2026/10/01 18:05:14 serving on http://127.0.0.1:28482
+canary-indexer: 2026/10/01 18:05:14 indexed heights 0 to 351, tip 72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a
+canary-indexer: 2026/10/01 18:05:16 stopping

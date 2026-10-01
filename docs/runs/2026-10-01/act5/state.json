@@ -1,0 +1,91 @@
+{
+  "format": "canary-state/1",
+  "generated_at": "2026-10-01T12:35:16Z",
+  "canary": {
+    "version": "0.1.0",
+    "build": "3a1417f"
+  },
+  "network": {
+    "name": "regtest",
+    "magic": 3669344250
+  },
+  "chain_tip": {
+    "height": 351,
+    "hash": "72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a",
+    "source": "core"
+  },
+  "checked": {
+    "from": 201,
+    "to": 201
+  },
+  "evidence_dir": "demo-out/act5/evidence",
+  "servers": [
+    {
+      "label": "withholder",
+      "url": "http://127.0.0.1:28482",
+      "pubkey": "db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c",
+      "publishes_records": true,
+      "signs_receipts": true,
+      "reachable": true,
+      "tip": {
+        "height": 351,
+        "hash": "72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a",
+        "signed": true
+      },
+      "policy": {
+        "prunes_spent": false,
+        "dust_threshold_sat": 0,
+        "dust_configurable": false,
+        "signed": false
+      },
+      "error": null
+    }
+  ],
+  "coverage": [
+    {
+      "from": 201,
+      "to": 201,
+      "state": "unresolvable",
+      "reason": "gap_unfilled"
+    }
+  ],
+  "counts": {
+    "verified": 0,
+    "resolved": 0,
+    "unresolvable": 1,
+    "unverified": 0,
+    "disputed": 0,
+    "compromised": 0
+  },
+  "blocks": [
+    {
+      "height": 201,
+      "hash": "43b08197547822e4a36cc701b4c3d30040c1e4cef990ab60ca83447fbbe9b851",
+      "state": "unresolvable",
+      "reason": "gap_unfilled",
+      "servers": [
+        {
+          "label": "withholder",
+          "state": "unresolvable",
+          "reason": "gap_unfilled",
+          "record_event_id": "035cb260252a63ef7231c9a04c0c213dcbe67bd50ddd3808ca2571eafe205341",
+          "n": 1,
+          "root": "535ea582f57a14e8b9dcf3abe91a95f4cf1c231bc78836cfe0d81b18ee457cda",
+          "positions": {
+            "full": 0,
+            "hash": 0,
+            "absent": 1
+          },
+          "filled": 0,
+          "signed": true,
+          "tip": {
+            "height": 351,
+            "hash": "72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a"
+          }
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "expected_payments": []
+}

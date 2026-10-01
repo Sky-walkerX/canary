@@ -273,11 +273,22 @@ main() {
 		say "After the main payment's block, it sits $ACT5_DEPTH blocks below the tip, past the $RETENTION_WINDOW-block window."
 	fi
 
-	step "Paying 1 BTC to a new taproot (bech32m) address"
-	local payee txid
+	step "Paying 1 BTC to a new taproot (bech32m) address, among four other taproot payments"
+	local payee txid other amount
+	# Four ordinary taproot payments share the block, so the withheld entry is one of
+	# several and the honest list visibly holds the others.
+	for amount in 0.2 0.3; do
+		other=$(wallet getnewaddress "" bech32m)
+		wallet sendtoaddress "$other" "$amount" >/dev/null
+	done
 	payee=$(wallet getnewaddress "" bech32m)
 	txid=$(wallet sendtoaddress "$payee" 1.0)
+	for amount in 0.4 0.5; do
+		other=$(wallet getnewaddress "" bech32m)
+		wallet sendtoaddress "$other" "$amount" >/dev/null
+	done
 	say "Paid $payee in transaction $txid"
+	say "Four other taproot payments go into the same block."
 
 	step "Mining 1 block to confirm the payment"
 	cli generatetoaddress 1 "$miner" >/dev/null

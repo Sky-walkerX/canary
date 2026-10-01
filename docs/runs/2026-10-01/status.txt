@@ -1,0 +1,4 @@
+Last check 2026-10-01 12:35 UTC · blocks 0–351 · regtest · canary 0.1.0 (3a1417f)
+351 Checked · 1 Data withheld
+withholder left out an entry it had signed for: block 351, txid ad56b9bb…e21e.
+  Evidence: omission-regtest-351-ad56b9bb-db614560.json. You can prove this to others.

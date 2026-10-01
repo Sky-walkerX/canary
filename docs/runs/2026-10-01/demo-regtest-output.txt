@@ -1,0 +1,91 @@
+
+==> Checking prerequisites
+    Bitcoin Core daemon version v31.1.0 bitcoind
+    Output goes to demo-out
+
+==> Building canary and canary-indexer
+
+==> Starting bitcoind in regtest mode, RPC and REST on port 28443
+    Bitcoin Core REST is at http://127.0.0.1:28443/rest
+
+==> Creating a wallet and mining 200 blocks
+    Mined to bcrt1qycyflxfyapzsarkndp0y3cuaqp7yvyfutpuf6z. The first 100 block rewards can now be spent.
+
+==> Act 5: paying 1 BTC to another taproot address, then mining 150 blocks
+    Paid bcrt1pu63ngw5rv8u8ecr39xjw8yfu56yz52mp9uky3t3afgvxxsm35dzs4rv7zt in transaction b3d748316d7d1d7fcc64837a2d4ca459015bd8f7519f1c1ad73db4499c21cdb9
+    The early payment is in block 201, hash 43b08197547822e4a36cc701b4c3d30040c1e4cef990ab60ca83447fbbe9b851
+    After the main payment's block, it sits 150 blocks below the tip, past the 144-block window.
+
+==> Paying 1 BTC to a new taproot (bech32m) address, among four other taproot payments
+    Paid bcrt1py8nnup0sjc0fgufhrgc8578smd2lvgzx0g92t8e5yfhp2n5u4vdse0cc3y in transaction ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e
+    Four other taproot payments go into the same block.
+
+==> Mining 1 block to confirm the payment
+    The payment is in block 351, hash 72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a
+
+==> Making two throwaway indexer keys
+    honest      3d27ad6159f369d753e866befaadaba8963b9a8688701ad67e07dc3b4e0e525e
+    withholder  db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c
+    The secret keys stay in the temporary directory and are removed on exit.
+
+==> Starting the honest indexer on port 28481
+
+==> Starting the withholding indexer on port 28482
+    It leaves ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e out of every list it serves, and still signs it into the block's record.
+    It leaves the early payment b3d748316d7d1d7fcc64837a2d4ca459015bd8f7519f1c1ad73db4499c21cdb9 out the same way.
+
+==> Waiting for both indexers to reach block 351
+    Both indexers serve block 351.
+
+==> Running canary check on blocks 0 to 351, with both servers pinned and the payment declared
+Checking blocks 0–351 against 2 servers.
+Last check 2026-10-01 12:35 UTC · blocks 0–351 · regtest · canary 0.1.0 (3a1417f)
+351 Checked · 1 Data withheld
+withholder left out an entry it had signed for: block 351, txid ad56b9bb…e21e.
+  Evidence: omission-regtest-351-ad56b9bb-db614560.json. You can prove this to others.
+Results saved to demo-out/state.json.
+    canary check saw a finding, as expected.
+
+==> Checking the evidence file offline with canary verify
+Checks out.
+The server signed a record that includes this entry, then signed a list that left it out.
+Accused key db614560…d48c. Block 351 on regtest, position 0, txid ad56b9bb…e21e.
+  Read the file: Passed. Format canary-evidence/1, claim omission.
+  Record signature: Passed. The signed record's id and signature are valid.
+  Signer: Passed. The record is signed by the accused key.
+  Block: Passed. The record names block 351 on regtest, the block this file names.
+  Inclusion: Passed. Entry 0 of 5 proves into the signed root.
+  Receipt: Passed. The receipt is signed by the same key, names the same block and covers these 269 bytes.
+  Served list: Passed. The served list has 5 positions, and position 0 is marked absent.
+  Retention window: Passed. The server's signed tip was 351, so the block was 0 blocks deep, inside the 144-block window.
+
+==> Printing canary status
+Last check 2026-10-01 12:35 UTC · blocks 0–351 · regtest · canary 0.1.0 (3a1417f)
+351 Checked · 1 Data withheld
+withholder left out an entry it had signed for: block 351, txid ad56b9bb…e21e.
+  Evidence: omission-regtest-351-ad56b9bb-db614560.json. You can prove this to others.
+
+==> Act 5: running canary check on block 201 alone, with only the withholding server pinned
+    The withholder left the early payment out too. Its signed tip puts that block 150 blocks deep.
+    Past the window a gap is permitted. No other server and no declared payment can supply the entry.
+Checking blocks 201–201 against 1 server.
+Last check 2026-10-01 12:35 UTC · blocks 201–201 · regtest · canary 0.1.0 (3a1417f)
+1 Can't be checked
+Results saved to demo-out/act5/state.json.
+
+==> Printing canary status for act 5
+Last check 2026-10-01 12:35 UTC · blocks 201–201 · regtest · canary 0.1.0 (3a1417f)
+1 Can't be checked
+    Block 201 reads Can't be checked, reason gap_unfilled. That is neither a pass nor an accusation.
+
+==> Done
+    State file:     demo-out/state.json
+    Evidence file:  demo-out/evidence/omission-regtest-351-ad56b9bb-db614560.json
+    Logs and output: demo-out
+    To see the results in the dashboard, from <local path> run:
+      go run ./cmd/canary ui --state demo-out/state.json
+    Act 5 state:    demo-out/act5/state.json
+    To see act 5 in the dashboard, run:
+      go run ./cmd/canary ui --state demo-out/act5/state.json
+
+==> Stopping the indexers and bitcoind

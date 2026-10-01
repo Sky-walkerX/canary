@@ -1,0 +1,10 @@
+network     regtest
+payment     ad56b9bb4aa382fdaec664abc1dcaf57b0477905c5c17c2c7669d6212d5fe21e
+block       351 72ef80792f8633d70f19945464df62f82a267b68ee3e113199e9d11a5e41d58a
+chain tip   351
+honest      http://127.0.0.1:28481  pubkey 3d27ad6159f369d753e866befaadaba8963b9a8688701ad67e07dc3b4e0e525e
+withholder  http://127.0.0.1:28482  pubkey db6145604bce8440aecbdd33356ad9116d495b780c97e36ef214e132e655d48c
+evidence    evidence/omission-regtest-351-ad56b9bb-db614560.json
+act 5       payment b3d748316d7d1d7fcc64837a2d4ca459015bd8f7519f1c1ad73db4499c21cdb9
+act 5 block 201 43b08197547822e4a36cc701b4c3d30040c1e4cef990ab60ca83447fbbe9b851
+act 5 state act5/state.json

@@ -1,0 +1,11 @@
+Checks out.
+The server signed a record that includes this entry, then signed a list that left it out.
+Accused key db614560…d48c. Block 351 on regtest, position 0, txid ad56b9bb…e21e.
+  Read the file: Passed. Format canary-evidence/1, claim omission.
+  Record signature: Passed. The signed record's id and signature are valid.
+  Signer: Passed. The record is signed by the accused key.
+  Block: Passed. The record names block 351 on regtest, the block this file names.
+  Inclusion: Passed. Entry 0 of 5 proves into the signed root.
+  Receipt: Passed. The receipt is signed by the same key, names the same block and covers these 269 bytes.
+  Served list: Passed. The served list has 5 positions, and position 0 is marked absent.
+  Retention window: Passed. The server's signed tip was 351, so the block was 0 blocks deep, inside the 144-block window.

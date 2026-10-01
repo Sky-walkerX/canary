@@ -405,7 +405,19 @@ docs/roadmap/            the scored feature roadmap, with the v1 cut line
 docs/superpowers/plans/  the 8 September implementation plans
 ```
 
+## For contributors
+
+The BOSS Battle submission pack lives in `docs/submission/`:
+
+- [Devfolio fields](docs/submission/devfolio.md) holds the text for each form field,
+  ready to paste once the real run fills its brackets.
+- [Video script](docs/submission/video-script.md) gives each shot's time, screen,
+  narration and caption, and the commands to set up the run on camera.
+- [Final-day checklist](docs/submission/checklist.md) lists the steps for Monday
+  5 Oct in IST, with the commands.
+
 ## License
 
-The project will be released under the MIT license before submission on 5 Oct 2026. The
-`LICENSE` file is not in the repository yet.
+Canary is released under the [MIT license](LICENSE). The self-hosted Atkinson
+Hyperlegible fonts in `internal/ui/assets/fonts` keep their own SIL Open Font License,
+which sits beside them.

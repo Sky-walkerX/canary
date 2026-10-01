@@ -20,9 +20,8 @@
 //   [data-checker-build]    the line that names the commit and Go release
 //                           the module was built from.
 //   script[type="application/json"][data-checker-text]
-//                           optional: words that replace the defaults in TEXT,
-//                           written by the site generator from the wording
-//                           table.
+//                           the words to show, keyed as in TEXT. The site
+//                           generator writes them from the wording table.
 // It reads these attributes on the checker element:
 //   data-wasm       the module's address. The default is canary.wasm beside
 //                   this script.
@@ -30,6 +29,9 @@
 //                   script.
 //   data-wasm-size  optional: the module's size in bytes once decoded, which
 //                   drives the progress bar.
+//   data-wasm-build optional: the build line, as the site generator read it
+//                   from the module file. Without it, the line comes from
+//                   the module's own report once it loads.
 // The defaults suit a site that ships the module, wasm_exec.js and this
 // script in one folder named by a hash of all three. A browser can then keep
 // them for good, and never pairs this script with a module from another
@@ -42,9 +44,11 @@
 (() => {
   'use strict';
 
-  // Default words. A [data-checker-text] block replaces any of them. The two
-  // "Can't read this file" lines are replaced again by the module once it
-  // loads, so they match canary verify word for word.
+  // Fallback words, for a page that carries no [data-checker-text] block. The
+  // block replaces each of them. A Go test in internal/ui holds these to the
+  // wording table word for word, so they never drift from what the site
+  // writes. The two "Can't read this file" lines are replaced again by the
+  // module once it loads, so they match canary verify word for word.
   const TEXT = {
     loadingStart: 'Loading the checker.',
     loading: 'Loading the checker, a {size} download.',
@@ -236,6 +240,7 @@
       wasm: root.getAttribute('data-wasm') || beside('canary.wasm'),
       exec: root.getAttribute('data-wasm-exec') || beside('wasm_exec.js'),
       size: parseInt(root.getAttribute('data-wasm-size') || '', 10) || 0,
+      build: root.getAttribute('data-wasm-build') || '',
       samples: { real: root.getAttribute('data-evidence'), tampered: root.getAttribute('data-tampered') },
     };
 
@@ -414,10 +419,17 @@
       input.disabled = false;
       tries.forEach((b) => { b.disabled = !samples[b.getAttribute('data-checker-try')]; });
       root.querySelectorAll('[data-checker-live]').forEach((e) => setHidden(e, false));
+      // The page's line wins: the site generator read it from the very file
+      // this page loaded. The module's own report fills in for a page
+      // without one.
       const go = info.go_release || info.go_version;
-      if (go) {
+      let line = cfg.build;
+      if (!line && go) {
         const vars = { go, revision: (info.revision || '').slice(0, 7) };
-        build.textContent = fill(!vars.revision ? text.buildNoRevision : info.modified ? text.buildModified : text.build, vars);
+        line = fill(!vars.revision ? text.buildNoRevision : info.modified ? text.buildModified : text.build, vars);
+      }
+      if (line) {
+        build.textContent = line;
         setHidden(build, false);
       }
       addPaste();
@@ -446,6 +458,17 @@
       shown = node;
       result.insertBefore(node, status);
       status.textContent = announce;
+      reveal(node);
+    }
+
+    // reveal scrolls a new report to the top of the screen when it starts
+    // above it or in its lower part. On a narrow screen the report sits below
+    // the buttons, so a tap would otherwise change little the reader can see.
+    function reveal(node) {
+      const top = node.getBoundingClientRect().top;
+      if (top >= 0 && top < window.innerHeight * 0.6) return;
+      const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      node.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
     }
 
     function wrap(source) {
@@ -618,7 +641,9 @@
         }, 0);
       });
       d.append(summary, label, area, go, note);
-      const after = root.querySelector('.checker-tries') || input.closest('label') || input;
+      // Pasting is another way to give a file, so it sits right under the
+      // drop zone, before the samples.
+      const after = input.closest('label') || input;
       after.after(d);
     }
 

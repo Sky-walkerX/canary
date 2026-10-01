@@ -126,9 +126,10 @@
 }
 .checker-title { font-size: var(--text-xl); }
 .checker-bar .checker-privacy { color: var(--on-canary); font-weight: 600; }
-/* The checker script reveals these. Until it runs they stay out of sight,
-   whatever display another rule gives them. */
-[data-checker-live][hidden] { display: none; }
+/* The checker script reveals these: the live sentences, the loading line
+   and the build line. Until it runs they stay out of sight, whatever
+   display another rule gives them. */
+.checker [hidden] { display: none; }
 .checker-main {
   display: grid;
   gap: var(--space-4);
@@ -172,9 +173,18 @@
 .drop:has(:disabled):hover { border-color: var(--rule-strong); }
 .drop:has(:disabled) .drop-input { cursor: not-allowed; }
 
+/* The sample pair: where it comes from, the two buttons, which byte the
+   copy changes, and the two files. */
+.checker-samples {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: var(--rule-width) solid var(--rule);
+}
+.sample-source { font-size: var(--text-s); font-weight: 600; max-width: 58ch; }
 .checker-tries { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .checker-tries .btn { font-size: var(--text-m); min-height: 44px; padding-inline: var(--space-4); }
-.tamper-note { font-size: var(--text-s); max-width: 58ch; }
+.tamper-note { font-size: var(--text-s); color: var(--ink-muted); max-width: 58ch; }
 .checker-downloads {
   display: flex;
   flex-wrap: wrap;

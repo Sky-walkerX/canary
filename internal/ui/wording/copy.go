@@ -1503,16 +1503,19 @@ type SiteText struct {
 	// conditions the claim needs.
 	Claim, Lede, Conditions string
 
-	// The evidence checker. Its script fills the result area later.
+	// The evidence checker. Its script fills the result area.
 	// CheckerInBrowser and CheckerPrivacy describe that script, so the page
-	// renders them hidden and the script reveals them when it runs. The
-	// NoEvidence variants replace their namesakes when no file is published.
-	CheckerTitle, CheckerIntro, CheckerInBrowser                string
-	CheckerChoose, CheckerTryReal, CheckerTryTampered           string
-	CheckerNoEvidence, CheckerPending, CheckerPendingNoEvidence string
-	CheckerNoScript, CheckerNoScriptNoEvidence                  string
-	CheckerDownloadReal, CheckerDownloadTampered                string
-	CheckerStepsIntro, CheckerPrivacy                           string
+	// renders them hidden and the script reveals them when it runs.
+	// CheckerPending shows only when the site was built without the checker
+	// module. The Example variants replace their namesakes when the sample is
+	// the formats document's example, not a file from the recorded run.
+	CheckerTitle, CheckerIntro, CheckerInBrowser     string
+	CheckerChoose, CheckerTryReal, CheckerTryExample string
+	CheckerTryTampered, CheckerSourceExample         string
+	CheckerPending, CheckerNoScript                  string
+	CheckerDownloadReal, CheckerDownloadExample      string
+	CheckerDownloadTampered                          string
+	CheckerStepsIntro, CheckerPrivacy                string
 
 	ProblemTitle string
 	Problem      []string
@@ -1608,19 +1611,20 @@ var Site = SiteText{
 	CheckerTitle: "Check an evidence file",
 	CheckerIntro: "An evidence file holds a server's signed record, the exact bytes it served and its signature over them. " +
 		"canary verify checks it with no network, and trusts nothing the file says about itself.",
-	CheckerInBrowser:          "This page runs the same check in your browser.",
-	CheckerChoose:             "Choose an evidence file",
-	CheckerTryReal:            "Try the real evidence file",
-	CheckerTryTampered:        "Try a tampered copy",
-	CheckerNoEvidence:         "The real evidence file comes from the recorded run, which is not published yet.",
-	CheckerPending:            "The checker that runs in this page is not built yet. Until it is, download a file and run canary verify on it.",
-	CheckerPendingNoEvidence:  "The checker that runs in this page is not built yet. Until it is, run canary verify on an evidence file your own canary check wrote.",
-	CheckerNoScript:           "Without JavaScript, download the file and run canary verify on it in a terminal.",
-	CheckerNoScriptNoEvidence: "Without JavaScript, run canary verify in a terminal on an evidence file your own canary check wrote.",
-	CheckerDownloadReal:       "Download the real file",
-	CheckerDownloadTampered:   "Download the tampered copy",
-	CheckerStepsIntro:         "The check runs these eight steps in order, and stops at the first that fails.",
-	CheckerPrivacy:            "The file stays in your browser.",
+	CheckerInBrowser:     "This page runs the same check in your browser.",
+	CheckerChoose:        "Choose an evidence file",
+	CheckerTryReal:       "Try the real evidence file",
+	CheckerTryExample:    "Try the example file",
+	CheckerTryTampered:   "Try a tampered copy",
+	CheckerSourceExample: "The sample is an example file from the formats document, not from a recorded run.",
+	CheckerPending: "This build of the site has no checker, so this page can't check files. " +
+		"Download a file and run canary verify on it in a terminal.",
+	CheckerNoScript:         "Without JavaScript, download a file and run canary verify on it in a terminal.",
+	CheckerDownloadReal:     "Download the real file",
+	CheckerDownloadExample:  "Download the example file",
+	CheckerDownloadTampered: "Download the tampered copy",
+	CheckerStepsIntro:       "The check runs these eight steps in order, and stops at the first that fails.",
+	CheckerPrivacy:          "The file stays in your browser.",
 
 	ProblemTitle: "The problem",
 	Problem: []string{
@@ -1677,7 +1681,7 @@ var Site = SiteText{
 		"canary verify opens no connection.",
 	RunNeeds: "You need git and Go.",
 	RunAfter: "For the real file, canary verify prints \"Checks out.\" For a tampered copy, it names the step that failed.",
-	RunIntroNoEvidence: "Build Canary once with a network. Then turn the network off and check an evidence file your own canary check wrote. " +
+	RunIntroNoEvidence: "Build Canary once with a network. Then turn the network off and check the example file from above, or one your own canary check wrote. " +
 		"canary verify opens no connection.",
 	RunAfterNoEvidence: "For a file that checks out, canary verify prints \"Checks out.\" For one that does not, it names the step that failed.",
 	RunFilePlaceholder: "FILE",
@@ -1724,10 +1728,99 @@ func (s SiteText) TableLabel(heading string) string {
 	return s.DocTable + ": " + heading
 }
 
-// TamperNote says exactly which byte the tampered copy changes. offset counts
-// from 1, the way cmp reports a difference, and field names the JSON value
-// that holds the byte.
-func (s SiteText) TamperNote(offset int, field, from, to string) string {
-	return fmt.Sprintf("The tampered copy changes one byte of the real file. Byte %d, inside %s, reads %q where the real file has %q.",
-		offset, field, to, from)
+// TamperNote says exactly which byte the tampered copy changes, and which
+// verify step that byte breaks. offset counts from 1, the way cmp reports a
+// difference. field names the JSON value that holds the byte, and step is the
+// step name the evidence package reports.
+func (s SiteText) TamperNote(offset int, field, from, to, step string) string {
+	return fmt.Sprintf("The tampered copy changes one byte of the original. Byte %d, inside %s, reads %q where the original has %q. "+
+		"That one change makes the %s step fail.", offset, field, to, from, VerifyStep(step))
+}
+
+// CheckerSourceRecorded says where a sample from the recorded run comes from.
+// date is the day of the run.
+func (s SiteText) CheckerSourceRecorded(date string) string {
+	return "The sample comes from the recorded run on " + date + "."
+}
+
+// CheckerText is the browser checker's own words: the lines checker.js shows
+// while it loads, runs and reports. cmd/site writes them into the page as one
+// JSON block, keyed by these tags, and checker.js reads them from there.
+// checker.js keeps the same words as fallbacks for a page with no block, and
+// a test in internal/ui holds the two to each other.
+//
+// checker.js fills the slots in braces: {size}, {name}, {revision} and {go}.
+type CheckerText struct {
+	LoadingStart    string `json:"loadingStart"`
+	Loading         string `json:"loading"`
+	Starting        string `json:"starting"`
+	Failed          string `json:"failed"`
+	NoWasm          string `json:"noWasm"`
+	Retry           string `json:"retry"`
+	Choose          string `json:"choose"`
+	Details         string `json:"details"`
+	Command         string `json:"command"`
+	Checking        string `json:"checking"`
+	Internal        string `json:"internal"`
+	Source          string `json:"source"`
+	SourcePaste     string `json:"sourcePaste"`
+	SourceDrop      string `json:"sourceDrop"`
+	PasteOpen       string `json:"pasteOpen"`
+	PasteLabel      string `json:"pasteLabel"`
+	PasteButton     string `json:"pasteButton"`
+	PasteEmpty      string `json:"pasteEmpty"`
+	Build           string `json:"build"`
+	BuildModified   string `json:"buildModified"`
+	BuildNoRevision string `json:"buildNoRevision"`
+	TooLarge        string `json:"tooLarge"`
+	NotOpened       string `json:"notOpened"`
+}
+
+// Checker is the browser checker's wording. TooLarge and NotOpened are the
+// lines canary verify prints. The module sends its own copies once it loads,
+// with its own size limit, and those replace these.
+var Checker = CheckerText{
+	LoadingStart: "Loading the checker.",
+	Loading:      "Loading the checker, a {size} download.",
+	Starting:     "Starting the checker.",
+	Failed: "The checker failed to load, so this page can't check files. " +
+		"Try again, or download the file and run this in a terminal:",
+	NoWasm: "This browser can't run WebAssembly, so the checker can't run in this page. " +
+		"Download the file and run this in a terminal:",
+	Retry:    "Try loading again",
+	Choose:   Site.CheckerChoose,
+	Details:  "Technical details",
+	Command:  "canary verify " + Site.RunFilePlaceholder,
+	Checking: "Checking the file in this browser.",
+	Internal: "The checker stopped with an internal error and did not check this file. " +
+		"Run this in a terminal instead:",
+	Source:          "File: {name}",
+	SourcePaste:     "Pasted text",
+	SourceDrop:      "Dropped text",
+	PasteOpen:       "Paste the file's text instead",
+	PasteLabel:      "Text of an evidence file",
+	PasteButton:     "Check the pasted text",
+	PasteEmpty:      "Paste the text of an evidence file first.",
+	Build:           "Built from commit {revision} with {go}.",
+	BuildModified:   "Built from commit {revision} plus uncommitted changes, with {go}.",
+	BuildNoRevision: "Built with {go}.",
+	TooLarge:        VerifyCantRead(VerifyReasonTooLarge(16 << 20)),
+	NotOpened:       VerifyCantRead(VerifyReasonNotOpened),
+}
+
+// CheckerBuildLine names the build of the checker module: its commit, cut to
+// seven characters, and its Go release, such as "Go 1.26.4". It fills the
+// same template checker.js fills from the module's own report.
+func CheckerBuildLine(revision, goRelease string, modified bool) string {
+	if len(revision) > 7 {
+		revision = revision[:7]
+	}
+	line := Checker.Build
+	switch {
+	case revision == "":
+		line = Checker.BuildNoRevision
+	case modified:
+		line = Checker.BuildModified
+	}
+	return strings.NewReplacer("{revision}", revision, "{go}", goRelease).Replace(line)
 }

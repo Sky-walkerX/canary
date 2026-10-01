@@ -3,23 +3,41 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/Sky-walkerX/canary/evidence"
 	"github.com/Sky-walkerX/canary/internal/ui/wording"
 )
 
 // checkerView is what the checker area on the home page shows. The page
 // script that runs the checker reads the data attributes it renders.
 type checkerView struct {
-	HasEvidence  bool
+	// Recorded is true when the sample comes from the recorded run, given
+	// with -evidence. Otherwise it is the formats document's example.
+	Recorded     bool
 	RealName     string
 	RealURL      string
 	TamperedName string
 	TamperedURL  string
-	TamperNote   string
+
+	// The words that depend on where the sample comes from.
+	TryLabel, DownloadLabel, Source, TamperNote string
+
+	// Module is the browser checker, or nil when the site was built without
+	// it.
+	Module *moduleView
+}
+
+// moduleView is what the page tells checker.js about the module.
+type moduleView struct {
+	Size  int    // canary.wasm's size in bytes, which drives the progress bar
+	Build string // the line that names its commit and Go release
+	Text  wording.CheckerText
 }
 
 // The tampered copy flips one hex digit of one of these JSON values. Either
@@ -31,37 +49,143 @@ const (
 	tamperTxid    = "missing.txid"
 )
 
-// writeEvidence publishes the real evidence file unchanged, and a copy with
+// The formats document holds the example evidence file, as the first JSON
+// block under "### Example" in this section.
+const (
+	formatsDoc      = "design/2026-09-30-v1-formats.md"
+	evidenceSection = "## 6. The evidence file"
+)
+
+// writeEvidence publishes the sample evidence file unchanged, and a copy with
 // one byte flipped. It records exactly which byte, so the page can say so.
+// Before it publishes the pair, it runs both through the verifier the
+// checker runs: the sample must check out, and the copy must not.
 func (s *site) writeEvidence() error {
-	if s.cfg.Evidence == "" {
-		return nil
-	}
-	real, err := os.ReadFile(s.cfg.Evidence)
+	file, name, view, err := s.sample()
 	if err != nil {
-		return fmt.Errorf("site: read evidence: %w", err)
+		return err
 	}
-	tampered, offset, field, err := tamper(real)
+	tampered, offset, field, err := tamper(file)
 	if err != nil {
-		return fmt.Errorf("site: evidence %s: %w", s.cfg.Evidence, err)
+		return fmt.Errorf("site: evidence %s: %w", name, err)
 	}
-	name := filepath.Base(s.cfg.Evidence)
+	step, err := checkPair(file, tampered)
+	if err != nil {
+		return fmt.Errorf("site: evidence %s: %w", name, err)
+	}
 	tname := strings.TrimSuffix(name, ".json") + "-tampered.json"
-	if err := s.write("evidence/"+name, real); err != nil {
+	if err := s.write("evidence/"+name, file); err != nil {
 		return err
 	}
 	if err := s.write("evidence/"+tname, tampered); err != nil {
 		return err
 	}
-	s.checker = checkerView{
-		HasEvidence:  true,
-		RealName:     name,
-		RealURL:      "/evidence/" + name,
-		TamperedName: tname,
-		TamperedURL:  "/evidence/" + tname,
-		TamperNote:   wording.Site.TamperNote(offset+1, field, string(real[offset]), string(tampered[offset])),
-	}
+	view.RealName, view.RealURL = name, "/evidence/"+name
+	view.TamperedName, view.TamperedURL = tname, "/evidence/"+tname
+	view.TamperNote = wording.Site.TamperNote(offset+1, field, string(file[offset]), string(tampered[offset]), step)
+	s.checker = view
 	return nil
+}
+
+// sample returns the evidence file the checker offers, its published name,
+// and the words that say where it comes from. A file given with -evidence
+// comes from the recorded run, dated by the time canary check wrote it.
+// Without one, the sample is the formats document's example, named for what
+// it is.
+func (s *site) sample() ([]byte, string, checkerView, error) {
+	if s.cfg.Evidence == "" {
+		doc, err := os.ReadFile(filepath.Join(s.cfg.Docs, filepath.FromSlash(formatsDoc)))
+		if err != nil {
+			return nil, "", checkerView{}, fmt.Errorf("site: read the formats document: %w", err)
+		}
+		file, err := docExample(doc, evidenceSection)
+		if err != nil {
+			return nil, "", checkerView{}, fmt.Errorf("site: example evidence file: %w", err)
+		}
+		parsed, err := evidence.Parse(file)
+		if err != nil {
+			return nil, "", checkerView{}, fmt.Errorf("site: example evidence file: %w", err)
+		}
+		return file, "example-" + parsed.Name(), checkerView{
+			TryLabel:      wording.Site.CheckerTryExample,
+			DownloadLabel: wording.Site.CheckerDownloadExample,
+			Source:        wording.Site.CheckerSourceExample,
+		}, nil
+	}
+	file, err := os.ReadFile(s.cfg.Evidence)
+	if err != nil {
+		return nil, "", checkerView{}, fmt.Errorf("site: read evidence: %w", err)
+	}
+	var ev struct {
+		Context struct {
+			WrittenAt string `json:"written_at"`
+		} `json:"context"`
+	}
+	json.Unmarshal(file, &ev) // tamper and checkPair report a file that is not JSON.
+	when, err := time.Parse(time.RFC3339, ev.Context.WrittenAt)
+	if err != nil {
+		return nil, "", checkerView{}, fmt.Errorf("site: evidence %s: context.written_at %q is not an RFC 3339 time, and the page dates the recorded run from it",
+			s.cfg.Evidence, ev.Context.WrittenAt)
+	}
+	return file, filepath.Base(s.cfg.Evidence), checkerView{
+		Recorded:      true,
+		TryLabel:      wording.Site.CheckerTryReal,
+		DownloadLabel: wording.Site.CheckerDownloadReal,
+		Source:        wording.Site.CheckerSourceRecorded(when.UTC().Format("2 January 2006")),
+	}, nil
+}
+
+// docExample returns the first JSON block under "### Example" in the doc
+// section whose heading line starts with heading, up to the next "## "
+// heading. It reads the doc the way cmd/canary's tests and the checker's
+// smoke test do, so all three use the same bytes.
+func docExample(doc []byte, heading string) ([]byte, error) {
+	s := string(doc)
+	if !strings.HasPrefix(s, heading) {
+		at := strings.Index(s, "\n"+heading)
+		if at < 0 {
+			return nil, fmt.Errorf("no section %q", heading)
+		}
+		s = s[at+1:]
+	}
+	if next := strings.Index(s[len(heading):], "\n## "); next >= 0 {
+		s = s[:len(heading)+next]
+	}
+	ex := strings.Index(s, "\n### Example")
+	if ex < 0 {
+		return nil, fmt.Errorf("section %q has no example", heading)
+	}
+	s = s[ex:]
+	open := strings.Index(s, "```json\n")
+	if open < 0 {
+		return nil, fmt.Errorf("section %q has no JSON example", heading)
+	}
+	s = s[open+len("```json\n"):]
+	end := strings.Index(s, "\n```")
+	if end < 0 {
+		return nil, fmt.Errorf("the JSON example in section %q never ends", heading)
+	}
+	return []byte(s[:end+1]), nil
+}
+
+// checkPair runs the sample and its tampered copy through evidence.Verify,
+// the function the browser checker and canary verify run. The sample must
+// check out and the copy must not. It returns the step the copy fails, so
+// the page can name it.
+func checkPair(file, tampered []byte) (string, error) {
+	if rep, _ := evidence.Verify(file); rep.Result != evidence.ResultChecksOut {
+		return "", fmt.Errorf("it reads %s (%s), not checks_out, and the page offers it as a file that checks out", rep.Result, rep.Code)
+	}
+	rep, _ := evidence.Verify(tampered)
+	if rep.Result != evidence.ResultDoesNotCheckOut {
+		return "", fmt.Errorf("its tampered copy reads %s (%s), not does_not_check_out", rep.Result, rep.Code)
+	}
+	for _, c := range rep.Checks {
+		if c.OK != nil && !*c.OK {
+			return c.Step, nil
+		}
+	}
+	return "", errors.New("its tampered copy fails no step")
 }
 
 // tamper returns a copy of an evidence file with one hex digit flipped, the

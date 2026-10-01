@@ -165,6 +165,7 @@ func TestHelpDescribesTheWithholdSwitchPlainly(t *testing.T) {
 		"--withhold-txid TXID",
 		"leave this transaction out of what it serves",
 		"still signing it",
+		"Repeat it to withhold more than one.",
 		"For demos only.",
 		"--gen-key PATH",
 		"--core-rest URL",
@@ -182,6 +183,7 @@ func TestUsageErrors(t *testing.T) {
 		"bad core-rest":    {"--core-rest", "127.0.0.1:18443/rest", "--key-file", path},
 		"short txid":       {"--core-rest", "http://127.0.0.1:1/rest", "--key-file", path, "--withhold-txid", "abcd"},
 		"uppercase txid":   {"--core-rest", "http://127.0.0.1:1/rest", "--key-file", path, "--withhold-txid", strings.Repeat("AB", 32)},
+		"bad second txid":  {"--core-rest", "http://127.0.0.1:1/rest", "--key-file", path, "--withhold-txid", strings.Repeat("ab", 32), "--withhold-txid", "abcd"},
 		"zero poll":        {"--core-rest", "http://127.0.0.1:1/rest", "--key-file", path, "--poll", "0s"},
 		"unknown flag":     {"--nope"},
 		"stray argument":   {"--core-rest", "http://127.0.0.1:1/rest", "--key-file", path, "extra"},
@@ -261,6 +263,94 @@ func TestServesAndWithholds(t *testing.T) {
 	}
 	if stdout.String() != "" {
 		t.Errorf("stdout = %q, want nothing: logs go to stderr", stdout.String())
+	}
+}
+
+// --withhold-txid repeats. The warning names every txid, and the server
+// leaves each one out, even when they sit in different blocks.
+func TestWithholdTxidRepeats(t *testing.T) {
+	chain := coretest.NewChain(t)
+	early := chain.PayToTaproot(coretest.P2WPKH)
+	earlyBlk := chain.Mine(early)
+	recent := chain.PayToTaproot(coretest.P2TR)
+	recentBlk := chain.Mine(chain.PayToTaproot(coretest.P2TR), recent)
+	rest := coretest.Serve(t, chain)
+	keyPath, _ := genKey(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var stdout, stderr syncBuffer
+	done := make(chan int, 1)
+	go func() {
+		done <- run(ctx, []string{
+			"--core-rest", rest,
+			"--key-file", keyPath,
+			"--addr", "127.0.0.1:0",
+			"--poll", "20ms",
+			"--withhold-txid", recent.TxHash().String(),
+			"--withhold-txid", early.TxHash().String(),
+			"--withhold-txid", recent.TxHash().String(),
+		}, &stdout, &stderr)
+	}()
+
+	base := waitForServer(t, &stderr, done)
+	warning := "WARNING: --withhold-txid is set. This server leaves 2 transactions out of every list it serves, while its signed records still include them: " +
+		recent.TxHash().String() + ", " + early.TxHash().String() + ". Use it for demos only."
+	if !strings.Contains(stderr.String(), warning) {
+		t.Errorf("start-up warning does not name both txids once, in order:\n%s", stderr.String())
+	}
+
+	for _, tt := range []struct {
+		block string
+		want  []wire.PositionKind
+	}{
+		{earlyBlk.BlockHash().String(), []wire.PositionKind{wire.KindAbsent}},
+		{recentBlk.BlockHash().String(), []wire.PositionKind{wire.KindFull, wire.KindAbsent}},
+	} {
+		positions := servedPositions(t, base, tt.block)
+		if len(positions) != len(tt.want) {
+			t.Fatalf("block %s: %d positions, want %d", tt.block, len(positions), len(tt.want))
+		}
+		for i, k := range tt.want {
+			if positions[i].Kind != k {
+				t.Errorf("block %s position %d: kind %d, want %d", tt.block, i, positions[i].Kind, k)
+			}
+		}
+	}
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("exit %d after stop, want 0; stderr:\n%s", code, stderr.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the server did not stop")
+	}
+}
+
+// servedPositions fetches one block's list, waiting for the first sync.
+func servedPositions(t *testing.T, base, block string) []wire.Position {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp, err := http.Get(base + "/tweaks/" + block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			positions, err := wire.DecodeResponse(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return positions
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("GET /tweaks/%s: status %d: %s", block, resp.StatusCode, body)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

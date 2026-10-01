@@ -15,10 +15,10 @@
 // against each other. When the indexer's results match Canary's, that tests
 // the protocol, not the entry computation.
 //
-// Config.WithholdTxID makes the server misbehave on purpose, for the demo. It
-// still signs an honest record for every block, then leaves that one entry
-// out of every list it serves. /info does not reveal it. Canary has to catch
-// the server from its own signatures.
+// Config.WithholdTxID and Config.WithholdTxIDs make the server misbehave on
+// purpose, for the demo. It still signs an honest record for every block,
+// then leaves each named entry out of every list it serves. /info does not
+// reveal it. Canary has to catch the server from its own signatures.
 package indexer
 
 import (
@@ -62,6 +62,11 @@ type Config struct {
 	// while its signed record still includes it. It exists for the demo.
 	WithholdTxID *[32]byte
 
+	// WithholdTxIDs names more transactions to withhold the same way, each
+	// by its txid in internal order. The server withholds every txid here
+	// and WithholdTxID together. The demo's last act uses a second one.
+	WithholdTxIDs [][32]byte
+
 	// Software fills the software object in /info.
 	Software Software
 
@@ -82,7 +87,7 @@ type Indexer struct {
 	core     *core.Client
 	key      [32]byte
 	pubkey   [32]byte
-	withhold *[32]byte
+	withhold map[[32]byte]bool // txids to leave out of served lists, internal order
 	software Software
 	log      *log.Logger
 
@@ -110,10 +115,16 @@ func New(cfg Config) (*Indexer, error) {
 	if logger == nil {
 		logger = log.New(os.Stderr, "canary-indexer: ", log.LstdFlags)
 	}
-	var withhold *[32]byte
-	if cfg.WithholdTxID != nil {
-		id := *cfg.WithholdTxID
-		withhold = &id
+	// A copy, so the caller cannot change what the server withholds.
+	var withhold map[[32]byte]bool
+	if cfg.WithholdTxID != nil || len(cfg.WithholdTxIDs) > 0 {
+		withhold = make(map[[32]byte]bool, len(cfg.WithholdTxIDs)+1)
+		if cfg.WithholdTxID != nil {
+			withhold[*cfg.WithholdTxID] = true
+		}
+		for _, id := range cfg.WithholdTxIDs {
+			withhold[id] = true
+		}
 	}
 	return &Indexer{
 		core:     cfg.Core,

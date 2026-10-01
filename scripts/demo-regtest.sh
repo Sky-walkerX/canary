@@ -6,7 +6,16 @@
 # payment's entry while still signing it into the block's record. Then it runs
 # canary check, canary verify and canary status.
 #
-# Usage: scripts/demo-regtest.sh [OUTPUT_DIR]
+# Usage: scripts/demo-regtest.sh [--act5] [OUTPUT_DIR]
+#
+# --act5 adds the demo's last act, a block that can't be checked. Before the
+# main payment it makes an early payment and mines 150 blocks, so that block
+# ends up past the 144-block window. The withholding indexer leaves both
+# payments out. A second canary check then covers the early block alone,
+# with only the withholder pinned and nothing declared. Nobody can supply the
+# entry, so the block reads Can't be checked, reason gap_unfilled. That is
+# neither a pass nor an accusation. The main check runs unchanged, and still
+# names the withholder for the main payment.
 #
 # OUTPUT_DIR defaults to ./demo-out. It must be empty or not exist yet. The
 # state file, the evidence file, the indexer logs and each command's output go
@@ -36,6 +45,12 @@ WAIT_SECONDS=${CANARY_DEMO_WAIT_SECONDS:-120}
 # payment's block sits inside it, so the demo mines one block after the
 # payment and never 144 or more.
 RETENTION_WINDOW=144
+
+# With --act5, the early payment's block ends up this many blocks below the
+# tip: 149 blocks after it, then the main payment's block.
+ACT5_DEPTH=150
+
+USAGE="Usage: scripts/demo-regtest.sh [--act5] [OUTPUT_DIR]"
 
 # Set as the run goes. The cleanup reads them, so each starts empty.
 TMP=""
@@ -157,10 +172,20 @@ wait_for_indexer() {
 }
 
 main() {
-	local root out version major port
+	local root out="" act5="" arg version major port
 
 	root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-	out=${1:-./demo-out}
+	for arg in "$@"; do
+		case $arg in
+		--act5) act5=yes ;;
+		-*) fail "Unknown option $arg. $USAGE" ;;
+		*)
+			[ -z "$out" ] || fail "Give at most one output directory. $USAGE"
+			out=$arg
+			;;
+		esac
+	done
+	out=${out:-./demo-out}
 
 	step "Checking prerequisites"
 	if ! command -v "$BITCOIND" >/dev/null 2>&1 || ! command -v "$BITCOIN_CLI" >/dev/null 2>&1; then
@@ -231,6 +256,23 @@ main() {
 	cli generatetoaddress 200 "$miner" >/dev/null
 	say "Mined to $miner. The first 100 block rewards can now be spent."
 
+	local early_txid="" early_block="" early_height=""
+	if [ -n "$act5" ]; then
+		step "Act 5: paying 1 BTC to another taproot address, then mining $ACT5_DEPTH blocks"
+		local early_payee
+		early_payee=$(wallet getnewaddress "" bech32m)
+		early_txid=$(wallet sendtoaddress "$early_payee" 1.0)
+		cli generatetoaddress 1 "$miner" >/dev/null
+		early_block=$(cli getbestblockhash)
+		early_height=$(cli getblockcount)
+		cli getrawtransaction "$early_txid" 0 "$early_block" >/dev/null 2>&1 ||
+			fail "Transaction $early_txid is not in block $early_block. The early payment did not confirm."
+		cli generatetoaddress $((ACT5_DEPTH - 1)) "$miner" >/dev/null
+		say "Paid $early_payee in transaction $early_txid"
+		say "The early payment is in block $early_height, hash $early_block"
+		say "After the main payment's block, it sits $ACT5_DEPTH blocks below the tip, past the $RETENTION_WINDOW-block window."
+	fi
+
 	step "Paying 1 BTC to a new taproot (bech32m) address"
 	local payee txid
 	payee=$(wallet getnewaddress "" bech32m)
@@ -265,8 +307,13 @@ main() {
 
 	step "Starting the withholding indexer on port $WITHHOLDER_PORT"
 	say "It leaves $txid out of every list it serves, and still signs it into the block's record."
+	local withhold_args=(--withhold-txid "$txid")
+	if [ -n "$act5" ]; then
+		withhold_args+=(--withhold-txid "$early_txid")
+		say "It leaves the early payment $early_txid out the same way."
+	fi
 	"$indexer" --core-rest "$rest" --addr "127.0.0.1:$WITHHOLDER_PORT" \
-		--key-file "$TMP/keys/withholder.key" --poll 1s --withhold-txid "$txid" \
+		--key-file "$TMP/keys/withholder.key" --poll 1s "${withhold_args[@]}" \
 		>"$out/logs/withholder.log" 2>&1 &
 	WITHHOLDER_PID=$!
 
@@ -284,6 +331,10 @@ main() {
 	tip=$(cli getblockcount)
 	if [ $((tip - height)) -ge "$RETENTION_WINDOW" ]; then
 		fail "The payment's block is $((tip - height)) blocks deep. It must be less than $RETENTION_WINDOW."
+	fi
+	# Act 5 needs the opposite: the early block past the window.
+	if [ -n "$act5" ] && [ $((tip - early_height)) -lt "$RETENTION_WINDOW" ]; then
+		fail "The early payment's block is $((tip - early_height)) blocks deep. Act 5 needs $RETENTION_WINDOW or more."
 	fi
 
 	step "Running canary check on blocks 0 to $tip, with both servers pinned and the payment declared"
@@ -316,6 +367,33 @@ main() {
 	step "Printing canary status"
 	"$canary" status --state "$out/state.json" | tee "$out/status.txt"
 
+	if [ -n "$act5" ]; then
+		step "Act 5: running canary check on block $early_height alone, with only the withholding server pinned"
+		say "The withholder left the early payment out too. Its signed tip puts that block $((tip - early_height)) blocks deep."
+		say "Past the window a gap is permitted. No other server and no declared payment can supply the entry."
+		mkdir -p "$out/act5"
+		set +e
+		"$canary" check \
+			--indexer "http://127.0.0.1:$WITHHOLDER_PORT=withholder" --pubkey "withholder=$withholder_pub" \
+			--core-rest "$rest" --from "$early_height" --to "$early_height" \
+			--state "$out/act5/state.json" --evidence-dir "$out/act5/evidence" 2>&1 | tee "$out/act5/check.txt"
+		code=${PIPESTATUS[0]}
+		set -e
+		case $code in
+		0) ;;
+		1) fail "The act 5 check saw a finding. Block $early_height should read Can't be checked, which accuses nobody. Its output is in $out/act5/check.txt." ;;
+		*) fail "The act 5 check failed with exit code $code. Its output is in $out/act5/check.txt." ;;
+		esac
+
+		step "Printing canary status for act 5"
+		"$canary" status --state "$out/act5/state.json" | tee "$out/act5/status.txt"
+		if ! grep -qx "1 Can't be checked" "$out/act5/status.txt" ||
+			! grep -q '"reason": "gap_unfilled"' "$out/act5/state.json"; then
+			fail "Block $early_height does not read Can't be checked, reason gap_unfilled. See $out/act5/state.json."
+		fi
+		say "Block $early_height reads Can't be checked, reason gap_unfilled. That is neither a pass nor an accusation."
+	fi
+
 	cat >"$out/run.txt" <<EOF
 network     regtest
 payment     $txid
@@ -325,6 +403,13 @@ honest      http://127.0.0.1:$HONEST_PORT  pubkey $honest_pub
 withholder  http://127.0.0.1:$WITHHOLDER_PORT  pubkey $withholder_pub
 evidence    evidence/$(basename "$evidence")
 EOF
+	if [ -n "$act5" ]; then
+		cat >>"$out/run.txt" <<EOF
+act 5       payment $early_txid
+act 5 block $early_height $early_block
+act 5 state act5/state.json
+EOF
+	fi
 
 	step "Done"
 	say "State file:     $out/state.json"
@@ -332,6 +417,11 @@ EOF
 	say "Logs and output: $out"
 	say "To see the results in the dashboard, from $root run:"
 	say "  go run ./cmd/canary ui --state $out/state.json"
+	if [ -n "$act5" ]; then
+		say "Act 5 state:    $out/act5/state.json"
+		say "To see act 5 in the dashboard, run:"
+		say "  go run ./cmd/canary ui --state $out/act5/state.json"
+	fi
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

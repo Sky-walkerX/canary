@@ -8,9 +8,10 @@
 //	canary-indexer --gen-key ~/.canary/indexer.key
 //	canary-indexer --core-rest http://127.0.0.1:18443/rest
 //
-// --withhold-txid makes it leave one transaction out of every list it serves
-// while still signing that transaction into the block's record. It exists
-// for the demo, so that Canary has something to catch.
+// --withhold-txid makes it leave a transaction out of every list it serves
+// while still signing that transaction into the block's record. Repeat it to
+// withhold several. It exists for the demo, so that Canary has something to
+// catch.
 //
 // Exit codes: 0 after a clean stop, 1 when the server cannot run, 2 for a
 // usage error, including a missing or unreadable key file.
@@ -30,6 +31,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,7 +78,7 @@ var flagHelp = []struct{ name, arg, text string }{
 	{"key-file", "PATH", "File holding the server's secret key, as 64 hex characters. It signs every record and receipt. Create one with --gen-key."},
 	{"gen-key", "PATH", "Write a new random secret key to PATH, readable only by you, print its npub, and exit."},
 	{"poll", "DURATION", "How often to ask Bitcoin Core for new blocks."},
-	{"withhold-txid", "TXID", "Makes the server leave this transaction out of what it serves, while still signing it into the block's record. For demos only. TXID is in display order, as bitcoin-cli prints it."},
+	{"withhold-txid", "TXID", "Makes the server leave this transaction out of what it serves, while still signing it into the block's record. Repeat it to withhold more than one. For demos only. TXID is in display order, as bitcoin-cli prints it."},
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -87,7 +89,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	keyFile := fs.String("key-file", defaultKeyFile(), "")
 	genKey := fs.String("gen-key", "", "")
 	poll := fs.Duration("poll", 2*time.Second, "")
-	withhold := fs.String("withhold-txid", "", "")
+	var withhold txidFlags
+	fs.Var(&withhold, "withhold-txid", "")
 	fs.Usage = func() { printUsage(fs, stderr) }
 
 	if err := fs.Parse(args); err != nil {
@@ -128,13 +131,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if *poll <= 0 {
 		return usageError("--poll must be positive, got %s", *poll)
 	}
-	var withholdID *[32]byte
-	if *withhold != "" {
-		id, err := core.ParseDisplayHash(*withhold)
+	var withholdIDs [][32]byte
+	seen := make(map[[32]byte]bool, len(withhold))
+	for _, txid := range withhold {
+		id, err := core.ParseDisplayHash(txid)
 		if err != nil {
 			return usageError("--withhold-txid must be a txid of 64 lowercase hex characters, in display order: %v", err)
 		}
-		withholdID = &id
+		if !seen[id] {
+			seen[id] = true
+			withholdIDs = append(withholdIDs, id)
+		}
 	}
 	if *keyFile == "" {
 		return usageError("--key-file is required, because the home directory for the default is unknown")
@@ -154,16 +161,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if warning != "" {
 		logger.Printf("warning: %s", warning)
 	}
-	if withholdID != nil {
-		fmt.Fprintf(stderr, "WARNING: --withhold-txid is set. This server leaves transaction %s out of every list it serves, while its signed records still include it. Use it for demos only.\n", *withhold)
+	if len(withholdIDs) > 0 {
+		fmt.Fprintln(stderr, withholdWarning(withholdIDs))
 	}
 
 	idx, err := indexer.New(indexer.Config{
-		Core:         client,
-		Key:          key,
-		WithholdTxID: withholdID,
-		Software:     indexer.Software{Name: "canary-indexer", Version: version, Build: buildID()},
-		Logger:       logger,
+		Core:          client,
+		Key:           key,
+		WithholdTxIDs: withholdIDs,
+		Software:      indexer.Software{Name: "canary-indexer", Version: version, Build: buildID()},
+		Logger:        logger,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -220,6 +227,31 @@ func serve(ctx context.Context, idx *indexer.Indexer, addr, coreREST string, pol
 	}
 	<-syncDone
 	return code
+}
+
+// txidFlags collects every --withhold-txid, in the order given. run checks
+// each one after parsing, so a bad txid gets the same usage error as before
+// the flag could repeat.
+type txidFlags []string
+
+func (f *txidFlags) String() string { return strings.Join(*f, ",") }
+
+func (f *txidFlags) Set(v string) error {
+	*f = append(*f, v)
+	return nil
+}
+
+// withholdWarning is the start-up warning for --withhold-txid. It names every
+// txid in display order.
+func withholdWarning(ids [][32]byte) string {
+	if len(ids) == 1 {
+		return fmt.Sprintf("WARNING: --withhold-txid is set. This server leaves transaction %s out of every list it serves, while its signed records still include it. Use it for demos only.", core.DisplayHex(ids[0]))
+	}
+	names := make([]string, len(ids))
+	for i, id := range ids {
+		names[i] = core.DisplayHex(id)
+	}
+	return fmt.Sprintf("WARNING: --withhold-txid is set. This server leaves %d transactions out of every list it serves, while its signed records still include them: %s. Use it for demos only.", len(ids), strings.Join(names, ", "))
 }
 
 func printUsage(fs *flag.FlagSet, w io.Writer) {

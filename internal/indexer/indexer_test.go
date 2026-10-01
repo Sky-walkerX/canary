@@ -15,6 +15,7 @@ import (
 	"github.com/Sky-walkerX/canary/commit"
 	"github.com/Sky-walkerX/canary/internal/core"
 	"github.com/Sky-walkerX/canary/internal/core/coretest"
+	"github.com/Sky-walkerX/canary/internal/indexer"
 	"github.com/Sky-walkerX/canary/wire"
 	"github.com/nbd-wtf/go-nostr"
 )
@@ -123,6 +124,35 @@ func TestWithholdingLeavesTheRecordHonest(t *testing.T) {
 	}
 	if !wire.InsideRetentionWindow(r.TipHeight, c.BlockHeight) {
 		t.Errorf("tip %d and height %d put the block outside the window; the demo needs it inside", r.TipHeight, c.BlockHeight)
+	}
+}
+
+// The switch repeats. WithholdTxID and WithholdTxIDs together name every
+// entry the server leaves out, and the record still commits to all of them.
+func TestWithholdingSeveralTxids(t *testing.T) {
+	f := newFixture(t)
+	a, c := f.payers[0].TxHash(), f.payers[2].TxHash()
+	s := startServer(t, f.rest, 2, withholding(a), func(cfg *indexer.Config) {
+		// A repeat of the single txid changes nothing.
+		cfg.WithholdTxIDs = [][32]byte{[32]byte(c), [32]byte(a)}
+	})
+	s.sync(t)
+
+	positions, _, _ := s.tweaks(t, f.hash())
+	want := []wire.PositionKind{wire.KindAbsent, wire.KindFull, wire.KindAbsent}
+	if len(positions) != len(want) {
+		t.Fatalf("list has %d positions, want %d", len(positions), len(want))
+	}
+	for i, k := range want {
+		if positions[i].Kind != k {
+			t.Errorf("position %d has kind %d, want %d", i, positions[i].Kind, k)
+		}
+	}
+	if positions[1].Leaf.TxID != [32]byte(f.payers[1].TxHash()) {
+		t.Error("position 1 does not carry the one entry left in")
+	}
+	if cmt, _ := s.commitment(t, f.hash()); cmt.N != 3 {
+		t.Errorf("record n = %d, want 3: the record stays honest", cmt.N)
 	}
 }
 

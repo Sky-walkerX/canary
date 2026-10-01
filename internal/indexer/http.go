@@ -218,7 +218,7 @@ func (x *Indexer) serveTweaks(w http.ResponseWriter, blockHash [32]byte) {
 
 	positions := make([]wire.Position, len(rec.leaves))
 	for i, leaf := range rec.leaves {
-		if x.withhold != nil && leaf.TxID == *x.withhold {
+		if x.withhold[leaf.TxID] {
 			// The demo's attack: leave the entry out of what is served. The
 			// signed record still includes it, and the receipt below signs
 			// this list with the gap.

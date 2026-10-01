@@ -351,7 +351,7 @@ func ProvableShort(kind string, provable, hasEvidence bool) string {
 	case kind == "withheld" && provable:
 		return "You can prove this to others."
 	case kind == "withheld" && hasEvidence:
-		return "Inclusion only. You can be sure of this, you can't yet prove it to others."
+		return "Inclusion only. Your check saw the entry left out, but this file can't prove that to others."
 	case kind == "withheld":
 		return "You know this. You can't prove it to others."
 	case kind == "warning":
@@ -408,15 +408,33 @@ func VerdictSomeChecked(passed, total int) Verdict {
 }
 
 // VerdictNoneChecked is the verdict when no block could be checked.
-func VerdictNoneChecked(total int) Verdict {
+// unresolvable counts the blocks that read Can't be checked; the rest read
+// Not checked. reason is the reason every unresolvable block shares, or ""
+// when they do not share one. A block that reads Can't be checked had a
+// signed record, so the lede never says that nothing was signed.
+func VerdictNoneChecked(total, unresolvable int, reason string) Verdict {
 	head := "None of the " + blocks(total) + " could be checked."
 	if total == 1 {
 		head = "The 1 block could not be checked."
 	}
-	return Verdict{
-		Headline: head,
-		Lede:     "No block had a signed record and a list Canary could check against it.",
+	var lede string
+	switch {
+	case unresolvable == 0:
+		lede = "No block had a signed record Canary could check against."
+	case unresolvable < total:
+		lede = blocks(total-unresolvable) + " had no signed record to check against. " +
+			"For the other " + strconv.Itoa(unresolvable) + ", Canary could not recompute the root."
+	default:
+		lede = "Every block had a signed record, but Canary could not recompute its root."
+		if total == 1 {
+			lede = "The block had a signed record, but Canary could not recompute its root."
+		}
+		if _, ok := reasons[reason]; ok {
+			lede += " " + reasons[reason]
+		}
+		lede += " Can't be checked is neither a pass nor an accusation."
 	}
+	return Verdict{Headline: head, Lede: lede}
 }
 
 // VerdictDisputed is the verdict when servers disagree and nobody is accused.
@@ -858,7 +876,7 @@ func VerifyResultLabel(result, code string) string {
 // Verify headlines, the first line canary verify prints.
 const (
 	VerifyChecksOut     = "Checks out."
-	VerifyInclusionOnly = "Inclusion only: you can be sure of this, you can't yet prove it to others."
+	VerifyInclusionOnly = "Inclusion only: this file shows the server signed for the entry. It does not prove the entry was left out."
 )
 
 // VerifyInclusionOnlyDetail holds the two lines printed under
@@ -1745,7 +1763,7 @@ type SiteDiagramText struct {
 var Site = SiteText{
 	Home: SitePage{
 		Title:       "Canary: hold tweak servers to what they signed",
-		Description: "Canary checks a silent-payments server's tweak list against the record the same server signed, and names the server when they differ.",
+		Description: "Canary checks a silent-payments server's tweak list against the record it signed, and names the server that leaves out a recent entry.",
 	},
 	HowItWorks: SitePage{
 		Title:       "How Canary works",
@@ -1761,7 +1779,7 @@ var Site = SiteText{
 	},
 	Runs: SitePage{
 		Title:       "Recorded runs",
-		Description: "Real runs of canary check on regtest, each shown as the dashboard stood after the run, with the SHA-256 of every file.",
+		Description: "Real runs of canary check on regtest, shown as the dashboard stood after each check, with the SHA-256 of every file.",
 	},
 	NotFound: SitePage{
 		Title:       "Page not found",
@@ -1778,10 +1796,10 @@ var Site = SiteText{
 	FooterLicense:    "MIT License",
 	FooterNoRequests: "This site makes no outside requests.",
 
-	Claim: "Canary names the silent-payments server that leaves out an entry it signed for.",
+	Claim: "Canary names the silent-payments server that leaves out a recent entry it signed for.",
 	Lede: "A light wallet can't tell \"nobody paid you\" from \"the server left your payment out.\" " +
 		"Canary checks the tweak list a server sends against the record the same server signed for that block. " +
-		"When they differ, it names the server and the block.",
+		"If the list leaves out an entry the record includes, and the block is less than 144 blocks deep, Canary names the server and the block.",
 	Conditions: "It makes a server accountable. It does not remove the need to trust one. " +
 		"The claim needs at least one honest server that publishes signed records, and a path to those records that nobody censors. " +
 		"Version 1 is built and tested on regtest only.",
@@ -1849,6 +1867,8 @@ var Site = SiteText{
 		{Label: "A server that serves less than it signed for gets named", Text: "Not when it sends the entry's hash under a declared pruning policy. The block then reads Checked, gap filled."},
 		{Label: "Omission is detected", Text: "Only when you run canary check. Version 1 has no wallet in the loop, so nothing stops a wallet from using a block Canary flagged."},
 		{Label: "Detection works", Text: "Version 1 is built and tested on regtest only, against its own reference indexer, which shares the checker's canonical package. No deployed server speaks this protocol yet."},
+		{Label: "One server is enough", Text: "One server alone can't show its record is complete. If the record leaves out your entry, the block still reads Checked. " +
+			"A second server makes that block read Servers disagree, accusing nobody. A payment you declared names the server, but you can't prove it to others."},
 		{Label: "Several servers catch a lying one", Text: "If every server colludes, only a tripwire helps, and only for payments you know exist."},
 		{Label: "Records are public", Text: "Version 1 fetches each server's records from that server over HTTP, and publishes them nowhere else yet."},
 		{Label: "A lying server gets caught", Text: "Canary looks for entries left out, never for fake ones. Adding fake entries is a different attack."},
@@ -1870,11 +1890,12 @@ var Site = SiteText{
 	RunVerifyLabel:     "Copy the verify command",
 
 	RunsEmpty: "No recorded run is published yet.",
-	RunsAboutEmpty: "A recorded run is one real canary check on regtest, against two reference indexers, one of them told to withhold an entry. " +
+	RunsAboutEmpty: "A recorded run runs canary check on regtest against two reference indexers, one of them told to withhold an entry. " +
 		"Its page will show the results as they were, with the time of the run and the SHA-256 of its state file. It is a recording, not a live view.",
 	RunsAction: "Until then, run it yourself",
-	RunsAbout: "Each run here is one real canary check against Bitcoin Core on regtest, with reference indexers we ran ourselves. " +
-		"Its pages show the dashboard as it stood after the run, rendered from the state files the run wrote. They are a recording, not a live view.",
+	RunsAbout: "Each run here ran canary check against Bitcoin Core on regtest, with reference indexers we ran ourselves. " +
+		"A run can hold more than one canary check. Its pages show the dashboard as it stood after each check, " +
+		"rendered from the state files the run wrote. They are a recording, not a live view.",
 	RunsOpen:      "Open the recording",
 	RunsStateHash: "State file SHA-256",
 
@@ -2050,10 +2071,11 @@ func (s SiteText) RecordedRange(label string, from, to uint32, servers int) stri
 	return r + ", " + strconv.Itoa(servers) + " " + plural(servers, "server", "servers")
 }
 
-// CheckerSourceRecorded says where a sample from the recorded run comes from.
-// date is the day of the run.
+// CheckerSourceRecorded says where a real sample comes from when no run on
+// the site names it. date is the day canary check wrote the file. It names
+// no recorded run, because the site has none to link.
 func (s SiteText) CheckerSourceRecorded(date string) string {
-	return "The sample comes from the recorded run on " + date + "."
+	return "The sample is an evidence file canary check wrote on " + date + "."
 }
 
 // CheckerText is the browser checker's own words: the lines checker.js shows

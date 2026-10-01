@@ -10,8 +10,8 @@ func TestAfterLabel(t *testing.T) {
 			"The server signed a record that includes this entry, then signed a list that left it out."},
 		{"Does not check out: receipt failed.", "Does not check out", "Receipt failed."},
 		{"Can't read this file: not JSON.", "Can't read this file", "Not JSON."},
-		{"Inclusion only: you can be sure of this, you can't yet prove it to others.", "Checks out, inclusion only",
-			"Inclusion only: you can be sure of this, you can't yet prove it to others."},
+		{"Inclusion only: this file shows the server signed for the entry. It does not prove the entry was left out.", "Checks out, inclusion only",
+			"Inclusion only: this file shows the server signed for the entry. It does not prove the entry was left out."},
 		{"Checks out.", "Checks out", "Checks out."},
 		{"Checks outright.", "Checks out", "Checks outright."},
 	}

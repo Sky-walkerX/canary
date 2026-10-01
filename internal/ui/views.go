@@ -414,7 +414,7 @@ func buildVerdict(f *state.File) (wording.Verdict, *wording.StateText) {
 	case passed > 0:
 		v = wording.VerdictSomeChecked(passed, total)
 	default:
-		v = wording.VerdictNoneChecked(total)
+		v = wording.VerdictNoneChecked(total, int(c.Unresolvable), sharedReason(f, state.Unresolvable))
 	}
 
 	// A later run never clears a finding, so withheld and disagree findings
@@ -437,6 +437,22 @@ func buildVerdict(f *state.File) (wording.Verdict, *wording.StateText) {
 		}
 	}
 	return v, badge
+}
+
+// sharedReason returns the reason every coverage range in state s gives, or
+// "" when they give more than one or no range is in s.
+func sharedReason(f *state.File, s state.StateCode) string {
+	var reason string
+	for _, c := range f.Coverage {
+		if c.State != s {
+			continue
+		}
+		if reason != "" && string(c.Reason) != reason {
+			return ""
+		}
+		reason = string(c.Reason)
+	}
+	return reason
 }
 
 // buildServers fills the servers table. A server's reachable field says only

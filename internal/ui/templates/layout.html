@@ -41,7 +41,7 @@
 <footer class="site-footer">
   <div class="wrap footer-row">
     <p>{{.Chrome.Framing}}</p>
-    <p>This dashboard: canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}}). It makes no outside requests. <a class="ext" href="{{.Chrome.ReleaseNotes}}" rel="noreferrer">Release notes{{template "icon" "external"}}</a></p>
+    <p>This dashboard: canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}}). It makes no outside requests.{{with .Chrome.ReleaseNotes}} <a class="ext" href="{{.}}" rel="noreferrer">Release notes{{template "icon" "external"}}</a>{{end}}</p>
   </div>
   {{with .Chrome.Watermark}}<p class="watermark watermark-foot">{{.}}</p>{{end}}
 </footer>

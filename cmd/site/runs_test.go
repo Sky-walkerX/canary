@@ -143,7 +143,7 @@ func TestCheckerUsesTheRecordedRun(t *testing.T) {
 	home := read(t, dist, "index.html")
 	checker := section(t, home, "checker")
 	for _, want := range []string{
-		htmlText(wording.Site.CheckerSourceRun("regtest", "1 October 2026", core[1])),
+		htmlText(wording.Site.CheckerSourceRun("regtest", "1 Oct 2026", core[1])),
 		`<a href="` + runURL + `">` + htmlText(wording.Site.CheckerSeeRun) + `</a>`,
 		htmlText(wording.Site.CheckerTryReal),
 		htmlText(wording.Site.CheckerDownloadReal),
@@ -153,6 +153,10 @@ func TestCheckerUsesTheRecordedRun(t *testing.T) {
 		if !strings.Contains(checker, want) {
 			t.Errorf("the checker lacks %q", want)
 		}
+	}
+	// One spelling of the run's date on every page: the banner's.
+	if strings.Contains(home, "October") {
+		t.Error("the home page spells the run's date in full, and the run's own pages write 1 Oct 2026")
 	}
 	if core[1] != "v31.1.0" {
 		t.Errorf("the run's output names Bitcoin Core %s; the checker's label names it", core[1])

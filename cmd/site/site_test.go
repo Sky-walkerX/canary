@@ -483,7 +483,7 @@ func TestCheckerWithEvidence(t *testing.T) {
 		`data-copy="./canary verify evidence/` + name + `"`,
 		htmlText(wording.Site.CheckerPending),
 		htmlText(wording.Site.CheckerNoScript),
-		htmlText(wording.Site.CheckerSourceRecorded("3 October 2026")),
+		htmlText(wording.Site.CheckerSourceRecorded("3 Oct 2026")),
 		htmlText(wording.Site.RunIntro),
 		htmlText(wording.Site.RunAfter),
 	} {

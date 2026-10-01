@@ -770,6 +770,13 @@ func TestStripGeometry(t *testing.T) {
 	if v.Summary != want {
 		t.Errorf("summary = %q", v.Summary)
 	}
+	// A one-block segment names one block.
+	if got := v.Segments[3].Title; got != "Block 205: Data withheld" {
+		t.Errorf("one-block segment title = %q", got)
+	}
+	if got := v.Segments[0].Title; !strings.HasPrefix(got, "Blocks 0–") {
+		t.Errorf("range segment title = %q", got)
+	}
 	fx := newFixture(t, nil, nil)
 	fx.writeFile(f)
 	_, body := fx.get("/blocks")
@@ -1226,5 +1233,87 @@ func TestServerPolicyAndAnswered(t *testing.T) {
 	}
 	if n := strings.Count(body, ">"+wording.PolicyNotDeclared+"<"); n != 1 {
 		t.Errorf("%d servers read %q, want only bare", n, wording.PolicyNotDeclared)
+	}
+}
+
+// TestStripOneBlock names a check of one block as one block, in the strip's
+// segment title and in its text alternative.
+func TestStripOneBlock(t *testing.T) {
+	f := exampleFile(t)
+	f.Checked = state.Range{From: 201, To: 201}
+	f.Coverage = []state.CoverageRange{{From: 201, To: 201, State: state.Unresolvable, Reason: state.GapUnfilled}}
+	f.Counts = state.Counts{Unresolvable: 1}
+	v := buildStrip("strip", f)
+	if got := v.Segments[0].Title; got != "Block 201: Can't be checked" {
+		t.Errorf("segment title = %q", got)
+	}
+	if want := "Coverage of block 201: 1 Can't be checked."; v.Summary != want {
+		t.Errorf("summary = %q, want %q", v.Summary, want)
+	}
+}
+
+// TestOverviewNoneCheckedGivesTheReason keeps the act 5 overview honest: the
+// server signed a record for the block, so the lede must not say it signed
+// nothing, and it gives the reason the block can't be checked.
+func TestOverviewNoneCheckedGivesTheReason(t *testing.T) {
+	f := exampleFile(t)
+	f.Checked = state.Range{From: 201, To: 201}
+	f.Coverage = []state.CoverageRange{{From: 201, To: 201, State: state.Unresolvable, Reason: state.GapUnfilled}}
+	f.Counts = state.Counts{Unresolvable: 1}
+	f.Blocks = nil
+	f.Findings = nil
+	v, badge := buildVerdict(f)
+	if badge != nil {
+		t.Errorf("badge = %v, want none", badge.Label)
+	}
+	for _, w := range []string{"had a signed record", wording.Reason("gap_unfilled")} {
+		if !strings.Contains(v.Lede, w) {
+			t.Errorf("lede %q lacks %q", v.Lede, w)
+		}
+	}
+	if strings.Contains(v.Lede, "No block had a signed record") {
+		t.Errorf("lede %q says no block had a signed record", v.Lede)
+	}
+}
+
+// TestReleaseNotesLinkOnlyWhenConfigured keeps the footer from linking a
+// releases page that may hold nothing. The link shows only when the caller
+// names a release URL.
+func TestReleaseNotesLinkOnlyWhenConfigured(t *testing.T) {
+	fx := newFixture(t, exampleState(t), nil)
+	_, body := fx.get("/")
+	if strings.Contains(body, "Release notes") || strings.Contains(body, "/releases") {
+		t.Error("the footer links release notes when no release URL is configured")
+	}
+	const url = "https://example.org/canary/releases/tag/v0.1.0"
+	fx = newFixture(t, exampleState(t), func(o *Options) { o.ReleaseNotesURL = url })
+	_, body = fx.get("/")
+	if !strings.Contains(body, `href="`+url+`"`) || !strings.Contains(body, "Release notes") {
+		t.Error("the footer lacks the configured release notes link")
+	}
+}
+
+// TestRelativeEvidenceDirFollowsTheStateFile reads a relative evidence_dir
+// from the state file's own directory, not from wherever canary ui started.
+// A recorded run then opens from a clone, and the verify command it shows is
+// the one that runs beside its state file.
+func TestRelativeEvidenceDirFollowsTheStateFile(t *testing.T) {
+	f := exampleFile(t)
+	f.EvidenceDir = "evidence"
+	b, err := state.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx := newFixture(t, b, func(o *Options) { o.EvidenceDir = "" })
+	if rec := fx.do(http.MethodGet, "/evidence/"+exampleEvidence); rec.Code != http.StatusOK {
+		t.Fatalf("evidence: status %d, want 200", rec.Code)
+	}
+	_, body := fx.get("/findings/827a8d3f502e")
+	want := "canary verify evidence/" + exampleEvidence
+	if !strings.Contains(body, want) {
+		t.Errorf("finding page lacks %q", want)
+	}
+	if strings.Contains(body, fx.dir) {
+		t.Error("finding page shows the state directory's absolute path")
 	}
 }

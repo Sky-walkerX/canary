@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"image/png"
 	"io/fs"
 	"strings"
@@ -56,8 +57,8 @@ func TestSpriteAndAssetsExported(t *testing.T) {
 		t.Errorf("Sprite() is not the inlinable glyph sprite")
 	}
 	a := Assets()
-	for _, name := range []string{"tokens.css", "ui.css", "app.js", "live.js", "fonts/atkinson-hyperlegible-next-latin.woff2",
-		"fonts/atkinson-hyperlegible-mono-latin.woff2", "fonts/OFL-atkinson-hyperlegible-next.txt"} {
+	for _, name := range []string{"tokens.css", "ui.css", "app.js", "live.js", "fonts/geist-latin.woff2",
+		"fonts/jetbrains-mono-latin.woff2", "fonts/OFL-geist.txt"} {
 		if _, err := fs.Stat(a, name); err != nil {
 			t.Errorf("Assets() lacks %s: %v", name, err)
 		}
@@ -92,10 +93,13 @@ func TestFaviconHasOneSource(t *testing.T) {
 		if !tt.fullBleed && a != 0 {
 			t.Errorf("FaviconPNG(%d) has an opaque corner, want the rounded square's transparent one", tt.size)
 		}
-		// The perch runs under the letter in canary yellow.
+		// The perch runs under the letter in the brand amber, the same value
+		// the brand token carries.
+		light, _, _ := tokenBlocks(t)
+		want := strings.ToUpper(strings.TrimPrefix(light["--canary"], "#"))
 		r, g, bl, _ := img.At(tt.size/2, tt.size*265/320).RGBA()
-		if r>>8 < 0xe0 || g>>8 < 0xd0 || bl>>8 > 0x80 {
-			t.Errorf("FaviconPNG(%d) has no yellow perch under the letter: %d %d %d", tt.size, r>>8, g>>8, bl>>8)
+		if got := fmt.Sprintf("%02X%02X%02X", r>>8, g>>8, bl>>8); got != want {
+			t.Errorf("FaviconPNG(%d) perch is #%s, want the brand token #%s", tt.size, got, want)
 		}
 	}
 }

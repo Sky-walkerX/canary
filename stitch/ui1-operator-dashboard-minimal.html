@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_dashboard" name="shell-type"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=JetBrains+Mono:wght@300;400;500&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            surface: "#0e0f12",
+            "surface-container-lowest": "#08090b",
+            "surface-container-low": "#131418",
+            "surface-container": "#18191f",
+            "surface-container-high": "#22232a",
+            "surface-container-highest": "#2b2c35",
+            "surface-bright": "#383944",
+            "on-surface": "#ededf0",
+            "on-surface-variant": "#9496a1",
+            outline: "#5e606e",
+            "outline-variant": "#2b2c36",
+            primary: "#ffc174",
+            "primary-container": "#f59e0b",
+            "on-primary-container": "#2a1700",
+            secondary: "#4cd7f6",
+            tertiary: "#56e5a9",
+            "tertiary-container": "#10b981",
+            error: "#f87171",
+            "error-container": "#450a0a",
+            "on-error-container": "#fca5a5"
+          },
+          fontFamily: {
+            sans: ["Geist", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface font-sans text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Minimalist Fixed Sidebar -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-surface-container-lowest border-r border-outline-variant/30 z-50 flex flex-col justify-between py-6 px-5">
+<div class="flex flex-col gap-8">
+<!-- Minimal Brand -->
+<div class="flex items-center gap-2.5">
+<img alt="Canary" class="h-6 w-auto object-contain opacity-90" src="https://lh3.googleusercontent.com/aida/AEtjO1U7M9V3uUgEeN52aa3g3OQLN9kLY4ssKzctZyCiremRG0kdY7Bzagxp7XubafxZLUZKe3jPYoTxKPHrQ5YoAMueWasa95-yu5Yb8JvNj5RqlEUBZdjf0-8hMF0SAEbU1Fb-nqqjTZd95Jbw_6ZT2A3esuQYACNHwcqrUg0r8rl1aDQflTEFF86OZC-fTnm7GKtLZAypQR_wIkJhug-GHTaPMGmJiNsX24YDkh9o8aYND52sxUX6aLLiqGg"/>
+<span class="font-mono text-xs font-semibold tracking-wider text-on-surface uppercase">CANARY</span>
+<span class="text-[10px] font-mono text-primary-container tracking-widest uppercase ml-auto">REGTEST</span>
+</div>
+<!-- Navigation -->
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md bg-surface-container text-on-surface font-mono text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[17px] text-primary">terminal</span>
+<span>Inspector</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 font-mono text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[17px]">view_in_ar</span>
+<span>Block Scan</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 font-mono text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[17px]">enhanced_encryption</span>
+<span>BIP-352 Index</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 font-mono text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[17px]">router</span>
+<span>RPC Telemetry</span>
+</a>
+</nav>
+</div>
+<!-- Quiet Footer Meta -->
+<div class="flex flex-col gap-2 font-mono text-[11px] text-outline">
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span>Daemon 0.1.0</span>
+</div>
+<div>127.0.0.1:8332</div>
+</div>
+</aside>
+<!-- Main Content Space with Large Breathing Room -->
+<div class="pl-64">
+<!-- Top Quiet Status Bar -->
+<header class="sticky top-0 z-40 h-14 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 flex items-center justify-between px-10">
+<div class="flex items-center gap-4 font-mono text-xs text-on-surface-variant">
+<span class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span>Session sess_0192ca8f</span>
+</span>
+<span class="text-outline">/</span>
+<span>Heights 0..212</span>
+<span class="text-outline">/</span>
+<span class="text-outline">4m ago</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-xs">
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors" onclick="navigator.clipboard?.writeText('canary verify --range 0:212')">
+<span class="material-symbols-outlined text-[14px] text-primary">play_arrow</span>
+<span>Re-run</span>
+</button>
+</div>
+</header>
+<main class="max-w-6xl mx-auto px-10 py-16 flex flex-col gap-20">
+<!-- HERO / VERDICT -->
+<section class="flex flex-col gap-6 pt-4">
+<div class="flex items-center gap-2 text-xs font-mono text-on-surface-variant uppercase tracking-wider">
+<span class="inline-block w-2 h-2 rounded-full bg-tertiary"></span>
+<span>Audit Complete</span>
+<span class="text-outline">·</span>
+<span>2 Indexers</span>
+</div>
+<div class="flex flex-col lg:flex-row lg:items-baseline justify-between gap-6">
+<h1 class="text-4xl sm:text-5xl font-medium tracking-tight text-on-surface">
+            200 of 213 blocks checked.
+          </h1>
+<!-- Lower-Bound Law: Succinct single-line whisper -->
+<div class="flex items-center gap-2 font-mono text-xs text-on-surface-variant/80 max-w-md self-start lg:self-end pb-1">
+<span class="material-symbols-outlined text-[15px] text-primary shrink-0">balance</span>
+<span class="italic">“A balance computed over unverified blocks is a lower bound, not a balance.”</span>
+</div>
+</div>
+<!-- Minimalist Visual Continuum Strip -->
+<div class="flex flex-col gap-3 pt-6">
+<div class="flex items-center justify-between font-mono text-xs text-on-surface-variant">
+<span class="text-primary" id="ribbon-inspector-text">Hover blocks for receipt details</span>
+<div class="flex items-center gap-4 text-[11px]">
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-tertiary"></span> 200 Checked</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-primary-container"></span> 8 Gap filled</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-surface-bright"></span> 4 Can't check</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-error"></span> 1 Withheld</span>
+</div>
+</div>
+<!-- Thin, single-strip block timeline -->
+<div class="w-full bg-surface-container-low p-1 rounded-sm">
+<div class="flex w-full h-4 gap-[1px] items-stretch cursor-pointer" id="block-ribbon"></div>
+</div>
+<div class="flex items-center justify-between font-mono text-[11px] text-outline">
+<span>Height 0</span>
+<span>Height 100</span>
+<span class="text-error">#204 Withheld</span>
+<span>Tip 212</span>
+</div>
+</div>
+</section>
+<!-- THE 6 CANONICAL STATES: Quiet, spacious numbers -->
+<section class="flex flex-col gap-6">
+<div class="flex items-center justify-between font-mono text-xs uppercase tracking-wider text-outline">
+<span>Verification Taxonomy (§2.1)</span>
+<span>Click state for mechanics</span>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+<!-- State 1 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/70 transition-all cursor-pointer" onclick="toggleDisclosure('disc-checked')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-mono text-[10px] text-outline">01</span>
+</div>
+<div class="text-2xl font-light text-on-surface">200</div>
+<div class="font-mono text-xs text-on-surface-variant mt-1 group-hover:text-on-surface transition-colors">Checked</div>
+</div>
+<!-- State 2 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/70 transition-all cursor-pointer" onclick="toggleDisclosure('disc-gap')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span class="font-mono text-[10px] text-outline">02</span>
+</div>
+<div class="text-2xl font-light text-on-surface">8</div>
+<div class="font-mono text-xs text-on-surface-variant mt-1 group-hover:text-on-surface transition-colors">Gap filled</div>
+</div>
+<!-- State 3 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/70 transition-all cursor-pointer" onclick="toggleDisclosure('disc-cant')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-bright"></span>
+<span class="font-mono text-[10px] text-outline">03</span>
+</div>
+<div class="text-2xl font-light text-on-surface">4</div>
+<div class="font-mono text-xs text-on-surface-variant mt-1 group-hover:text-on-surface transition-colors">Can't check</div>
+</div>
+<!-- State 4 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/70 transition-all cursor-pointer opacity-50 hover:opacity-100" onclick="toggleDisclosure('disc-not')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="font-mono text-[10px] text-outline">04</span>
+</div>
+<div class="text-2xl font-light text-on-surface">0</div>
+<div class="font-mono text-xs text-on-surface-variant mt-1 group-hover:text-on-surface transition-colors">Not checked</div>
+</div>
+<!-- State 5 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/70 transition-all cursor-pointer opacity-50 hover:opacity-100" onclick="toggleDisclosure('disc-disagree')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="font-mono text-[10px] text-outline">05</span>
+</div>
+<div class="text-2xl font-light text-on-surface">0</div>
+<div class="font-mono text-xs text-on-surface-variant mt-1 group-hover:text-on-surface transition-colors">Disagree</div>
+</div>
+<!-- State 6 -->
+<div class="group p-4 rounded bg-surface-container-low hover:bg-surface-container border border-error/30 hover:border-error/60 transition-all cursor-pointer" onclick="toggleDisclosure('disc-withheld')">
+<div class="flex items-center justify-between pb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span class="font-mono text-[10px] text-error font-medium">06</span>
+</div>
+<div class="text-2xl font-light text-error">1</div>
+<div class="font-mono text-xs text-error mt-1 group-hover:text-error transition-colors">Withheld</div>
+</div>
+</div>
+<!-- Collapsible Details Box (Hidden until clicked) -->
+<div class="hidden flex-col gap-2 p-5 bg-surface-container-lowest border border-outline-variant/40 rounded transition-all" id="disclosure-container">
+<div class="flex items-center justify-between">
+<div class="font-mono text-xs font-semibold text-primary" id="disclosure-title"></div>
+<button class="text-outline hover:text-on-surface" onclick="closeDisclosure()">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<div class="text-xs text-on-surface-variant leading-relaxed font-mono" id="disclosure-content"></div>
+</div>
+</section>
+<!-- AUDIT FINDINGS: High signal, uncluttered card -->
+<section class="flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-outline">
+<span>Audit Findings</span>
+<span class="text-error font-medium">· 1 Discrepancy</span>
+</div>
+</div>
+<div class="p-6 rounded bg-surface-container-low border border-outline-variant/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+<div class="flex flex-col gap-2 max-w-2xl">
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="px-2 py-0.5 rounded bg-error-container text-on-error-container font-medium">Withheld</span>
+<span class="text-on-surface">Block #204</span>
+<span class="text-outline">·</span>
+<span class="text-outline font-mono">indexer-alpha.local</span>
+</div>
+<p class="text-sm text-on-surface-variant font-normal">
+              Omitted BIP-352 commitment present in local regtest index. Root mismatch confirmed against signed ECDSA receipt.
+            </p>
+<div class="font-mono text-[11px] text-outline pt-1">
+              Receipt SHA256: <code class="text-on-surface">7f81...3cc9</code> · Deterministic discrepancy
+            </div>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<button class="px-3.5 py-2 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 font-mono text-xs text-on-surface transition-colors" onclick="downloadFindingEvidence('f4a8b2c109de')">
+              Download JSON
+            </button>
+<button class="px-3.5 py-2 rounded bg-primary-container hover:bg-primary text-on-primary-container font-mono text-xs font-medium transition-colors">
+              Inspect Receipt →
+            </button>
+</div>
+</div>
+</section>
+<!-- SECONDARY TELEMETRY: Clean Tabbed Section with No Visual Overload -->
+<section class="flex flex-col gap-6">
+<div class="flex items-center justify-between border-b border-outline-variant/30 pb-3">
+<div class="flex items-center gap-6 font-mono text-xs">
+<button class="text-on-surface font-medium border-b-2 border-primary-container pb-3 -mb-3.5 transition-colors" id="tab-btn-indexers" onclick="switchTelemetryTab('indexers')">
+              Configured Indexers (2)
+            </button>
+<button class="text-on-surface-variant hover:text-on-surface pb-3 -mb-3.5 transition-colors" id="tab-btn-payments" onclick="switchTelemetryTab('payments')">
+              Declared Spends (--expect)
+            </button>
+</div>
+<div class="font-mono text-[11px] text-outline hidden sm:block">
+            Signed tips via valid receipts · Keys from --pubkey
+          </div>
+</div>
+<!-- Tab 1: Indexers Table (Clean, quiet rows) -->
+<div class="flex flex-col font-mono text-xs" id="tab-content-indexers">
+<div class="grid grid-cols-12 py-2 px-3 text-outline text-[11px] uppercase tracking-wider">
+<div class="col-span-5">Host</div>
+<div class="col-span-3">Public Key</div>
+<div class="col-span-2">Signed Tip</div>
+<div class="col-span-2 text-right">Status</div>
+</div>
+<div class="divide-y divide-outline-variant/20">
+<div class="grid grid-cols-12 py-3 px-3 items-center hover:bg-surface-container-low transition-colors rounded">
+<div class="col-span-5 flex items-center gap-2 text-on-surface">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>indexer-alpha.local:8332</span>
+</div>
+<div class="col-span-3 text-on-surface-variant">02a1b94...8e44</div>
+<div class="col-span-2 text-primary">#212</div>
+<div class="col-span-2 text-right text-error">1 Discrepancy</div>
+</div>
+<div class="grid grid-cols-12 py-3 px-3 items-center hover:bg-surface-container-low transition-colors rounded">
+<div class="col-span-5 flex items-center gap-2 text-on-surface">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span>indexer-beta.internal:8080</span>
+</div>
+<div class="col-span-3 text-on-surface-variant">03f71c2...11b0</div>
+<div class="col-span-2 text-tertiary">#212</div>
+<div class="col-span-2 text-right text-tertiary">Consistent</div>
+</div>
+</div>
+</div>
+<!-- Tab 2: Declared Payments Table -->
+<div class="hidden flex-col font-mono text-xs" id="tab-content-payments">
+<div class="grid grid-cols-12 py-2 px-3 text-outline text-[11px] uppercase tracking-wider">
+<div class="col-span-5">Spend Target</div>
+<div class="col-span-2">Height</div>
+<div class="col-span-3">Outpoint</div>
+<div class="col-span-2 text-right">Commitment</div>
+</div>
+<div class="divide-y divide-outline-variant/20">
+<div class="grid grid-cols-12 py-3 px-3 items-center hover:bg-surface-container-low transition-colors rounded">
+<div class="col-span-5 text-on-surface">sp1_regtest_treasury_sweep</div>
+<div class="col-span-2 text-on-surface-variant">#184</div>
+<div class="col-span-3 text-outline">c81e72...49a1:0</div>
+<div class="col-span-2 text-right text-tertiary">Verified</div>
+</div>
+<div class="grid grid-cols-12 py-3 px-3 items-center hover:bg-surface-container-low transition-colors rounded">
+<div class="col-span-5 text-on-surface">sp1_cold_escrow_deposit_02</div>
+<div class="col-span-2 text-on-surface-variant">#204</div>
+<div class="col-span-3 text-error">4ba039...67f2:1</div>
+<div class="col-span-2 text-right text-error">Withheld</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Ultra-Clean Minimal Footer -->
+<footer class="border-t border-outline-variant/20 py-8 px-10 text-outline font-mono text-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+<div>Accountable BIP-352 verification. Regtest mode.</div>
+<div class="flex items-center gap-4">
+<span>MIT</span>
+<span>·</span>
+<span>Canary v0.1.0</span>
+</div>
+</footer>
+</div>
+<script>
+    // Minimal Continuum Ribbon
+    const totalBlocks = 213;
+    const ribbonEl = document.getElementById('block-ribbon');
+    const inspectorText = document.getElementById('ribbon-inspector-text');
+
+    const gapFilled = new Set([41, 42, 88, 89, 90, 142, 143, 144]);
+    const cantCheck = new Set([12, 13, 115, 116]);
+    const withheld = new Set([204]);
+
+    for (let i = 0; i < totalBlocks; i++) {
+      const tick = document.createElement('div');
+      
+      let state = 'Checked';
+      let colorClass = 'bg-tertiary/70 hover:bg-tertiary';
+      let detail = 'Receipt verified against local RPC';
+
+      if (withheld.has(i)) {
+        state = 'Data withheld';
+        colorClass = 'bg-error scale-y-125 z-10';
+        detail = 'Commitment omitted by indexer-alpha.local';
+      } else if (cantCheck.has(i)) {
+        state = "Can't be checked";
+        colorClass = 'bg-surface-bright hover:bg-on-surface-variant';
+        detail = 'Archival gap (absent_in_window)';
+      } else if (gapFilled.has(i)) {
+        state = 'Gap filled';
+        colorClass = 'bg-primary-container hover:bg-primary';
+        detail = 'Supplied via hash manifest';
+      }
+
+      tick.className = `flex-1 h-full transition-all ${colorClass}`;
+      
+      tick.onmouseenter = () => {
+        inspectorText.innerHTML = `Block #${i} · <span class="text-on-surface">${state}</span> · ${detail}`;
+      };
+
+      tick.onmouseleave = () => {
+        inspectorText.innerHTML = `Hover blocks for receipt details`;
+      };
+
+      ribbonEl.appendChild(tick);
+    }
+
+    // Discreet Disclosures (§2.1)
+    const disclosures = {
+      'disc-checked': {
+        title: '01: Checked (200 Blocks)',
+        content: 'Tweak records checked against Bitcoin Core block hash. Both indexers agree on cryptographic root.'
+      },
+      'disc-gap': {
+        title: '02: Checked, Gap Filled (8 Blocks)',
+        content: 'Root verified. Missing positions reconstructed from peer hash proofs.'
+      },
+      'disc-cant': {
+        title: '03: Can\'t Be Checked (4 Blocks)',
+        content: 'Outside active reindex window. Neither a pass nor an accusation (§2.1).'
+      },
+      'disc-not': {
+        title: '04: Not Checked (0 Blocks)',
+        content: 'No signed records found or verified block filter applied.'
+      },
+      'disc-disagree': {
+        title: '05: Servers Disagree (0 Blocks)',
+        content: 'No conflicting roots detected between servers on this run.'
+      },
+      'disc-withheld': {
+        title: '06: Data Withheld (Block #204)',
+        content: 'indexer-alpha.local signed receipt omitted known BIP-352 commitment. Deterministic discrepancy provable by ECDSA receipt.'
+      }
+    };
+
+    function toggleDisclosure(key) {
+      const container = document.getElementById('disclosure-container');
+      const titleEl = document.getElementById('disclosure-title');
+      const contentEl = document.getElementById('disclosure-content');
+
+      if (container.dataset.activeKey === key && !container.classList.contains('hidden')) {
+        closeDisclosure();
+        return;
+      }
+
+      const data = disclosures[key];
+      if (data) {
+        titleEl.textContent = data.title;
+        titleEl.className = key === 'disc-withheld' ? 'font-mono text-xs font-semibold text-error' : 'font-mono text-xs font-semibold text-primary';
+        contentEl.textContent = data.content;
+        container.classList.remove('hidden');
+        container.classList.add('flex');
+        container.dataset.activeKey = key;
+      }
+    }
+
+    function closeDisclosure() {
+      const container = document.getElementById('disclosure-container');
+      container.classList.add('hidden');
+      container.classList.remove('flex');
+      delete container.dataset.activeKey;
+    }
+
+    // Telemetry Tabs Switcher
+    function switchTelemetryTab(tab) {
+      const btnIndexers = document.getElementById('tab-btn-indexers');
+      const btnPayments = document.getElementById('tab-btn-payments');
+      const contentIndexers = document.getElementById('tab-content-indexers');
+      const contentPayments = document.getElementById('tab-content-payments');
+
+      if (tab === 'indexers') {
+        btnIndexers.className = 'text-on-surface font-medium border-b-2 border-primary-container pb-3 -mb-3.5 transition-colors';
+        btnPayments.className = 'text-on-surface-variant hover:text-on-surface pb-3 -mb-3.5 transition-colors';
+        contentIndexers.classList.remove('hidden');
+        contentIndexers.classList.add('flex');
+        contentPayments.classList.add('hidden');
+        contentPayments.classList.remove('flex');
+      } else {
+        btnPayments.className = 'text-on-surface font-medium border-b-2 border-primary-container pb-3 -mb-3.5 transition-colors';
+        btnIndexers.className = 'text-on-surface-variant hover:text-on-surface pb-3 -mb-3.5 transition-colors';
+        contentPayments.classList.remove('hidden');
+        contentPayments.classList.add('flex');
+        contentIndexers.classList.add('hidden');
+        contentIndexers.classList.remove('flex');
+      }
+    }
+
+    // Evidence Download
+    function downloadFindingEvidence(findingId) {
+      const evidenceObj = {
+        spec_version: "bip352_canary_0.1.0",
+        finding_id: findingId,
+        state: "data_withheld",
+        server: "indexer-alpha.local:8332",
+        block_height: 204,
+        proof_digest: "7f813cc9",
+        timestamp: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(evidenceObj, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `canary_proof_${findingId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body></html>

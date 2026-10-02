@@ -894,8 +894,8 @@ The checker comes preloaded with the real evidence file and a labelled tampered 
 
 **Risks.**
 - **The recorded run must be exact.** Render the recorded-run page only from the byte-identical state file the real run wrote, committed next to the evidence file. Show the file's SHA-256 and the commit. Use absolute times only.
-- **Fonts.** Use Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono, self-hosted: 52 KB, matching metrics, and a slashed zero.
-- **Colour.** Use a canary yellow at about 55° hue, such as #F4E13A. Avoid #F5C518, which is IMDb's brand yellow and sits right next to Binance's. On light backgrounds, give the yellow an ink outline: without one, its contrast is only 1.2–1.5:1.
+- **Fonts.** Use Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono, self-hosted: 52 KB, matching metrics, and a slashed zero. *Superseded 2 October 2026: the design uses Geist and JetBrains Mono. See [decisions](../decisions.md).*
+- **Colour.** Use a canary yellow at about 55° hue, such as #F4E13A. Avoid #F5C518, which is IMDb's brand yellow and sits right next to Binance's. On light backgrounds, give the yellow an ink outline: without one, its contrast is only 1.2–1.5:1. *Superseded 2 October 2026: the brand is canary amber `#FFC174` on a dark-first ground. See [decisions](../decisions.md).*
 - **State symbols.** Draw the six state symbols as SVG, not as Unicode characters, which render differently from one platform to the next.
 
 **Score rationale.** Impact 6. Uniqueness 2, because every competitor has a site. The scored 8 hours assumed a separate JavaScript workspace. With the shared Go templates it's about 2 hours, and complexity falls from 5 to 3. That size was scored for a four-page site. The approved plan then added the preloaded checker, the recorded-run page with its SHA-256, and the wrangler deploy. Claude builds that extra scope in parallel, and it is not sized here.
@@ -1468,7 +1468,7 @@ Check its rules on prior work before you plan to enter. A small, new piece built
   - IMDb's yellow #F5C518; Canary uses a canary yellow near 55° hue instead.
   - Unicode state symbols; Canary uses SVG.
   - A bird logo, unless it survives one 45-minute attempt and still reads as a 16 px favicon.
-  - Overpass with IBM Plex Mono; Canary uses Atkinson Hyperlegible Next and Mono.
+  - Overpass with IBM Plex Mono; Canary uses Geist and JetBrains Mono. *Superseded 2 October 2026, which changed the pair from Atkinson Hyperlegible Next and Mono.*
   - Uppercase letter-spaced labels, "01 / 02 / 03" steps, big-number tiles, bento grids, pill badges, and a "hook, then three steps" landing page.
 
 ### Process choices

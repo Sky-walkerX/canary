@@ -179,8 +179,8 @@ WebAssembly, html/template
   JavaScript framework, and the site builds with Go alone.
 
 Reused code, for the code of conduct: the Go libraries above, plus `goldmark` for the
-site's Markdown, all used as published. The fonts are Atkinson Hyperlegible Next and
-Mono, under the SIL Open Font License. The repo's first two commits, design notes, landed
+site's Markdown, all used as published. The fonts are Geist and JetBrains Mono, under the
+SIL Open Font License. The repo's first two commits, design notes, landed
 on the evening of 6 September IST, before the event opened. The first code commit is from
 9 September.
 

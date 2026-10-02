@@ -108,19 +108,24 @@ func TestStateColoursContrast(t *testing.T) {
 	}
 }
 
-// TestPinnedIdentity keeps the brief's fixed colours.
+// TestPinnedIdentity keeps the Instrument identity's fixed colours: the brand
+// amber, both grounds, and the six state colours of the documented taxonomy.
 func TestPinnedIdentity(t *testing.T) {
 	light, dark, _ := tokenBlocks(t)
 	pinned := []struct {
 		theme             map[string]string
 		name, token, want string
 	}{
-		{light, "light", "--ink", "#17160F"},
-		{light, "light", "--bg", "#F5F3EC"},
-		{light, "light", "--canary", "#F4E13A"},
-		{light, "light", "--canary-text", "#5E5700"},
-		{dark, "dark", "--bg", "#121210"},
-		{dark, "dark", "--canary", "#F4E13A"},
+		{light, "light", "--bg", "#F6F6F8"},
+		{light, "light", "--canary", "#FFC174"},
+		{dark, "dark", "--bg", "#0E0F12"},
+		{dark, "dark", "--canary", "#FFC174"},
+		{dark, "dark", "--state-verified", "#09B788"},
+		{dark, "dark", "--state-resolved", "#06B6D4"},
+		{dark, "dark", "--state-unresolvable", "#F59E0B"},
+		{dark, "dark", "--state-unverified", "#94A3B8"},
+		{dark, "dark", "--state-disputed", "#F97316"},
+		{dark, "dark", "--state-compromised", "#F43F5E"},
 	}
 	for _, p := range pinned {
 		if !strings.EqualFold(p.theme[p.token], p.want) {

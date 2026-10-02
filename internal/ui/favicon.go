@@ -15,7 +15,7 @@ import (
 // assets/favicon.svg equal to FaviconSVG.
 const (
 	favGrid   = 32.0
-	favRadius = 4.0 // corner radius of the coal square
+	favRadius = 4.0 // corner radius of the ground square
 
 	// The C: an arc with its opening facing right.
 	favCX, favCY = 15.0, 13.5
@@ -31,9 +31,9 @@ const (
 )
 
 var (
-	favCoal      = color.NRGBA{0x17, 0x16, 0x0F, 0xff}
-	favLimestone = color.NRGBA{0xF5, 0xF3, 0xEC, 0xff}
-	favCanary    = color.NRGBA{0xF4, 0xE1, 0x3A, 0xff}
+	favGround = color.NRGBA{0x0E, 0x0F, 0x12, 0xff}
+	favInk    = color.NRGBA{0xED, 0xED, 0xF0, 0xff}
+	favAmber  = color.NRGBA{0xFF, 0xC1, 0x74, 0xff}
 )
 
 func favHex(c color.NRGBA) string { return fmt.Sprintf("#%02X%02X%02X", c.R, c.G, c.B) }
@@ -49,11 +49,11 @@ func FaviconSVG() []byte {
 	x, y0, y1 := favArcEnds()
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 %g %g\">\n", favGrid, favGrid)
-	fmt.Fprintf(&b, "  <rect width=\"%g\" height=\"%g\" rx=\"%g\" fill=\"%s\"/>\n", favGrid, favGrid, favRadius, favHex(favCoal))
+	fmt.Fprintf(&b, "  <rect width=\"%g\" height=\"%g\" rx=\"%g\" fill=\"%s\"/>\n", favGrid, favGrid, favRadius, favHex(favGround))
 	fmt.Fprintf(&b, "  <path d=\"M%.2f %.2fA%g %g 0 1 0 %.2f %.2f\" fill=\"none\" stroke=\"%s\" stroke-width=\"%g\"/>\n",
-		x, y0, favR, favR, x, y1, favHex(favLimestone), favStroke)
+		x, y0, favR, favR, x, y1, favHex(favInk), favStroke)
 	fmt.Fprintf(&b, "  <path d=\"M%g %gH%g\" stroke=\"%s\" stroke-width=\"%g\" stroke-linecap=\"round\"/>\n",
-		favPerchX0, favPerchY, favPerchX1, favHex(favCanary), favPerchWidth)
+		favPerchX0, favPerchY, favPerchX1, favHex(favAmber), favPerchWidth)
 	b.WriteString("</svg>\n")
 	return b.Bytes()
 }
@@ -109,15 +109,15 @@ func favSample(x, y float64, fullBleed bool) (color.NRGBA, bool) {
 	}
 	// The perch paints over the letter, as it does in the SVG.
 	if dist := segmentDist(x, y, favPerchX0, favPerchY, favPerchX1, favPerchY); dist <= favPerchWidth/2 {
-		return favCanary, true
+		return favAmber, true
 	}
 	dx, dy := x-favCX, y-favCY
 	d := math.Hypot(dx, dy)
 	angle := math.Abs(math.Atan2(-dy, dx)) * 180 / math.Pi
 	if math.Abs(d-favR) <= favStroke/2 && angle >= favOpenDeg {
-		return favLimestone, true
+		return favInk, true
 	}
-	return favCoal, true
+	return favGround, true
 }
 
 func inRoundedSquare(x, y float64) bool {

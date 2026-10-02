@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+{{/* A meta tag cannot read a token, so the two grounds are literal. */}}
+<meta name="theme-color" content="#F6F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E0F12" media="(prefers-color-scheme: dark)">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
 <title>{{.Title}}</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="/assets/fonts/atkinson-hyperlegible-next-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/ui.css">
 <script src="/assets/app.js"></script>
@@ -18,33 +21,40 @@
 {{.Chrome.Sprite}}
 <a class="skip-link" href="#main">Skip to content</a>
 {{with .Chrome.Watermark}}<aside class="watermark" aria-label="Sample data">{{.}}</aside>{{end}}
-<header class="site-header">
-  <div class="wrap header-row">
-    {{template "wordmark"}}
-    {{template "dashNav" .}}
-    {{with .Chrome.NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
-    {{template "themeToggle"}}
-  </div>
-  {{if .Chrome.StatusLine}}<div class="wrap"><p class="status-line">{{.Chrome.StatusLine}}</p></div>{{end}}
-</header>
-{{with .Chrome.Stale}}
-<div class="wrap">
-  <div class="notice" role="note">
-    {{template "icon" "info"}}
-    <p><strong>{{.Title}}.</strong> {{.Body}} {{.Action}}</p>
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-top">
+      {{template "wordmark"}}
+      {{template "dashNav" .}}
+      {{with .Chrome.NetworkBadge}}<p class="net-badge">{{.}}</p>{{end}}
+    </div>
+    <div class="rail-foot">
+      <p class="rail-build">canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}})</p>
+      {{template "themeToggle"}}
+    </div>
+  </aside>
+  <div class="column">
+    {{if .Chrome.StatusLine}}<div class="statusbar"><div class="wrap"><p class="status-line">{{.Chrome.StatusLine}}</p></div></div>{{end}}
+    {{with .Chrome.Stale}}
+    <div class="wrap">
+      <div class="notice" role="note">
+        {{template "icon" "info"}}
+        <p><strong>{{.Title}}.</strong> {{.Body}} {{.Action}}</p>
+      </div>
+    </div>
+    {{end}}
+    <main id="main" class="wrap" tabindex="-1">
+    {{template "content" .}}
+    </main>
+    <footer class="site-footer">
+      <div class="wrap footer-row">
+        <p>{{.Chrome.Framing}}</p>
+        <p>This dashboard: canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}}). It makes no outside requests.{{with .Chrome.ReleaseNotes}} <a class="ext" href="{{.}}" rel="noreferrer">Release notes{{template "icon" "external"}}</a>{{end}}</p>
+      </div>
+      {{with .Chrome.Watermark}}<p class="watermark watermark-foot">{{.}}</p>{{end}}
+    </footer>
   </div>
 </div>
-{{end}}
-<main id="main" class="wrap" tabindex="-1">
-{{template "content" .}}
-</main>
-<footer class="site-footer">
-  <div class="wrap footer-row">
-    <p>{{.Chrome.Framing}}</p>
-    <p>This dashboard: canary {{.Chrome.UIVersion}} ({{.Chrome.UIBuild}}). It makes no outside requests.{{with .Chrome.ReleaseNotes}} <a class="ext" href="{{.}}" rel="noreferrer">Release notes{{template "icon" "external"}}</a>{{end}}</p>
-  </div>
-  {{with .Chrome.Watermark}}<p class="watermark watermark-foot">{{.}}</p>{{end}}
-</footer>
 <div id="update-bar" class="update-bar" role="status" aria-live="polite"
   data-msg-results="{{.Chrome.Bar.NewResults}}" data-msg-finding="{{.Chrome.Bar.NewFinding}}"
   data-msg-findings="{{.Chrome.Bar.NewFindings}}" data-msg-updated="{{.Chrome.Bar.Updated}}"

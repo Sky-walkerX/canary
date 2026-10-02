@@ -1,32 +1,35 @@
 /*
- * Canary design tokens: the Safety Lamp identity.
+ * Canary design tokens: the Instrument identity.
  *
- * Coal ink on limestone, with a dark mode on #121210. Canary yellow is the
- * brand. It fills Canary's own chrome (the network badge, the focus halo,
- * text selection, the update bar) and is never a state colour.
+ * A dark surface family by default, with a light theme derived from it. Geist
+ * carries words, JetBrains Mono carries data: hashes, heights, URLs, counts
+ * and commands. Canary amber is the brand. It fills Canary's own chrome (the
+ * network badge, buttons, links, focus, text selection, the update bar) and is
+ * never a state colour.
  *
- * The six state colours each measure at least 4.5:1 against --bg and
- * --surface in both themes. internal/ui/contrast_test.go recomputes this, so
- * change a value here and the test tells you if it still passes.
+ * The six state colours come from the taxonomy in internal/ui/DESIGN.md. Each
+ * measures at least 4.5:1 against --bg and --surface in both themes.
+ * internal/ui/contrast_test.go recomputes this, so change a value here and the
+ * test tells you if it still passes.
  *
- * Dark mode follows the system unless the reader picks a theme, which sets
- * data-theme on <html>. The dark block appears twice, once per route, and the
- * test checks the two copies match.
+ * Dark is the default look. Dark mode follows the system unless the reader
+ * picks a theme, which sets data-theme on <html>. The dark block appears
+ * twice, once per route, and the test checks the two copies match.
  */
 
 @font-face {
-  font-family: "Atkinson Hyperlegible Next";
-  src: url("fonts/atkinson-hyperlegible-next-latin.woff2") format("woff2");
-  font-weight: 200 800;
+  font-family: "Geist";
+  src: url("fonts/geist-latin.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: "Atkinson Hyperlegible Mono";
-  src: url("fonts/atkinson-hyperlegible-mono-latin.woff2") format("woff2");
-  font-weight: 200 800;
+  font-family: "JetBrains Mono";
+  src: url("fonts/jetbrains-mono-latin.woff2") format("woff2");
+  font-weight: 100 800;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -36,30 +39,34 @@
   color-scheme: light;
 
   /* Ground and ink */
-  --bg: #F5F3EC;
-  --surface: #ECE9DF;
-  --ink: #17160F;
-  --ink-muted: #5A5648;
-  --rule: #D6D1C2;
-  --rule-strong: #8F8A78;
+  --bg: #F6F6F8;
+  --surface: #FFFFFF;
+  --surface-low: #EFEFF2;
+  --surface-high: #E7E7EC;
+  --surface-highest: #DEDEE5;
+  --surface-bright: #C4C4CD;
+  --ink: #12131A;
+  --ink-muted: #5A5F6B;
+  --rule: #DADAE1;
+  --rule-strong: #8B8F99;
 
   /* Brand: Canary's own voice, never a state */
-  --canary: #F4E13A;
-  --on-canary: #17160F;
-  --canary-text: #5E5700;
-  --perch: #17160F;
+  --canary: #FFC174;
+  --on-canary: #2A1700;
+  --canary-text: #8A4B00;
+  --perch: #12131A;
 
   /* The six states */
-  --state-verified: #1E6B35;
-  --state-resolved: #0B6663;
-  --state-unresolvable: #5A4A91;
-  --state-unverified: #625D4F;
-  --state-disputed: #9A4600;
-  --state-compromised: #B3261E;
+  --state-verified: #067A57;
+  --state-resolved: #0B6E86;
+  --state-unresolvable: #9A5B00;
+  --state-unverified: #5A6472;
+  --state-disputed: #B4500A;
+  --state-compromised: #B3243E;
 
   /* Type */
-  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --text-xs: 0.8125rem;
   --text-s: 0.875rem;
   --text-m: 1rem;
@@ -67,6 +74,7 @@
   --text-xl: 1.4375rem;
   --text-2xl: 1.75rem;
   --text-3xl: 2.125rem;
+  --text-4xl: 2.5rem;
   --leading: 1.5;
   --leading-tight: 1.2;
 
@@ -83,7 +91,13 @@
   /* Shape */
   --radius-s: 2px;
   --radius-m: 4px;
+  --radius-l: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
   --rule-width: 1px;
+
+  /* The only shadow: sticky chrome lifts off the page */
+  --shadow-chrome: 0 1px 8px rgba(18, 19, 26, 0.08);
 
   /* Layout */
   --page-max: 72rem;
@@ -98,41 +112,51 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #121210;
-    --surface: #1C1B17;
-    --ink: #EDEAE0;
-    --ink-muted: #A8A392;
-    --rule: #34322A;
-    --rule-strong: #6B675A;
-    --canary: #F4E13A;
-    --on-canary: #17160F;
-    --canary-text: #F4E13A;
-    --perch: #F4E13A;
-    --state-verified: #6DC98A;
-    --state-resolved: #4FC6C0;
-    --state-unresolvable: #ADA0EA;
-    --state-unverified: #A7A290;
-    --state-disputed: #F09A52;
-    --state-compromised: #FF8272;
+    --bg: #0E0F12;
+    --surface: #131418;
+    --surface-low: #08090B;
+    --surface-high: #18191F;
+    --surface-highest: #22232A;
+    --surface-bright: #383944;
+    --ink: #EDEDF0;
+    --ink-muted: #9496A1;
+    --rule: #2B2C36;
+    --rule-strong: #5E606E;
+    --canary: #FFC174;
+    --on-canary: #2A1700;
+    --canary-text: #FFC174;
+    --perch: #FFC174;
+    --state-verified: #09B788;
+    --state-resolved: #06B6D4;
+    --state-unresolvable: #F59E0B;
+    --state-unverified: #94A3B8;
+    --state-disputed: #F97316;
+    --state-compromised: #F43F5E;
+    --shadow-chrome: 0 1px 8px rgba(0, 0, 0, 0.4);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #121210;
-  --surface: #1C1B17;
-  --ink: #EDEAE0;
-  --ink-muted: #A8A392;
-  --rule: #34322A;
-  --rule-strong: #6B675A;
-  --canary: #F4E13A;
-  --on-canary: #17160F;
-  --canary-text: #F4E13A;
-  --perch: #F4E13A;
-  --state-verified: #6DC98A;
-  --state-resolved: #4FC6C0;
-  --state-unresolvable: #ADA0EA;
-  --state-unverified: #A7A290;
-  --state-disputed: #F09A52;
-  --state-compromised: #FF8272;
+  --bg: #0E0F12;
+  --surface: #131418;
+  --surface-low: #08090B;
+  --surface-high: #18191F;
+  --surface-highest: #22232A;
+  --surface-bright: #383944;
+  --ink: #EDEDF0;
+  --ink-muted: #9496A1;
+  --rule: #2B2C36;
+  --rule-strong: #5E606E;
+  --canary: #FFC174;
+  --on-canary: #2A1700;
+  --canary-text: #FFC174;
+  --perch: #FFC174;
+  --state-verified: #09B788;
+  --state-resolved: #06B6D4;
+  --state-unresolvable: #F59E0B;
+  --state-unverified: #94A3B8;
+  --state-disputed: #F97316;
+  --state-compromised: #F43F5E;
+  --shadow-chrome: 0 1px 8px rgba(0, 0, 0, 0.4);
 }

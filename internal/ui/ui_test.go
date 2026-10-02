@@ -184,9 +184,9 @@ func TestEveryRoute(t *testing.T) {
 		{"/assets/live.js", 200, "text/javascript"},
 		{"/assets/glyphs.svg", 200, "image/svg+xml"},
 		{"/assets/favicon.svg", 200, "image/svg+xml"},
-		{"/assets/fonts/atkinson-hyperlegible-next-latin.woff2", 200, "font/woff2"},
-		{"/assets/fonts/atkinson-hyperlegible-mono-latin.woff2", 200, "font/woff2"},
-		{"/assets/fonts/OFL-atkinson-hyperlegible-next.txt", 200, "text/plain"},
+		{"/assets/fonts/geist-latin.woff2", 200, "font/woff2"},
+		{"/assets/fonts/jetbrains-mono-latin.woff2", 200, "font/woff2"},
+		{"/assets/fonts/OFL-geist.txt", 200, "text/plain"},
 		{"/favicon.ico", 200, "image/svg+xml"},
 		{"/blocks?height=205", 303, ""},
 		{"/blocks?height=7", 404, "text/html"},
@@ -828,7 +828,7 @@ func TestAssetRevalidation(t *testing.T) {
 }
 
 func TestFontLicensesShipWithFonts(t *testing.T) {
-	for _, f := range []string{"atkinson-hyperlegible-next", "atkinson-hyperlegible-mono"} {
+	for _, f := range []string{"geist", "jetbrains-mono"} {
 		lic, ok := assets["fonts/OFL-"+f+".txt"]
 		if !ok || !bytes.Contains(lic.body, []byte("SIL Open Font License")) {
 			t.Errorf("no OFL text next to %s", f)

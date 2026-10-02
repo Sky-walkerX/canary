@@ -515,6 +515,6 @@ The BOSS Battle submission pack lives in `docs/submission/`:
 
 ## License
 
-Canary is released under the [MIT license](LICENSE). The self-hosted Atkinson
-Hyperlegible fonts in `internal/ui/assets/fonts` keep their own SIL Open Font License,
-which sits beside them.
+Canary is released under the [MIT license](LICENSE). The self-hosted Geist and JetBrains
+Mono fonts in `internal/ui/assets/fonts` keep their own SIL Open Font License, which sits
+beside them.

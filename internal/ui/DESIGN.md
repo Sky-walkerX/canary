@@ -1,73 +1,99 @@
 ---
-name: Canary, Safety Lamp
+name: Canary, Instrument
 description: The design system for Canary's local dashboard and its public site.
 colors:
-  limestone: "#F5F3EC"
-  limestone-surface: "#ECE9DF"
-  coal: "#17160F"
-  coal-muted: "#5A5648"
-  rule: "#D6D1C2"
-  rule-strong: "#8F8A78"
-  canary: "#F4E13A"
-  canary-text: "#5E5700"
-  state-verified: "#1E6B35"
-  state-resolved: "#0B6663"
-  state-unresolvable: "#5A4A91"
-  state-unverified: "#625D4F"
-  state-disputed: "#9A4600"
-  state-compromised: "#B3261E"
-  dark-bg: "#121210"
-  dark-surface: "#1C1B17"
-  dark-ink: "#EDEAE0"
-  dark-ink-muted: "#A8A392"
-  dark-rule: "#34322A"
-  dark-rule-strong: "#6B675A"
-  dark-state-verified: "#6DC98A"
-  dark-state-resolved: "#4FC6C0"
-  dark-state-unresolvable: "#ADA0EA"
-  dark-state-unverified: "#A7A290"
-  dark-state-disputed: "#F09A52"
-  dark-state-compromised: "#FF8272"
+  brand:
+    canary: "#FFC174"
+    on-canary: "#2A1700"
+    canary-text-light: "#8A4B00"
+    canary-text-dark: "#FFC174"
+  ground:
+    bg-light: "#F6F6F8"
+    surface-light: "#FFFFFF"
+    surface-low-light: "#EFEFF2"
+    surface-high-light: "#E7E7EC"
+    surface-highest-light: "#DEDEE5"
+    surface-bright-light: "#C4C4CD"
+    bg-dark: "#0E0F12"
+    surface-dark: "#131418"
+    surface-low-dark: "#08090B"
+    surface-high-dark: "#18191F"
+    surface-highest-dark: "#22232A"
+    surface-bright-dark: "#383944"
+  ink:
+    ink-light: "#12131A"
+    ink-muted-light: "#5A5F6B"
+    ink-dark: "#EDEDF0"
+    ink-muted-dark: "#9496A1"
+  rule:
+    rule-light: "#DADAE1"
+    rule-strong-light: "#8B8F99"
+    rule-dark: "#2B2C36"
+    rule-strong-dark: "#5E606E"
+  states:
+    verified-dark: "#09B788"
+    resolved-dark: "#06B6D4"
+    unresolvable-dark: "#F59E0B"
+    unverified-dark: "#94A3B8"
+    disputed-dark: "#F97316"
+    compromised-dark: "#F43F5E"
+    verified-light: "#067A57"
+    resolved-light: "#0B6E86"
+    unresolvable-light: "#9A5B00"
+    unverified-light: "#5A6472"
+    disputed-light: "#B4500A"
+    compromised-light: "#B3243E"
 typography:
-  verdict:
-    fontFamily: "Atkinson Hyperlegible Next"
-    fontSize: "2.125rem"
-    fontWeight: 700
+  display:
+    fontFamily: "Geist"
+    fontSize: "2.5rem"
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: "-0.03em"
+  h1:
+    fontFamily: "Geist"
+    fontSize: "1.75rem"
+    fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "-0.02em"
-  h1:
-    fontFamily: "Atkinson Hyperlegible Next"
-    fontSize: "1.75rem"
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.015em"
   h2:
-    fontFamily: "Atkinson Hyperlegible Next"
+    fontFamily: "Geist"
     fontSize: "1.4375rem"
-    fontWeight: 700
-    lineHeight: 1.2
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: "-0.015em"
   h3:
-    fontFamily: "Atkinson Hyperlegible Next"
+    fontFamily: "Geist"
     fontSize: "1.1875rem"
-    fontWeight: 700
-    lineHeight: 1.2
+    fontWeight: 500
+    lineHeight: 1.3
   body:
-    fontFamily: "Atkinson Hyperlegible Next"
+    fontFamily: "Geist"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
   small:
-    fontFamily: "Atkinson Hyperlegible Next"
+    fontFamily: "Geist"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
   data:
-    fontFamily: "Atkinson Hyperlegible Mono"
-    fontSize: "0.9375em"
+    fontFamily: "JetBrains Mono"
+    fontSize: "0.8125rem"
     fontWeight: 400
+    lineHeight: 1.4
+  label:
+    fontFamily: "JetBrains Mono"
+    fontSize: "0.6875rem"
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: "0.04em"
 rounded:
   s: "2px"
   m: "4px"
+  l: "8px"
+  xl: "12px"
+  full: "9999px"
 spacing:
   "1": "4px"
   "2": "8px"
@@ -79,25 +105,31 @@ spacing:
   "8": "64px"
 components:
   button:
-    textColor: "{colors.coal}"
+    textColor: "{colors.brand.canary-text-dark}"
     rounded: "{rounded.m}"
     padding: "6px 12px"
     height: "36px"
+  primary-button:
+    backgroundColor: "{colors.brand.canary}"
+    textColor: "{colors.brand.on-canary}"
+    rounded: "{rounded.m}"
+    padding: "8px 14px"
+    height: "38px"
   network-badge:
-    backgroundColor: "{colors.canary}"
-    textColor: "{colors.coal}"
+    backgroundColor: "{colors.brand.canary}"
+    textColor: "{colors.brand.on-canary}"
     rounded: "{rounded.s}"
-    padding: "4px 8px"
+    padding: "3px 8px"
   update-bar:
-    backgroundColor: "{colors.canary}"
-    textColor: "{colors.coal}"
+    backgroundColor: "{colors.brand.canary}"
+    textColor: "{colors.brand.on-canary}"
   command:
-    backgroundColor: "{colors.limestone-surface}"
+    backgroundColor: "{colors.ground.surface-low-dark}"
     rounded: "{rounded.m}"
     padding: "12px 16px"
 ---
 
-# Canary, Safety Lamp
+# Canary, Instrument
 
 The tokens live in `assets/tokens.css`. The component styles live in `assets/ui.css`.
 The words live in `wording/copy.go`. This file records the rules those three follow.
@@ -105,63 +137,87 @@ The words live in `wording/copy.go`. This file records the rules those three fol
 ## Overview
 
 Canary is a tool people operate: they run `canary check`, then read what it found. The
-dashboard leads with coverage, not alarms. Every block reads as one of six states, and
-the page says plainly what was checked, what could not be, and which server left what
-out. The look borrows from a mine's lamp room: coal ink on limestone, 1px rules, flat
-surfaces, and one bright yellow that belongs to Canary itself.
+dashboard is an instrument panel. It leads with coverage, not alarms. Every block reads as
+one of six states, and the page says plainly what was checked, what could not be, and
+which server left what out. Surfaces are quiet and dark by default, rules are 1px, nothing
+decorates, and every hex, height, count and command is set in mono so a reader can compare
+two runs by eye.
 
 ## Colors
 
-- **Coal on limestone** in light mode, limestone-tinted ink on `#121210` in dark mode.
-  Dark mode follows the system; a reader's choice sets `data-theme` on `<html>`.
-- **Canary yellow is Canary's own voice, never a state.** It fills the network badge,
-  the skip link, the update bar, the focus halo and text selection. In dark mode it also
-  draws the wordmark's perch line. Text in the yellow family uses `canary-text`.
-- **Six state colours**, each at 4.5:1 or more against both surfaces in both themes.
-  `contrast_test.go` recomputes this from `tokens.css`.
+- **Dark first.** `#0E0F12` ground, `#131418` panels, `#08090B` insets. The light theme is
+  the same family inverted: `#F6F6F8` ground, white panels, `#EFEFF2` insets. Dark is the
+  default look; a reader's choice sets `data-theme` on `<html>`, and the system preference
+  is honoured when they have not chosen.
+- **Canary amber is Canary's own voice, never a state.** It fills the network badge,
+  buttons, links, the focus ring, the skip link, the update bar and text selection. Text
+  that must read as canary amber uses `canary-text`.
+- **Six state colours**, from the taxonomy table below, each at 4.5:1 or more against both
+  surfaces in both themes. `contrast_test.go` recomputes this from `tokens.css`.
 - **Tones** reuse three state colours for results that are not block states: payment
   outcomes and verify results (`tone-good`, `tone-bad`, `tone-neutral`). A tone never
-  wears a state's label or glyph. Its glyphs are a tick, a cross and a dash, none of
-  them one of the six state symbols.
+  wears a state's label or glyph. Its glyphs are a tick, a cross and a dash, none of them
+  one of the six state symbols.
+
+### The six states
+
+| Code | Label | Token | Dark | Light |
+|---|---|---|---|---|
+| `verified` | Checked | `--state-verified` | `#09B788` | `#067A57` |
+| `resolved` | Checked, gap filled | `--state-resolved` | `#06B6D4` | `#0B6E86` |
+| `unresolvable` | Can't be checked | `--state-unresolvable` | `#F59E0B` | `#9A5B00` |
+| `unverified` | Not checked | `--state-unverified` | `#94A3B8` | `#5A6472` |
+| `disputed` | Servers disagree | `--state-disputed` | `#F97316` | `#B4500A` |
+| `compromised` | Data withheld | `--state-compromised` | `#F43F5E` | `#B3243E` |
 
 ## Typography
 
-One family carries everything: Atkinson Hyperlegible Next for words, Atkinson
-Hyperlegible Mono for data (hashes, heights, URLs, commands). Both are self-hosted
-WOFF2, Latin subset, with the OFL text beside them. The scale is fixed rem, about 1.2
-between steps. Body text stays under 60ch, about 75 characters a line. Numbers in
-tables and counts use tabular figures.
+Two families, each self-hosted WOFF2, Latin subset, with the OFL text beside it. **Geist**
+carries words, at 300 to 600. **JetBrains Mono** carries data: hashes, heights, URLs,
+public keys, counts, commands and every state label. The scale is fixed rem, about 1.2
+between steps, with one 2.5rem display step for a page's verdict. Body text stays under
+60ch, about 75 characters a line. Numbers in tables and counts use tabular figures.
 
 ## Layout
 
-A single column up to 72rem, with a 16px gutter below 768px and 32px above. The header
-reflows in three steps (one row at 1040px and up, two rows, then three at under 640px).
-Tables scroll inside their own bordered container, never the page, so nothing scrolls
-sideways at 360px. Under 720px the row tables (servers, payments, ranges) stack each
-row into labelled lines, and the per-server table on a block page becomes one list per
-server, so no column hides off the right edge. Sections sit 48px apart, with more
-space above a heading than below.
+- **Dashboard.** A fixed 16rem rail on 1024px and up, holding the wordmark, the nav, the
+  network badge and the run's own version and build; the theme toggle sits at its foot. A
+  sticky 56px status bar crosses the content column. Under 1024px the rail becomes a
+  header and the nav a row. The content column is capped at 72rem.
+- A single column of content, 16px gutter below 768px and 32px above. Sections sit 48px
+  apart, with more space above a heading than below.
+- Tables scroll inside their own bordered container, never the page, so nothing scrolls
+  sideways at 360px. Under 720px the row tables (servers, payments, ranges) stack each row
+  into labelled lines, and the per-server table on a block page becomes one list per
+  server, so no column hides off the right edge.
 
 ## Elevation & Depth
 
-None. Surfaces are flat and separated by 1px rules. The only shadow is the focus halo.
+One shadow exists, `--shadow-chrome`, and only sticky chrome lifts off the page. Everything
+else is flat and separated by 1px rules. There is no glass, no blur, no gradient, and no
+glow.
 
 ## Shapes
 
-Corners are 2px (badges, focus) or 4px (buttons, panels, tables, commands). Nothing is
-fully rounded: no pills.
+Corners are 2px (badges, rules, focus), 4px (buttons, commands, inputs), 8px (panels,
+tables, cards) or 12px (the checker console). Nothing else is rounded. `--radius-full` is
+reserved for the 2px status dots and beacons.
 
 ## Components
 
-- **State badge.** Glyph, word and colour, always all three, from `wording.State`.
-  Round glyphs mean no proven problem; angular ones mean a problem.
+- **State badge.** Glyph, word and colour, always all three, from `wording.State`. Round
+  glyphs mean no proven problem; angular ones mean a problem. Mono, uppercase, 2px corner.
 - **Verdict.** The overview's headline is the h1, with no glyph of its own. A state
   badge follows it only when the headline names one state, so a mixed result such as
   "200 of 213 blocks checked." gets none.
 - **Coverage strip.** An inline SVG with percentage x positions and pixel heights, so
   the hatch keeps a 4px gap at any width. Each state is drawn in its glyph's grammar,
   and problem ranges get a marker above. It is `role="img"` with a one-sentence summary;
-  the range table is the accessible interface.
+  the range table is the accessible interface. A thin per-block ribbon MAY sit under it as
+  decoration, `aria-hidden`, with a hover read-out; the strip and the range table stay.
+- **Blocks by state.** Six tiles, in the order of the taxonomy, each with its count, its
+  label and its meaning. Zero counts stay visible. The reasons for a state sit behind a
+  disclosure that opens and closes with a button and keeps `aria-expanded` honest.
 - **Hash.** Mono, grouped in fours by CSS margins so a manual copy carries no spaces.
   Lists show the first and last 8 characters; detail pages show the full value with a
   labelled copy button.
@@ -169,12 +225,18 @@ fully rounded: no pills.
   details".
 - **Verify report.** The eight steps as an ordered list, each with a tone glyph and a
   word (Passed, Failed, Not run).
-- **Update bar.** A fixed, non-modal `role="status"` bar in canary yellow. It stays until
+- **Checker console** (the client's one interactive part). A bordered 12px panel on the
+  inset surface, holding the drop target and, under it, the verdict banner and the eight
+  steps. Amber is the console's voice: the copy of Canary speaking about a file you hand
+  it.
+- **Update bar.** A fixed, non-modal `role="status"` bar in canary amber. It stays until
   the reader reloads or dismisses it.
-- **Focus.** A 2px ink ring with a canary halo on every focusable element.
-- **Favicon.** The wordmark's first letter, a C, on its perch in canary yellow, on a coal
-  square. `favicon.go` draws it from one set of numbers, as the SVG and as the PNG
+- **Focus.** A 2px amber ring with a 2px offset on every focusable element.
+- **Favicon.** The wordmark's first letter, a C, on its perch in canary amber, on the dark
+  ground. `favicon.go` draws it from one set of numbers, as the SVG and as the PNG
   fallbacks, and a test keeps `assets/favicon.svg` equal to it. There is no bird.
+- **Icons.** The sprite in `assets/glyphs.svg`, inlined by the `icon` partial, or one inline
+  SVG. Never an icon font: the pages load nothing from another origin.
 - **Finding headlines.** A server label is a name the user chose, often lower case, so a
   heading introduces it: "Server withholder left out an entry it had signed for."
   `canary status` keeps the bare label, as the formats document pins.
@@ -186,19 +248,20 @@ partials from `Partials()`, the files from `Assets()` and every word from
 `wording.Site`, and adds its own stylesheet, `cmd/site/assets/site.css`, for layouts the
 dashboard has no use for.
 
-- **Titles sit on the perch.** Each page title carries the wordmark's perch line under
-  it: coal in light mode, canary yellow in dark. The home page's claim carries a 4px one
-  across the column.
-- **The checker bar.** The evidence checker opens with a canary-yellow bar, the same voice
-  as the update bar: Canary speaking about a file you hand it. It is the one large use
-  of yellow on the site.
-- **Bands.** Home page sections put the heading in a left column on wide screens, with a
-  1px rule above each band.
+- **Header.** Sticky, 1px rule below, the wordmark and the brand beside it, the nav, and the
+  theme toggle. A page that shows a run carries that run's status line in the page head,
+  which is where the surface design puts it for recorded runs. The home and doc pages carry
+  no status line yet; adding one there needs a wording-table sentence and a data source, so
+  it is a decision to take with the developer, not a restyle.
+- **Bands.** Each home-page section opens with a mono eyebrow label in canary amber, a rule,
+  and one sentence on the right; the body sits under it. No eyebrow label stands above a
+  heading anywhere else.
+- **The checker console** carries the amber status banner and the eight steps.
 - **Drawings.** The docs' Mermaid diagrams become HTML drawings in
-  `cmd/site/templates/diagrams.html`: boxes with 1.5px ink borders, dashed for what comes
-  after v1, and `canary check` in canary yellow, because it is Canary. The decision chart
-  is a numbered list whose exits are state badges. A test fails when a diagram in the
-  docs gains a label its drawing lacks.
+  `cmd/site/templates/diagrams.html`: boxes with 1px rules, dashed for what comes after v1,
+  and `canary check` in canary amber, because it is Canary. The decision chart is a
+  numbered list whose exits are state badges. A test fails when a diagram in the docs gains
+  a label its drawing lacks.
 - **Doc tables.** A table cell holding exactly a state label shows the state badge.
 - **No outside requests.** Pages load only their own files, under the CSP in
   `site/_headers`: no inline styles or scripts, and no link out except the repository.
@@ -207,7 +270,11 @@ dashboard has no use for.
 
 - Do take every state label, reason and message from `wording/copy.go`.
 - Do state the limit next to the claim: Checked covers the tweak list, not payments.
-- Don't use canary yellow for a state, or a state colour without its glyph and word.
-- Don't add gradients, glass, shadows for depth, emoji, pills, stat tiles, eyebrow
-  labels above headings, or Unicode arrows standing in for icons.
-- Don't load anything from another origin. The CSP allows only `'self'`.
+- Do set data in mono and keep it tabular.
+- Don't use canary amber for a state, or a state colour without its glyph and word.
+- Don't add gradients, glass, blur, glows, shadows for depth, emoji, decorative pill shapes,
+  stat tiles with invented numbers, or Unicode arrows standing in for icons.
+- Don't load anything from another origin, including a font or an icon font. The CSP allows
+  only `'self'`.
+- Don't copy a number or a claim out of a design mock. Every count, hash, height and
+  sentence on a rendered page comes from the run, the evidence file or the wording table.

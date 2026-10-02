@@ -16,6 +16,25 @@ filling gaps, and working out which of two servers lied.
 
 ---
 
+## 2 October 2026: the Instrument identity replaces the Safety Lamp
+
+The developer made a new design in Stitch and kept it in `stitch/` and in the surface
+design file. Both UIs were restyled to it on 2 October. The wording rules did not change:
+the mocks' invented copy was discarded, every state word still comes from the wording
+table, and every number on a page still comes from the run.
+
+| Decision | Why |
+|---|---|
+| **Both UIs use the Instrument identity: a dark surface family by default, with a light theme derived from it** | The design is dark-first, so dark is the default look. The theme toggle stays because the surface design requires it, and the light theme keeps the same state hues, re-tuned to pass 4.5:1. `contrast_test.go` checks both themes, as before |
+| **The six state colours are the design's documented taxonomy** | Checked `#09B788`, Checked, gap filled `#06B6D4`, Can't be checked `#F59E0B`, Not checked `#94A3B8`, Servers disagree `#F97316`, Data withheld `#F43F5E` in dark, each darkened for the light theme. It is the one complete six-state mapping the design carries. Canary amber `#FFC174` is the brand and never a state colour, so the old invariant survives |
+| **Geist carries words, JetBrains Mono carries data** | Hashes, heights, counts and commands read best in mono and tabular figures. Both fonts are SIL OFL 1.1, self-hosted Latin subsets with their licence texts beside them. They replace Atkinson Hyperlegible Next and Mono, whose files were deleted |
+| **No icon font and no CDN** | The site's CSP allows `'self'` only, so the design's Material Symbols cannot ship. Icons come from the repo's own glyph sprite or from one inline SVG |
+| **Anatomy: a 16rem rail and a sticky status bar on the dashboard, banded sections on the site** | The rail holds the wordmark, the nav, the network badge, the run's version and build and the theme toggle, and it collapses to a header under 1024px. Every element the surface design requires is still there, only arranged differently |
+
+The Safety Lamp block below is kept as written and is superseded by this entry.
+
+---
+
 ## 1 October 2026: where the real run's files live, and what a record costs
 
 The first run on a real Bitcoin Core node, on Core v31.1.0 in regtest mode, wrote an
@@ -115,7 +134,7 @@ cut line and the dates after v1.
 | **The v1 reference indexer reuses `canonical`** | It saves 4 to 6 hours of building a separate path. It breaks the rule that the indexer computes entries independently, so the docs must say v1 does not test two independent implementations against each other. The rule applies again to any later indexer |
 | **The output hole is named now and fixed in v2** | Canary's entry is a txid and a tweak. Wallets decide whether a payment exists from output data Canary does not commit to: the BlindBit v1 filter and `/utxos`, or v2's `outputs_short`. So "Checked" means the tweak list was checked, never that payments were. Output keys in the entry cost 6 to 10 hours the budget does not have |
 | **Cypherpunk track by default** | Add Freedom Stack only if the 7 Sep handbook allows a second track, and only with a genuine crossover pitch |
-| **The UI uses Go `html/template` and the Safety Lamp identity** | No Node, no single-page app and no server-sent events in v1. A single-page app was measured at 50 to 65 hours, and v1 has no daemon for it to talk to. The identity is below |
+| **The UI uses Go `html/template` and the Safety Lamp identity** | No Node, no single-page app and no server-sent events in v1. A single-page app was measured at 50 to 65 hours, and v1 has no daemon for it to talk to. The identity is below, and the 2 Oct entry above supersedes it |
 | **The state-file and evidence-file formats froze on 30 Sep** | The UI and the checker build against them in parallel. A change needs a version bump and the user's approval |
 
 **The Safety Lamp identity:**

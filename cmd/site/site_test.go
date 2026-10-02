@@ -364,8 +364,8 @@ func TestAssetsAreFingerprinted(t *testing.T) {
 	}
 	dir := path.Dir(css[1])
 	for _, name := range []string{"tokens.css", "ui.css", "site.css", "app.js",
-		"fonts/atkinson-hyperlegible-next-latin.woff2", "fonts/atkinson-hyperlegible-mono-latin.woff2",
-		"fonts/OFL-atkinson-hyperlegible-next.txt", "fonts/OFL-atkinson-hyperlegible-mono.txt"} {
+		"fonts/geist-latin.woff2", "fonts/jetbrains-mono-latin.woff2",
+		"fonts/OFL-geist.txt", "fonts/OFL-jetbrains-mono.txt"} {
 		if _, err := os.Stat(filepath.Join(dist, filepath.FromSlash(dir), name)); err != nil {
 			t.Errorf("%s lacks %s", dir, name)
 		}

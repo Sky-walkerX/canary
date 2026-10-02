@@ -60,7 +60,9 @@
   {{end}}</section>
 
 <section class="band" aria-labelledby="problem-h">
-  <h2 id="problem-h" class="band-head">{{$.Text.ProblemTitle}}</h2>
+  <div class="band-head">
+    <h2 id="problem-h" class="band-label">{{$.Text.ProblemTitle}}</h2>
+  </div>
   <div class="band-body">
     {{range $.Text.Problem}}<p>{{.}}</p>
     {{end}}<blockquote class="pull"><p>{{$.Text.Quote}}</p></blockquote>
@@ -68,9 +70,11 @@
 </section>
 
 <section class="band" id="how" aria-labelledby="how-h">
-  <h2 id="how-h" class="band-head">{{$.Text.HowTitle}}</h2>
+  <div class="band-head">
+    <h2 id="how-h" class="band-label">{{$.Text.HowTitle}}</h2>
+    <p class="band-note">{{$.Text.HowIntro}}</p>
+  </div>
   <div class="band-body">
-    <p>{{$.Text.HowIntro}}</p>
     <ol class="how-steps">{{range $i, $s := $.Text.HowSteps}}
       <li><span class="how-n" aria-hidden="true">{{inc $i}}</span><p>{{$s}}</p></li>{{end}}
     </ol>
@@ -84,9 +88,11 @@
 </section>
 
 <section class="band" aria-labelledby="proves-h">
-  <h2 id="proves-h" class="band-head">{{$.Text.ProvesTitle}}</h2>
+  <div class="band-head">
+    <h2 id="proves-h" class="band-label">{{$.Text.ProvesTitle}}</h2>
+    <p class="band-note">{{$.Text.ProvesIntro}}</p>
+  </div>
   <div class="band-body">
-    <p>{{$.Text.ProvesIntro}}</p>
     <dl class="facts proves">{{range $.Text.Proves}}
       <div><dt>{{.Label}}</dt><dd>{{.Text}}</dd></div>{{end}}
     </dl>
@@ -94,9 +100,11 @@
 </section>
 
 <section class="band" aria-labelledby="limits-h">
-  <h2 id="limits-h" class="band-head">{{$.Text.LimitsTitle}}</h2>
+  <div class="band-head">
+    <h2 id="limits-h" class="band-label">{{$.Text.LimitsTitle}}</h2>
+    <p class="band-note">{{$.Text.LimitsIntro}}</p>
+  </div>
   <div class="band-body">
-    <p>{{$.Text.LimitsIntro}}</p>
     <div class="table-wrap table-stack limits" role="region" aria-labelledby="limits-h" tabindex="0">
       <table role="table">
         <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">{{$.Text.LimitsClaimHead}}</th><th scope="col" role="columnheader">{{$.Text.LimitsStopHead}}</th></tr></thead>
@@ -110,9 +118,11 @@
 </section>
 
 <section class="band" id="run" aria-labelledby="run-h">
-  <h2 id="run-h" class="band-head">{{$.Text.RunTitle}}</h2>
+  <div class="band-head">
+    <h2 id="run-h" class="band-label">{{$.Text.RunTitle}}</h2>
+    <p class="band-note">{{if .Checker.Recorded}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
+  </div>
   <div class="band-body">
-    <p>{{if .Checker.Recorded}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
     <ol class="run-steps">{{range .Commands}}
       <li>{{if .Placeholder}}<div class="command"><pre><code>{{.Value}}<var>{{.Placeholder}}</var></code></pre></div>
         <p class="run-placeholder">{{$.Text.RunPlaceholderNote}}</p>{{else}}{{template "command" (copyOf .Value .Label)}}{{end}}</li>{{end}}

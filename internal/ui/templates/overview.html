@@ -16,26 +16,26 @@
   <figure class="strip-figure">{{template "coverageStrip" .Strip}}</figure>
 </section>
 
-<div class="split section">
-  <section aria-labelledby="by-state">
-    <h2 id="by-state">Blocks by state</h2>
-    <ul class="counts">
-      {{range .Counts}}<li class="count-row{{if .Zero}} is-zero{{end}}">
-        <div class="count-line">{{template "stateBadge" .State}}<span class="count-n">{{.Count}}</span></div>
-        <p class="count-meaning">{{.State.Meaning}}</p>
-        {{template "explain" .State}}
-      </li>{{end}}
-    </ul>
-  </section>
-  <section aria-labelledby="findings-h">
-    <div class="section-head">
-      <h2 id="findings-h">Findings</h2>
-      {{if .MoreFindings}}<a href="{{link "/findings"}}">All {{.TotalFindings}} findings</a>{{end}}
-    </div>
-    {{if .Findings}}<ul class="finding-list">{{range .Findings}}{{template "findingItem" .}}{{end}}</ul>
-    {{else}}<p class="empty">{{.NoFindings}}</p>{{end}}
-  </section>
-</div>
+<section class="section" aria-labelledby="by-state">
+  <h2 id="by-state">Blocks by state</h2>
+  <ul class="counts">
+    {{range .Counts}}<li class="count-row{{if .Zero}} is-zero{{end}}">
+      <div class="count-head">{{template "stateBadge" .State}}</div>
+      <p class="count-n">{{.Count}}</p>
+      <p class="count-meaning">{{.State.Meaning}}</p>
+      <div class="count-explain">{{template "explain" .State}}</div>
+    </li>{{end}}
+  </ul>
+</section>
+
+<section class="section" aria-labelledby="findings-h">
+  <div class="section-head">
+    <h2 id="findings-h">Findings</h2>
+    {{if .MoreFindings}}<a href="{{link "/findings"}}">All {{.TotalFindings}} findings</a>{{end}}
+  </div>
+  {{if .Findings}}<ul class="finding-list">{{range .Findings}}{{template "findingItem" .}}{{end}}</ul>
+  {{else}}<p class="empty">{{.NoFindings}}</p>{{end}}
+</section>
 
 <section class="section" id="servers" aria-labelledby="servers-h">
   <h2 id="servers-h">Servers</h2>

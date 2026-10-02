@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"inverse-surface":"#e3e1e9","on-primary-fixed":"#2a1700","surface-container-high":"#292a2f","surface-dim":"#121318","surface":"#121318","secondary-fixed-dim":"#4cd7f6","secondary":"#4cd7f6","secondary-fixed":"#acedff","tertiary-fixed":"#6ffbbe","on-tertiary-container":"#004e34","surface-tint":"#ffb95f","on-tertiary":"#003824","surface-container-highest":"#34343a","on-error-container":"#ffdad6","tertiary-fixed-dim":"#4edea3","surface-container":"#1e1f25","on-secondary":"#003640","tertiary-container":"#30c88f","surface-bright":"#38393f","on-background":"#e3e1e9","primary-fixed-dim":"#ffb95f","surface-container-lowest":"#0d0e13","inverse-on-surface":"#2f3036","surface-container-low":"#1a1b21","secondary-container":"#03b5d3","on-surface-variant":"#d8c3ad","on-secondary-fixed":"#001f26","on-primary-fixed-variant":"#653e00","background":"#121318","inverse-primary":"#855300","primary-container":"#f59e0b","on-surface":"#e3e1e9","primary-fixed":"#ffddb8","on-tertiary-fixed":"#002113","on-secondary-container":"#00424e","on-error":"#690005","surface-variant":"#34343a","outline-variant":"#534434","outline":"#a08e7a","on-tertiary-fixed-variant":"#005236","error-container":"#93000a","on-primary":"#472a00","primary":"#ffc174","tertiary":"#56e5a9","on-secondary-fixed-variant":"#004e5c","error":"#ffb4ab","on-primary-container":"#613b00"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-lg":"2.5rem","margin-md":"1.5rem","space-xs":"0.25rem","space-xl":"1.5rem","gutter":"1rem","space-sm":"0.5rem","margin":"1rem","space-md":"0.75rem","space-2xl":"2.5rem","space-lg":"1rem","gutter-lg":"1.5rem"},"fontFamily":{"label-md":["JetBrains Mono"],"headline-xl-mobile":["Geist"],"body-md":["Geist"],"label-lg":["JetBrains Mono"],"headline-lg":["Geist"],"label-sm":["JetBrains Mono"],"headline-md":["Geist"],"headline-xl":["Geist"],"body-lg":["Geist"],"code-block":["JetBrains Mono"]},"fontSize":{"label-md":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0.02em","fontWeight":"500"}],"headline-xl-mobile":["1.75rem",{"lineHeight":"2.25rem","letterSpacing":"-0.02em","fontWeight":"600"}],"body-md":["0.8125rem",{"lineHeight":"1.25rem","letterSpacing":"0em","fontWeight":"400"}],"label-lg":["0.8125rem",{"lineHeight":"1.125rem","letterSpacing":"-0.01em","fontWeight":"500"}],"headline-lg":["1.5rem",{"lineHeight":"2rem","letterSpacing":"-0.025em","fontWeight":"600"}],"label-sm":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.04em","fontWeight":"400"}],"headline-md":["1.125rem",{"lineHeight":"1.5rem","letterSpacing":"-0.015em","fontWeight":"500"}],"headline-xl":["2.25rem",{"lineHeight":"2.75rem","letterSpacing":"-0.03em","fontWeight":"600"}],"body-lg":["0.9375rem",{"lineHeight":"1.5rem","letterSpacing":"-0.01em","fontWeight":"400"}],"code-block":["0.8125rem",{"lineHeight":"1.375rem","letterSpacing":"0em","fontWeight":"400"}]}}}};</script></head><body class="bg-surface font-body-md text-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div class="h-20 max-w-7xl mx-auto px-margin-lg flex flex-col justify-between pt-space-sm pb-space-xs"><div class="flex items-center justify-between w-full"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><img alt="Brand logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1U7M9V3uUgEeN52aa3g3OQLN9kLY4ssKzctZyCiremRG0kdY7Bzagxp7XubafxZLUZKe3jPYoTxKPHrQ5YoAMueWasa95-yu5Yb8JvNj5RqlEUBZdjf0-8hMF0SAEbU1Fb-nqqjTZd95Jbw_6ZT2A3esuQYACNHwcqrUg0r8rl1aDQflTEFF86OZC-fTnm7GKtLZAypQR_wIkJhug-GHTaPMGmJiNsX24YDkh9o8aYND52sxUX6aLLiqGg"/><span class="font-label-lg text-label-lg tracking-tight font-bold text-on-surface uppercase">CANARY</span></div><div class="flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container-low"><span class="w-2 h-2 rounded-full bg-primary-container inline-block"></span><span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">regtest</span></div><nav class="flex items-center gap-space-sm ml-space-md" data-active-classes="bg-surface-container-highest text-on-surface font-label-md text-label-md px-space-md py-space-xs rounded"><a aria-current="page" class="transition-colors bg-surface-container-highest text-on-surface font-label-md text-label-md px-space-md py-space-xs rounded" data-path="client-verification-home" href="#">Evidence Checker</a><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high px-space-md py-space-xs rounded transition-colors" data-path="specification-audit" href="#">BIP-352 Spec</a><a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high px-space-md py-space-xs rounded transition-colors" data-path="reproducible-builds" href="#">Reproducibility</a></nav></div><div class="flex items-center gap-space-md"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant"><div class="flex items-center gap-space-sm"><span>Last check 2026-10-03 08:32 UTC</span><span>·</span><span>blocks 0–212</span><span>·</span><span class="text-primary-container">regtest</span><span>·</span><span>canary 0.1.0 (abc1234)</span></div><div class="flex items-center gap-space-xs"><span class="text-tertiary-container">Synced</span><span>·</span><span>12s ago (UTC)</span></div></div></div></header><main class="w-full pt-20 bg-surface min-h-[calc(100vh-5rem)]"><div class="flex flex-col w-full">
+<div class="w-full max-w-7xl mx-auto px-margin-lg py-space-2xl flex flex-col gap-space-2xl">
+<!-- Hero Section: Pure & Bold -->
+<section class="flex flex-col gap-space-xl">
+<div class="flex flex-col gap-space-md max-w-5xl">
+<div class="inline-flex items-center gap-space-sm px-space-sm py-0.5 rounded bg-surface-container-high w-fit">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-widest">Protocol Specification §14 · Client Reference</span>
+</div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight text-balance">
+          Accountable silent payment verification for light wallets.
+        </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl">
+          Built and tested on regtest only. Checks tweak lists, not output-side spending. Verifies indexer commitments locally against deterministically bounded cryptoproofs.
+        </p>
+</div>
+<!-- Two Inviolable Conditions -->
+<div class="p-space-lg bg-surface-container-low rounded-lg shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-space-lg">
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Prerequisite Consensus Axioms</span>
+<div class="flex flex-col sm:flex-row sm:items-center gap-space-md font-label-md text-label-md text-on-surface">
+<span class="flex items-center gap-space-xs">
+<span class="text-primary-container">1.</span> At least one honest indexer publishing commitments
+            </span>
+<span class="hidden sm:inline text-outline-variant">·</span>
+<span class="flex items-center gap-space-xs">
+<span class="text-primary-container">2.</span> An uncensored path to a relay carrying them
+            </span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm px-space-md py-space-xs rounded bg-surface-container font-label-sm text-label-sm text-tertiary">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span>Zero Network Overhead</span>
+</div>
+</div>
+<!-- Mandatory Lower-Bound Principle Strip -->
+<div class="p-space-md bg-surface-container-lowest rounded flex items-start gap-space-md shadow-inner">
+<span class="material-symbols-outlined text-primary-container mt-0.5 text-[20px]">warning</span>
+<div class="flex flex-col gap-0.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">The Lower-Bound Principle</span>
+<p class="font-label-md text-label-md text-on-surface">
+            “A balance computed over blocks you could not verify is a lower bound, not a balance.”
+          </p>
+</div>
+</div>
+</section>
+<!-- Interactive Evidence Checker Tool -->
+<section class="flex flex-col gap-space-lg bg-surface-container-low rounded-xl p-space-xl shadow-lg" id="evidence-checker">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md pb-space-md bg-surface-container-low">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary">terminal</span>
+<span class="font-headline-md text-headline-md text-on-surface">In-Browser Evidence Checker (§14)</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+            Offline proof validation executing <code class="font-code-block text-code-block px-1 py-0.5 rounded bg-surface-container-highest text-primary">canary.wasm</code> locally.
+          </p>
+</div>
+<div class="flex items-center gap-space-xs font-label-sm text-label-sm text-on-surface-variant px-space-md py-1 rounded bg-surface-container">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span>CSP: <code class="font-code-block text-code-block text-tertiary">default-src 'self'; connect-src 'none'</code></span>
+</div>
+</div>
+<!-- Controls & Dropzone -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-stretch">
+<!-- Target container -->
+<div class="lg:col-span-8 p-space-xl rounded-lg bg-surface-container flex flex-col items-center justify-center gap-space-md text-center group cursor-pointer transition-all hover:bg-surface-container-high" id="drop-target">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[24px]">folder_zip</span>
+</div>
+<div class="flex flex-col gap-0.5">
+<span class="font-label-lg text-label-lg text-on-surface">Drop proof bundle payload (.json)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Local read only. No bytes transmitted over sockets.</span>
+</div>
+<div class="flex items-center gap-space-sm pt-space-xs">
+<button class="px-space-md py-space-xs bg-primary-container text-on-primary-fixed font-label-md text-label-md rounded hover:opacity-90 transition-opacity" id="btn-load-valid" type="button">
+              Load Sample: withheld.json (Valid)
+            </button>
+<button class="px-space-md py-space-xs bg-surface-container-highest text-on-surface hover:text-error hover:bg-error-container/20 font-label-md text-label-md rounded transition-colors" id="btn-load-tampered" type="button">
+              Load Sample: tampered.json (Fails #5)
+            </button>
+</div>
+</div>
+<!-- Telemetry Stats Panel -->
+<div class="lg:col-span-4 p-space-lg rounded-lg bg-surface-container-lowest flex flex-col justify-between gap-space-md">
+<div class="flex flex-col gap-space-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Runtime Telemetry</span>
+<div class="flex flex-col gap-space-xs font-label-sm text-label-sm">
+<div class="flex justify-between py-1 bg-surface-container/30 px-space-sm rounded">
+<span class="text-on-surface-variant">Engine</span>
+<span class="text-on-surface font-code-block text-code-block">canary-wasm 0.1.0</span>
+</div>
+<div class="flex justify-between py-1 bg-surface-container/30 px-space-sm rounded">
+<span class="text-on-surface-variant">secp256k1</span>
+<span class="text-on-surface font-code-block text-code-block">deterministic libsecp</span>
+</div>
+<div class="flex justify-between py-1 bg-surface-container/30 px-space-sm rounded">
+<span class="text-on-surface-variant">Memory Usage</span>
+<span class="text-tertiary font-code-block text-code-block">1,424 KiB heap</span>
+</div>
+<div class="flex justify-between py-1 bg-surface-container/30 px-space-sm rounded">
+<span class="text-on-surface-variant">Network I/O</span>
+<span class="text-tertiary font-code-block text-code-block">0 calls (enforced)</span>
+</div>
+</div>
+</div>
+<div class="p-space-sm rounded bg-surface-container-high font-label-sm text-label-sm text-on-surface-variant flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-primary">info</span>
+<span>Cryptographic evaluation verified locally in ~4ms</span>
+</div>
+</div>
+</div>
+<!-- Verdict Banner -->
+<div class="p-space-lg rounded-lg bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-space-md transition-colors" id="verdict-banner">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded bg-tertiary/10 text-tertiary flex items-center justify-center" id="verdict-icon-container">
+<span class="material-symbols-outlined text-[24px]" id="verdict-icon">verified</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-md text-headline-md text-tertiary" id="verdict-title">CHECKS OUT</span>
+<span class="text-outline-variant font-label-md">·</span>
+<span class="font-label-md text-label-md text-on-surface" id="verdict-tip">Tip #212</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant" id="verdict-subtitle">Offline Verification Complete — All 8 steps cryptographically reconciled</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Digest:</span>
+<code class="font-code-block text-code-block text-primary bg-surface-container-highest px-space-sm py-1 rounded" id="verdict-digest">7f9c...c81e</code>
+</div>
+</div>
+<!-- 8 Mandatory Steps Accordion/Checklist -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex justify-between items-center px-space-sm py-space-xs">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Mandatory Verification Pipeline (§2.5)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant" id="step-counter">8/8 Passed</span>
+</div>
+<div class="flex flex-col gap-1" id="steps-container">
+<!-- Step 1 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">1</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Read</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">Strict schema v1 parsed; boundary buffers checked</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 2 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">2</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Record Signature</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">BIP-340 / secp256k1 over tweak root matches signature frame</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 3 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">3</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Signer Public Key</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">Verified against indexer-alpha registry authority</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 4 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">4</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Block Header Link</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">Block 204 hash confirmed in local regtest header chain</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 5 (The dynamic point of failure for tampered proof) -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md" id="step-5-row">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold" id="step-5-badge">5</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Inclusion Integrity</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate" id="step-5-desc">Declared payment inclusion check; tweak roots reconciled</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1" id="step-5-status">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 6 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">6</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Receipt Confirmation</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">Valid counter-signature covering confirmed tip #212</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 7 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">7</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Served List Audit</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">41 tweak entries match published Merkle tree root</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+<!-- Step 8 -->
+<div class="step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<span class="step-badge w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold">8</span>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md text-on-surface">Sliding Window Expiry</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate">144-block proof retention active; no timestamp drift</span>
+</div>
+</div>
+<span class="step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed
+            </span>
+</div>
+</div>
+</div>
+</section>
+<!-- The Problem & Why Canary Exists -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-start pt-space-lg">
+<div class="lg:col-span-5 flex flex-col gap-space-md">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">§13.3 Architectural Rationale</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">
+          Why a light wallet cannot tell “nobody paid you” from “the server left your payment out”.
+        </h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+          In BIP-352 silent payments, receivers do not provide addresses up front. Senders compute ephemeral outputs derived from scan keys. To detect funds, light wallets query untrusted indexers for public tweak data.
+        </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+          If an indexer omits a tweak record, the client simply reconstructs fewer transactions. The failure mode is totally silent: balances appear smaller with zero protocol violation signaled.
+        </p>
+</div>
+<div class="lg:col-span-7 flex flex-col gap-space-md">
+<!-- Reference Quote Card -->
+<div class="p-space-xl bg-surface-container-low rounded-lg flex flex-col gap-space-md shadow-sm">
+<div class="flex items-center gap-space-sm text-primary">
+<span class="material-symbols-outlined">format_quote</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Bitshala BIP-352 Architecture Guide</span>
+</div>
+<blockquote class="font-body-lg text-body-lg text-on-surface italic">
+            “Without committed receipts, a malicious or degraded indexer can perform a surgical eclipse: simply returning empty tweak lists. The client cannot distinguish between zero transaction volume and an indexer actively omitting outputs.”
+          </blockquote>
+<div class="flex items-center gap-space-md pt-space-xs font-label-sm text-label-sm text-on-surface-variant">
+<span>Section: Silent Payment Blindspots</span>
+<span>·</span>
+<span class="text-primary-container">Commitment Invariance</span>
+</div>
+</div>
+<!-- Metric Callout -->
+<div class="grid grid-cols-2 gap-space-md">
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Default Light Client</span>
+<span class="font-headline-md text-headline-md text-error">Blind Faith</span>
+<span class="font-body-md text-body-md text-on-surface-variant">Accepts incomplete tweak slices silently</span>
+</div>
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Canary Verification</span>
+<span class="font-headline-md text-headline-md text-tertiary">Cryptographic Dispute</span>
+<span class="font-body-md text-body-md text-on-surface-variant">Signs every served set; enables receipts</span>
+</div>
+</div>
+</div>
+</section>
+<!-- The 4-Step Loop & Six States -->
+<section class="flex flex-col gap-space-xl bg-surface-container-low rounded-xl p-space-xl">
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">§13.4 Verification Topology</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">The 4-Step Loop & Canonical States</h2>
+</div>
+<!-- 4 Step Loop -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md">
+<div class="p-space-lg bg-surface-container rounded flex flex-col gap-space-sm">
+<span class="font-label-md text-label-md text-primary font-bold">01 · COMMIT</span>
+<p class="font-body-md text-body-md text-on-surface">
+            Indexer signs the Merkle root of all valid tweaks for each regtest block tip.
+          </p>
+</div>
+<div class="p-space-lg bg-surface-container rounded flex flex-col gap-space-sm">
+<span class="font-label-md text-label-md text-primary font-bold">02 · DECLARE</span>
+<p class="font-body-md text-body-md text-on-surface">
+            Client requests tweak ranges, receiving cryptographically bound response receipts.
+          </p>
+</div>
+<div class="p-space-lg bg-surface-container rounded flex flex-col gap-space-sm">
+<span class="font-label-md text-label-md text-primary font-bold">03 · RECOMPUTE</span>
+<p class="font-body-md text-body-md text-on-surface">
+            Client recomputes the expected tweak tree locally from independent headers.
+          </p>
+</div>
+<div class="p-space-lg bg-surface-container rounded flex flex-col gap-space-sm">
+<span class="font-label-md text-label-md text-primary font-bold">04 · PROVE</span>
+<p class="font-body-md text-body-md text-on-surface">
+            Inconsistencies produce a compact portable fraud proof exportable to other relays.
+          </p>
+</div>
+</div>
+<!-- Six Canonical Verification States -->
+<div class="flex flex-col gap-space-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">The 6 Discrete Verification States</span>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-md">
+<!-- State 1 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-label-md text-label-md text-on-surface">Checked</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Every served tweak matches indexer signature and header commitments. Balance is accountable.
+            </p>
+</div>
+<!-- State 2 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-label-md text-label-md text-on-surface">Checked Gap Filled</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Temporary omission repaired via secondary peer relay before window expiration.
+            </p>
+</div>
+<!-- State 3 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="font-label-md text-label-md text-on-surface">Can’t Be Checked</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Required headers or parent commitments pruned past the active 144-block verification window.
+            </p>
+</div>
+<!-- State 4 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-on-surface-variant"></span>
+<span class="font-label-md text-label-md text-on-surface">Not Checked</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Proof payload downloaded but verification queue not yet executed locally.
+            </p>
+</div>
+<!-- State 5 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-label-md text-label-md text-on-surface">Servers Disagree</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Two indexed relays signed conflicting Merkle roots for the identical block height.
+            </p>
+</div>
+<!-- State 6 -->
+<div class="p-space-md bg-surface-container rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-label-md text-label-md text-on-surface">Data Withheld</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Indexer refused to serve entries beneath a published root hash. Balance marked lower bound.
+            </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Limits Next to Claims (§13.6) -->
+<section class="flex flex-col gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">§13.6 Transparent Boundary Architecture</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Limits Next to Claims</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+          Cryptographic tools must document explicit failure limits directly alongside their guarantees.
+        </p>
+</div>
+<div class="overflow-x-auto rounded-lg bg-surface-container-low shadow-sm">
+<table class="w-full text-left font-body-md text-body-md text-on-surface">
+<thead class="bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+<tr>
+<th class="py-space-md px-space-lg">Area of Claim</th>
+<th class="py-space-md px-space-lg">What Canary Proves</th>
+<th class="py-space-md px-space-lg">Invariable Protocol Boundary</th>
+</tr>
+</thead>
+<tbody class="divide-none">
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-space-md px-space-lg font-label-md text-label-md text-on-surface">Output-side withholding</td>
+<td class="py-space-md px-space-lg text-on-surface-variant">Evaluates completeness of tweak generation for registered scan keys.</td>
+<td class="py-space-md px-space-lg text-primary">Deferred to v2 spec. Current system checks tweak lists, not UTXO spending status.</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors bg-surface-container/20">
+<td class="py-space-md px-space-lg font-label-md text-label-md text-on-surface">Cut-through hash withholding</td>
+<td class="py-space-md px-space-lg text-on-surface-variant">Pinpoints exact missing entries if the full tweak list is fetched.</td>
+<td class="py-space-md px-space-lg text-primary">If only truncated 32-byte hashes are requested, withholding is flagged but unresolvable.</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-space-md px-space-lg font-label-md text-label-md text-on-surface">Single-server eclipse</td>
+<td class="py-space-md px-space-lg text-on-surface-variant">Detects non-responsiveness and marks local ledger as lower-bound.</td>
+<td class="py-space-md px-space-lg text-primary">Requires at least 1 honest indexer or an uncensored peer path to restore state.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Run It Yourself (§13.7) -->
+<section class="flex flex-col gap-space-lg bg-surface-container-lowest rounded-xl p-space-xl shadow-md">
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">§13.7 Reproducible Binary Execution</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Run It Yourself</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+          Independent verification requires zero reliance on this web client. Compile the Go toolchain directly against your local regtest node.
+        </p>
+</div>
+<div class="flex flex-col gap-space-sm bg-surface-container p-space-lg rounded-lg font-code-block text-code-block text-on-surface">
+<div class="flex items-center justify-between text-on-surface-variant text-label-sm pb-space-xs">
+<span>Terminal (POSIX)</span>
+<button class="flex items-center gap-1 hover:text-on-surface transition-colors" id="btn-copy-terminal" type="button">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+<span>Copy Snippet</span>
+</button>
+</div>
+<div class="flex flex-col gap-1 text-on-surface selection:bg-primary-container selection:text-on-primary-fixed">
+<p><span class="text-outline-variant">$ </span>git clone https://github.com/canary-verifier/canary.git</p>
+<p><span class="text-outline-variant">$ </span>cd canary && go build -o canary cmd/canary/main.go</p>
+<p><span class="text-outline-variant">$ </span>./canary verify --proof ./samples/withheld.json --tip 212</p>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row items-center justify-between gap-space-md pt-space-xs font-label-sm text-label-sm text-on-surface-variant">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-tertiary text-[18px]">verified</span>
+<span>Deterministic commit: <code class="font-code-block text-code-block text-on-surface">abc1234479e0bf599e0b1</code></span>
+</div>
+<a class="text-primary hover:underline flex items-center gap-1" href="#">
+<span>Inspect Reproducible Build Manifest</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+</section>
+</div>
+</div>
+<script>
+(function() {
+  const btnValid = document.getElementById('btn-load-valid');
+  const btnTampered = document.getElementById('btn-load-tampered');
+  const verdictBanner = document.getElementById('verdict-banner');
+  const verdictIcon = document.getElementById('verdict-icon');
+  const verdictIconContainer = document.getElementById('verdict-icon-container');
+  const verdictTitle = document.getElementById('verdict-title');
+  const verdictSubtitle = document.getElementById('verdict-subtitle');
+  const verdictTip = document.getElementById('verdict-tip');
+  const verdictDigest = document.getElementById('verdict-digest');
+  const stepCounter = document.getElementById('step-counter');
+
+  const step5Row = document.getElementById('step-5-row');
+  const step5Badge = document.getElementById('step-5-badge');
+  const step5Desc = document.getElementById('step-5-desc');
+  const step5Status = document.getElementById('step-5-status');
+
+  function setValidState() {
+    verdictBanner.className = 'p-space-lg rounded-lg bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-space-md transition-colors';
+    verdictIconContainer.className = 'w-10 h-10 rounded bg-tertiary/10 text-tertiary flex items-center justify-center';
+    verdictIcon.textContent = 'verified';
+    verdictTitle.className = 'font-headline-md text-headline-md text-tertiary';
+    verdictTitle.textContent = 'CHECKS OUT';
+    verdictTip.textContent = 'Tip #212';
+    verdictSubtitle.textContent = 'Offline Verification Complete — All 8 steps cryptographically reconciled';
+    verdictDigest.textContent = '7f9c...c81e';
+    stepCounter.textContent = '8/8 Passed';
+
+    step5Row.className = 'step-row bg-surface-container hover:bg-surface-container-high transition-colors rounded p-space-md flex items-center justify-between gap-space-md';
+    step5Badge.className = 'w-6 h-6 rounded bg-tertiary/10 text-tertiary flex items-center justify-center text-[14px] font-label-md font-bold';
+    step5Desc.textContent = 'Declared payment inclusion check; tweak roots reconciled';
+    step5Status.className = 'step-status font-label-sm text-label-sm text-tertiary flex items-center gap-1';
+    step5Status.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span> Passed';
+  }
+
+  function setTamperedState() {
+    verdictBanner.className = 'p-space-lg rounded-lg bg-error-container/20 flex flex-col sm:flex-row sm:items-center justify-between gap-space-md transition-colors';
+    verdictIconContainer.className = 'w-10 h-10 rounded bg-error/20 text-error flex items-center justify-center';
+    verdictIcon.textContent = 'gpp_bad';
+    verdictTitle.className = 'font-headline-md text-headline-md text-error';
+    verdictTitle.textContent = 'VERIFICATION FAILED';
+    verdictTip.textContent = 'Tip #212';
+    verdictSubtitle.textContent = 'Step 5 Inclusion Integrity Violation: declared tweak omitted from signed root';
+    verdictDigest.textContent = 'd3b1...49aa';
+    stepCounter.textContent = '7/8 Passed (1 Abort)';
+
+    step5Row.className = 'step-row bg-error-container/10 transition-colors rounded p-space-md flex items-center justify-between gap-space-md';
+    step5Badge.className = 'w-6 h-6 rounded bg-error/20 text-error flex items-center justify-center text-[14px] font-label-md font-bold';
+    step5Desc.textContent = 'Declared payment omission identified: tweak 0x02a1...44f not in commitment';
+    step5Status.className = 'step-status font-label-sm text-label-sm text-error flex items-center gap-1';
+    step5Status.innerHTML = '<span class="material-symbols-outlined text-[16px]">cancel</span> FAILED';
+  }
+
+  if (btnValid) btnValid.addEventListener('click', setValidState);
+  if (btnTampered) btnTampered.addEventListener('click', setTamperedState);
+
+  const btnCopy = document.getElementById('btn-copy-terminal');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', function() {
+      const text = "git clone https://github.com/canary-verifier/canary.git\ncd canary && go build -o canary cmd/canary/main.go\n./canary verify --proof ./samples/withheld.json --tip 212";
+      navigator.clipboard.writeText(text).then(function() {
+        btnCopy.innerHTML = '<span class="material-symbols-outlined text-[14px] text-tertiary">done</span><span class="text-tertiary">Copied</span>';
+        setTimeout(function() {
+          btnCopy.innerHTML = '<span class="material-symbols-outlined text-[14px]">content_copy</span><span>Copy Snippet</span>';
+        }, 2000);
+      });
+    });
+  }
+})();
+</script></main><footer class="w-full bg-surface-container-lowest py-space-xl shadow-[0_-1px_8px_rgba(0,0,0,0.4)]"><div class="max-w-7xl mx-auto px-margin-lg flex flex-col md:flex-row items-center justify-between gap-space-md font-label-sm text-label-sm text-on-surface-variant"><div>Accountable verification for BIP-352 silent payments. Built and tested on regtest only. Makes no outside requests.</div><div class="flex items-center gap-space-lg"><a class="hover:text-on-surface transition-colors" href="#">repository</a><span>·</span><span class="uppercase">MIT License</span><span>·</span><span>canary v0.1.0</span></div></div></footer></body></html>

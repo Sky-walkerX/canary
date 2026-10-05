@@ -172,6 +172,11 @@ func TestNoindexFlag(t *testing.T) {
 
 func TestHeadersFile(t *testing.T) {
 	h := read(t, buildSite(t, nil), "_headers")
+	// One rule per pattern. A second /* block, which the -noindex build used to
+	// append, made Cloudflare Pages drop the first block's security headers.
+	if n := strings.Count(h, "\n/*\n"); n != 1 {
+		t.Errorf("_headers has %d \"/*\" blocks, want 1", n)
+	}
 	for _, want := range []string{
 		"Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; " +
 			"style-src 'self'; font-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",

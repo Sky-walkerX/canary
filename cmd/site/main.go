@@ -372,18 +372,40 @@ func (s *site) writeIcons() error {
 }
 
 // writeHeaders copies the _headers source under the generator's marker. With
-// noindex it adds a rule that asks search engines to skip every path, the
-// header form of the meta tag.
+// noindex it adds X-Robots-Tag to the source's own /* block, the header form of
+// the meta tag. It must not add a second /* block: Cloudflare Pages keeps one
+// rule per pattern, and measured on 2 Oct, a duplicate /* block made it stop
+// serving the first block's CSP and the rest of the security headers.
 func (s *site) writeHeaders() error {
 	src, err := os.ReadFile(s.cfg.Headers)
 	if err != nil {
 		return fmt.Errorf("site: read headers: %w", err)
 	}
-	b := append([]byte(marker+"\n\n"), src...)
 	if s.cfg.NoIndex {
-		b = append(bytes.TrimRight(b, "\n"), "\n\n# Added by -noindex, the default until submission.\n/*\n  X-Robots-Tag: noindex\n"...)
+		withTag, err := withNoIndex(src)
+		if err != nil {
+			return fmt.Errorf("site: %s: %w", s.cfg.Headers, err)
+		}
+		src = withTag
 	}
-	return s.write("_headers", b)
+	return s.write("_headers", append([]byte(marker+"\n\n"), src...))
+}
+
+// withNoIndex adds X-Robots-Tag: noindex to the first /* block of a _headers
+// file.
+func withNoIndex(src []byte) ([]byte, error) {
+	lines := strings.Split(string(src), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "/*" {
+			continue
+		}
+		out := make([]string, 0, len(lines)+1)
+		out = append(out, lines[:i+1]...)
+		out = append(out, "  X-Robots-Tag: noindex")
+		out = append(out, lines[i+1:]...)
+		return []byte(strings.Join(out, "\n")), nil
+	}
+	return nil, errors.New("no /* block to add X-Robots-Tag to")
 }
 
 // page is what every page template receives.

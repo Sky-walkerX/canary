@@ -44,7 +44,7 @@ Cypherpunk
 
 - Source: https://github.com/Sky-walkerX/canary, tag `v0.1.0`
 - Video: [video link]
-- Site with the in-browser evidence checker: [site URL]
+- Site with the in-browser evidence checker: https://canary-b0i.pages.dev
 
 ## Media
 

@@ -32,12 +32,17 @@ the morning.
       this one.
 - [ ] The Devfolio draft is saved, with the fields from [devfolio.md](devfolio.md).
 - [ ] Wrangler is logged in to Cloudflare, and the Pages project exists. Its address is
-      [site URL].
+      https://canary-b0i.pages.dev.
 
       ```sh
-      npx wrangler login
-      npx wrangler pages project create canary --production-branch=main
+      bunx wrangler login
+      bunx wrangler pages project create canary --production-branch=main
       ```
+
+      Created on 2 Oct, with a noindex preview of the restyle deployed to it. On wrangler
+      4.146 and later, `pages project create` delegates to the Workers path and fails with
+      "Could not detect a directory containing static files"; pass `--force` the first
+      time to create it on the classic Pages path instead.
 
 - [ ] Everything is pushed, and CI passed on the latest commit.
 
@@ -183,22 +188,22 @@ Devfolio. Come back to the site after 17:00, and stop site work at 21:00.
       make wasm
       go run ./cmd/site -noindex=false \
         -evidence evidence/omission-regtest-351-ad56b9bb-db614560.json \
-        -base-url [site URL]
+        -base-url https://canary-b0i.pages.dev
       ```
 
 - [ ] Deploy to the production branch.
 
       ```sh
-      npx wrangler pages deploy site/dist --project-name=canary --branch=main
+      bunx wrangler pages deploy site/dist --project-name=canary --branch=main
       ```
 
 - [ ] The site answers, and nothing asks search engines to stay away. The first command
       prints a 200 status. The other two print 0.
 
       ```sh
-      curl -sI [site URL]/ | head -n 1
-      curl -s [site URL]/ | grep -c 'name="robots"'
-      curl -sI [site URL]/ | grep -ci 'x-robots-tag'
+      curl -sI https://canary-b0i.pages.dev/ | head -n 1
+      curl -s https://canary-b0i.pages.dev/ | grep -c 'name="robots"'
+      curl -sI https://canary-b0i.pages.dev/ | grep -ci 'x-robots-tag'
       ```
 
 - [ ] In a private browser window, "Try the real evidence file" reads "Checks out." and
@@ -232,7 +237,7 @@ Devfolio. Come back to the site after 17:00, and stop site work at 21:00.
       ```sh
       for u in https://github.com/Sky-walkerX/canary \
                https://github.com/Sky-walkerX/canary/blob/v0.1.0/LICENSE \
-               [video link] [site URL]; do
+               [video link] https://canary-b0i.pages.dev; do
         printf '%s ' "$u"; curl -s -o /dev/null -L -w '%{http_code}\n' "$u"
       done
       ```

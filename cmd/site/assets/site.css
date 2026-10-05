@@ -1346,3 +1346,15 @@ body.site .theme-toggle { min-height: 40px; padding-inline: 16px; }
     column-gap: var(--space-8);
   }
 }
+
+/* Doc pages: the body uses the column instead of a 52rem cap, which is what
+   pushed the six-state and limits tables into a hidden scroll. Prose keeps its
+   measure through the p/li rules. The table of contents sticks below the app
+   bar rather than behind it. */
+body.site .doc-body { max-width: none; }
+@media (min-width: 1040px) {
+  body.site .doc.has-toc .toc {
+    top: 88px;
+    max-height: calc(100vh - 120px);
+  }
+}

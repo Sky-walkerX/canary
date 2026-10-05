@@ -12,14 +12,14 @@ import (
 	"github.com/Sky-walkerX/canary/internal/ui"
 )
 
-// The site re-declares the neutrals inside body.site, because the client mock
-// is warm where the dashboard mock is cool. This test recomputes the same
+// The site declares its own Material 3 scheme inside body.site: a light scheme,
+// then the dark scheme twice, once per route. This test recomputes the same
 // 4.5:1 floor that internal/ui/contrast_test.go holds the dashboard to, on the
 // values the site actually uses, and checks the two dark routes agree.
 
-// siteDarkBlocks returns the declarations of every body.site block in
-// site.css, in file order.
-func siteDarkBlocks(t *testing.T) []map[string]string {
+// siteSchemeBlocks returns the declarations of every body.site block in
+// site.css, in file order: light first, then the two dark routes.
+func siteSchemeBlocks(t *testing.T) []map[string]string {
 	t.Helper()
 	b, err := fs.ReadFile(siteAssets, "assets/site.css")
 	if err != nil {
@@ -32,7 +32,9 @@ func siteDarkBlocks(t *testing.T) []map[string]string {
 		for _, d := range regexp.MustCompile(`(--[a-z0-9-]+)\s*:\s*(#[0-9A-Fa-f]{6})`).FindAllStringSubmatch(m[1], -1) {
 			vars[d[1]] = d[2]
 		}
-		blocks = append(blocks, vars)
+		if len(vars) > 0 {
+			blocks = append(blocks, vars)
+		}
 	}
 	return blocks
 }
@@ -91,46 +93,79 @@ func siteContrast(a, b string) (float64, error) {
 }
 
 func TestSitePaletteContrast(t *testing.T) {
-	blocks := siteDarkBlocks(t)
-	if len(blocks) != 2 {
-		t.Fatalf("site.css has %d body.site blocks, want 2, one per dark route", len(blocks))
+	blocks := siteSchemeBlocks(t)
+	if len(blocks) != 3 {
+		t.Fatalf("site.css has %d body.site blocks, want 3: the light scheme, then the two dark routes", len(blocks))
 	}
-	if fmt.Sprint(blocks[0]) != fmt.Sprint(blocks[1]) {
-		t.Fatalf("the two body.site blocks differ:\nmedia: %v\nattr:  %v", blocks[0], blocks[1])
+	if fmt.Sprint(blocks[1]) != fmt.Sprint(blocks[2]) {
+		t.Fatalf("the two dark schemes differ:\nmedia: %v\nattr:  %v", blocks[1], blocks[2])
 	}
-	theme := tokenDarkBlock(t)
-	for k, v := range blocks[0] {
-		theme[k] = v
-	}
-	for _, want := range []string{"--bg", "--surface", "--surface-low", "--ink", "--ink-muted", "--canary-text"} {
-		if theme[want] == "" {
-			t.Fatalf("the site palette has no %s", want)
-		}
+	// The dashboard's tokens are the base; the site's scheme overrides them.
+	base := tokenDarkBlock(t)
+	schemes := []struct {
+		name  string
+		theme map[string]string
+	}{
+		{"light", merge(base, blocks[0])},
+		{"dark", merge(base, blocks[1])},
 	}
 	text := []string{
 		"--ink", "--ink-muted", "--canary-text",
 		"--state-verified", "--state-resolved", "--state-unresolvable",
 		"--state-unverified", "--state-disputed", "--state-compromised",
 	}
-	for _, fg := range text {
-		for _, bg := range []string{"--bg", "--surface"} {
-			r, err := siteContrast(theme[fg], theme[bg])
-			if err != nil {
-				t.Fatalf("%s on %s: %v", fg, bg, err)
-			}
-			if r < 4.5 {
-				t.Errorf("%s %s on %s %s is %.2f:1, want at least 4.5:1", fg, theme[fg], bg, theme[bg], r)
+	for _, s := range schemes {
+		for _, want := range []string{"--bg", "--surface", "--surface-low", "--surface-high", "--ink", "--ink-muted", "--primary", "--on-primary", "--primary-container", "--on-primary-container"} {
+			if s.theme[want] == "" {
+				t.Fatalf("%s scheme has no %s", s.name, want)
 			}
 		}
+		for _, fg := range text {
+			for _, bg := range []string{"--bg", "--surface"} {
+				r, err := siteContrast(s.theme[fg], s.theme[bg])
+				if err != nil {
+					t.Fatalf("%s %s on %s: %v", s.name, fg, bg, err)
+				}
+				if r < 4.5 {
+					t.Errorf("%s: %s %s on %s %s is %.2f:1, want at least 4.5:1", s.name, fg, s.theme[fg], bg, s.theme[bg], r)
+				}
+			}
+		}
+		// M3 role pairs the components paint: filled buttons, chips, the
+		// navigation indicator, and the amber on-canary pair kept for the
+		// dashboard's badge.
+		for _, pair := range [][2]string{
+			{"--on-primary", "--primary"},
+			{"--on-primary-container", "--primary-container"},
+			{"--on-secondary-container", "--secondary-container"},
+			{"--on-tertiary-container", "--tertiary-container"},
+			{"--on-error-container", "--error-container"},
+			{"--on-canary", "--canary"},
+		} {
+			r, err := siteContrast(s.theme[pair[0]], s.theme[pair[1]])
+			if err != nil {
+				t.Fatalf("%s %s on %s: %v", s.name, pair[0], pair[1], err)
+			}
+			if r < 4.5 {
+				t.Errorf("%s: %s %s on %s %s is %.2f:1, want at least 4.5:1", s.name, pair[0], s.theme[pair[0]], pair[1], s.theme[pair[1]], r)
+			}
+		}
+		// A filled card must separate from the ground it sits on. M3's own
+		// tonal step is small; the guard is against flattening it to nothing.
+		if r, _ := siteContrast(s.theme["--surface-high"], s.theme["--bg"]); r < 1.05 {
+			t.Errorf("%s: filled cards are %.2f:1 against the ground, too close to separate", s.name, r)
+		}
 	}
-	if r, _ := siteContrast(theme["--on-canary"], theme["--canary"]); r < 4.5 {
-		t.Errorf("text on the amber fill is %.2f:1", r)
+}
+
+// merge returns base with over overlaid.
+func merge(base, over map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range base {
+		out[k] = v
 	}
-	// The site's ground is lighter than the dashboard's, so the panels must
-	// still read as panels above it rather than as the same surface. The
-	// mock's own step is 1.08:1, and the 1px rules carry the rest, so the
-	// guard is only against someone flattening the scale to nothing.
-	if r, _ := siteContrast(theme["--surface"], theme["--bg"]); r < 1.05 {
-		t.Errorf("panels are %.2f:1 against the ground, too close to separate", r)
+	for k, v := range over {
+		out[k] = v
 	}
+	return out
 }

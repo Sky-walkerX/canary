@@ -1358,3 +1358,25 @@ body.site .doc-body { max-width: none; }
     max-height: calc(100vh - 120px);
   }
 }
+
+/* One number for the app bar, so nothing can hide behind it. The bar is held
+   to the M3 72px exactly (it was 85px, which left the doc contents 3px behind
+   it), sits above everything that scrolls, and every sticky element clears its
+   bottom edge by 16px. */
+body.site .site-header {
+  min-height: 72px;
+  z-index: 30;
+}
+body.site .site-header-row {
+  min-height: 72px;
+  padding-block: 0;
+  align-items: center;
+}
+body.site .toc,
+body.site .band-head { top: 88px; }
+@media (min-width: 1040px) {
+  body.site .doc.has-toc .toc {
+    top: 88px;
+    max-height: calc(100vh - 104px);
+  }
+}

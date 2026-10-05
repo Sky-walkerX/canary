@@ -4,11 +4,142 @@
  * claim, the evidence checker, the home page's bands and the pages built
  * from the docs.
  *
- * The same rules hold as the dashboard. Dark ground first, 1px hairline
- * rules, radii of 2 to 12px, no gradients or shadows except the sticky
- * chrome. Canary amber is Canary's own voice and is never a state colour.
- * Every value comes from a token in tokens.css.
+ * The site follows Material Design 3: a tonal colour scheme seeded on Canary
+ * amber, the M3 type scale and shape scale, state layers, and M3 components
+ * (top app bar, navigation indicator, filled and outlined buttons, chips,
+ * filled cards, list items, data tables). The scheme and the component layer
+ * are declared in this file, scoped to body.site; the dashboard keeps its own
+ * mock. Every value is a token.
  */
+
+/* Light scheme, from the same amber seed: primary tone 40, surfaces warm. */
+body.site {
+  color-scheme: light;
+  --bg: #FFF8F3;
+  --surface-low: #FFFFFF;
+  --surface: #F8F0E7;
+  --surface-high: #F2EAE1;
+  --surface-highest: #ECE4DB;
+  --surface-bright: #E0D8CF;
+  --ink: #211A12;
+  --ink-muted: #51453A;
+  --rule: #D5C3B2;
+  --rule-strong: #85736A;
+  --primary: #8A5100;
+  --on-primary: #FFFFFF;
+  --primary-container: #FFDDB8;
+  --on-primary-container: #2B1700;
+  --secondary: #6E5C3F;
+  --on-secondary: #FFFFFF;
+  --secondary-container: #F8DFB9;
+  --on-secondary-container: #271901;
+  --tertiary: #4F6448;
+  --on-tertiary: #FFFFFF;
+  --tertiary-container: #D1E8C6;
+  --on-tertiary-container: #0D1F0A;
+  --error: #B3261E;
+  --on-error: #FFFFFF;
+  --error-container: #F9DEDC;
+  --on-error-container: #410E0B;
+  --canary: #8A5100;
+  --on-canary: #FFFFFF;
+  --canary-text: #8A5100;
+  --perch: #211A12;
+  /* The six taxonomy colours, tuned for the light surfaces. They are the
+     product's own taxonomy, so M3's error role does not replace them. */
+  --state-verified: #067A57;
+  --state-resolved: #0B6E86;
+  --state-unresolvable: #9A5B00;
+  --state-unverified: #5A6472;
+  --state-disputed: #B4500A;
+  --state-compromised: #B3243E;
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 28px;
+  --radius-full: 999px;
+  --text-xs: 0.6875rem;
+  --text-s: 0.75rem;
+  --text-m: 0.875rem;
+  --text-l: 1rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+  --state-hover: 8%;
+  --state-press: 12%;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) body.site {
+    color-scheme: dark;
+    --bg: #121110;
+    --surface-low: #0C0B0A;
+    --surface: #1A1917;
+    --surface-high: #1E1D1B;
+    --surface-highest: #292724;
+    --surface-bright: #34322E;
+    --ink: #E9E2DA;
+    --ink-muted: #D3C7B8;
+    --rule: #4A453D;
+    --rule-strong: #968E82;
+    --primary: #FFB868;
+    --on-primary: #46290B;
+    --primary-container: #654019;
+    --on-primary-container: #FFDDB8;
+    --secondary: #E4C08F;
+    --on-secondary: #422C0A;
+    --secondary-container: #5B441C;
+    --on-secondary-container: #FFDFAE;
+    --tertiary: #C9C6A4;
+    --on-tertiary: #32321A;
+    --tertiary-container: #49482E;
+    --on-tertiary-container: #E5E3C4;
+    --error: #FFB4AB;
+    --on-error: #690005;
+    --error-container: #93000A;
+    --on-error-container: #FFDAD6;
+    --canary: #FFB868;
+    --on-canary: #46290B;
+    --canary-text: #FFB868;
+    --perch: #FFB868;
+    --shadow-chrome: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+html[data-theme="dark"] body.site {
+  color-scheme: dark;
+  --bg: #121110;
+  --surface-low: #0C0B0A;
+  --surface: #1A1917;
+  --surface-high: #1E1D1B;
+  --surface-highest: #292724;
+  --surface-bright: #34322E;
+  --ink: #E9E2DA;
+  --ink-muted: #D3C7B8;
+  --rule: #4A453D;
+  --rule-strong: #968E82;
+  --primary: #FFB868;
+  --on-primary: #46290B;
+  --primary-container: #654019;
+  --on-primary-container: #FFDDB8;
+  --secondary: #E4C08F;
+  --on-secondary: #422C0A;
+  --secondary-container: #5B441C;
+  --on-secondary-container: #FFDFAE;
+  --tertiary: #C9C6A4;
+  --on-tertiary: #32321A;
+  --tertiary-container: #49482E;
+  --on-tertiary-container: #E5E3C4;
+  --error: #FFB4AB;
+  --on-error: #690005;
+  --error-container: #93000A;
+  --on-error-container: #FFDAD6;
+  --canary: #FFB868;
+  --on-canary: #46290B;
+  --canary-text: #FFB868;
+  --perch: #FFB868;
+  --shadow-chrome: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
 
 /* Header. Sticky, a hairline rule below, then the wordmark, the nav and
    the theme toggle. The site has no network badge. */
@@ -23,6 +154,11 @@
   grid-template-columns: auto 1fr auto;
   grid-template-areas: "mark nav toggle";
 }
+/* Without these the three children auto-place, and the nav lands in the
+   toggle's narrow column and wraps to three rows. */
+body.site .site-header-row .wordmark { grid-area: mark; }
+body.site .site-header-row .nav { grid-area: nav; }
+body.site .site-header-row .theme-toggle { grid-area: toggle; }
 @media (max-width: 899px) {
   .site-header-row {
     grid-template-columns: 1fr auto;
@@ -31,10 +167,16 @@
       "nav nav";
   }
 }
-/* Four links fit one row at 360px when they step down a size. */
+/* At 360px the four links keep one row and the toggle keeps one line: the
+   links drop a size and lose most of their padding, and the toggle stops
+   wrapping its label. */
 @media (max-width: 479px) {
-  .site-header-row .nav ul { gap: var(--space-1) 14px; }
-  .site-header-row .nav a { font-size: var(--text-s); }
+  .site-header-row .nav ul { gap: var(--space-1) 10px; }
+  .site-header-row .nav a {
+    font-size: var(--text-xs);
+    padding-inline: 6px;
+  }
+  .site-header-row .theme-toggle { white-space: nowrap; }
 }
 /* The brand sits beside the wordmark, so nothing pushes it off its perch. */
 .site-header .wordmark { margin-right: 0; }
@@ -62,33 +204,64 @@
   gap: var(--space-5);
   padding-top: var(--space-6);
 }
+/* The numbered spine and the rule that runs out of it. The hero opens the
+   document, so its number sits on the same line as a hairline that carries
+   the eye across the page. */
+.hero-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+}
+.hero-rule {
+  flex: 1 1 auto;
+  height: var(--rule-width);
+  background: var(--rule);
+}
+.band-num {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
 .hero-claim {
-  max-width: 40ch;
-  font-size: clamp(2.125rem, 1.35rem + 3.3vw, 3.5rem);
+  max-width: 26ch;
+  margin: 0;
+  font-size: clamp(2.375rem, 1.1rem + 4.4vw, 4rem);
   font-weight: 600;
-  line-height: 1.06;
-  letter-spacing: -0.03em;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
-.hero-lede { font-size: var(--text-l); max-width: 56ch; }
-.hero-conditions { color: var(--ink-muted); max-width: 56ch; }
+/* The claim carries one amber phrase, the way the mock marks its headline. */
+.hero-claim .hl { color: var(--canary-text); }
+.hero-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+.hero-lede { font-size: var(--text-l); max-width: 48ch; margin: 0; }
+.hero-conditions {
+  max-width: 42ch;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--canary);
+}
+.hero-conditions p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--ink-muted);
+}
 
 @media (min-width: 900px) {
-  .hero {
+  .hero { gap: var(--space-6); }
+  .hero-foot {
     grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    grid-template-areas:
-      "claim claim"
-      "lede conditions";
     column-gap: var(--space-7);
-    row-gap: var(--space-6);
-  }
-  .hero-claim { grid-area: claim; }
-  .hero-lede { grid-area: lede; }
-  .hero-conditions {
-    grid-area: conditions;
-    align-self: start;
-    padding-left: var(--space-5);
-    border-left: var(--rule-width) solid var(--rule);
+    align-items: start;
   }
 }
 
@@ -97,14 +270,19 @@
    drop target, the samples and the report. */
 
 .checker {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   margin-top: var(--space-7);
   background: var(--surface-low);
   border: var(--rule-width) solid var(--rule);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-2xl);
   scroll-margin-top: var(--space-5);
 }
+/* The checker's head. The mock opens the console with a label row over a
+   hairline, not a filled band, so amber stays a label colour here; the large
+   amber fills are the network badge, the update bar, the primary action and
+   the drawing's canary check box. */
 .checker-bar {
   grid-column: 1 / -1;
   display: flex;
@@ -112,14 +290,24 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-1) var(--space-5);
-  padding: var(--space-3) var(--space-4);
-  background: var(--canary);
-  color: var(--on-canary);
-  border-bottom: var(--rule-width) solid var(--on-canary);
-  border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  background: none;
+  border-bottom: var(--rule-width) solid var(--rule);
 }
-.checker-title { font-size: var(--text-xl); }
-.checker-bar .checker-privacy { color: var(--on-canary); font-weight: 600; }
+.checker-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--canary-text);
+}
+.checker-bar .checker-privacy {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
 /* The checker script reveals these: the live sentences, the loading line
    and the build line. Until it runs they stay out of sight, whatever
    display another rule gives them. */
@@ -209,12 +397,22 @@
 .checker-pending .icon { width: 18px; height: 18px; }
 .checker-steps-intro { font-size: var(--text-s); color: var(--ink-muted); }
 .checker-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
   counter-reset: vstep;
   border-top: var(--rule-width) solid var(--rule);
   font-size: var(--text-s);
+}
+/* Pair the steps once there is room, as the mock does: eight rows in one
+   column is a list, eight in two is a report. */
+@media (min-width: 900px) {
+  .checker-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-7);
+  }
 }
 .checker-steps li {
   counter-increment: vstep;
@@ -234,6 +432,59 @@
   border-top: var(--rule-width) solid var(--rule-strong);
 }
 
+/* Registration marks: two 10px elbows just outside the console's corners, the
+   way a drawing frames a detail it wants the eye to find. */
+.checker::before,
+.checker::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.checker::before {
+  top: -5px;
+  left: -5px;
+  border-top: var(--rule-width) solid var(--rule-strong);
+  border-left: var(--rule-width) solid var(--rule-strong);
+}
+.checker::after {
+  right: -5px;
+  bottom: -5px;
+  border-right: var(--rule-width) solid var(--rule-strong);
+  border-bottom: var(--rule-width) solid var(--rule-strong);
+}
+
+/* The run band's three commands sit in one console with a lamp row, instead of
+   three boxes stacked. The commands lose their own frames inside it. */
+body.site .run-steps {
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4);
+  list-style: none;
+  background: var(--surface-low);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-xl);
+}
+body.site .run-steps::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 2px 0 var(--space-4) 2px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+  box-shadow: 10px 0 0 0 var(--rule-strong), 20px 0 0 0 var(--rule-strong);
+}
+body.site .run-steps > li + li { margin-top: var(--space-4); }
+body.site .run-steps .command {
+  margin-top: 0;
+  max-width: none;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+body.site .run-steps .run-placeholder { margin-top: var(--space-2); }
+
 @media (min-width: 900px) {
   .checker-bar { padding: var(--space-3) var(--space-6); }
   .checker-main, .checker-result { padding: var(--space-6); }
@@ -246,6 +497,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   margin-top: var(--space-8);
+  /* The spine: one hairline down the left of every band, with the band's
+     number sitting inside it, so the page reads as a numbered document. */
+  padding-left: var(--space-5);
+  border-left: var(--rule-width) solid var(--rule);
 }
 .band-head {
   display: flex;
@@ -810,4 +1065,318 @@
   list-style: none;
   font-size: var(--text-s);
   color: var(--ink-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * Material 3 components.
+ *
+ * These rules come last so they restyle the components above to Material 3:
+ * the type scale, the shape scale, the state layers and the M3 component
+ * shapes (top app bar, navigation indicator, filled and outlined buttons,
+ * chips, filled cards, list items, data tables). Layout rules above are kept.
+ * ------------------------------------------------------------------------- */
+
+body.site {
+  font-family: var(--font-sans);
+  font-size: var(--text-m);
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+
+/* Top app bar: surface, 64px, no shadow, title in title-large. */
+.site-header {
+  min-height: 64px;
+  background: var(--surface);
+  box-shadow: none;
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+.site-header-row { align-items: center; }
+body.site .site-header .wordmark {
+  font-size: var(--text-xl);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+body.site .site-header .wordmark::after { background: var(--primary); height: 2px; }
+
+/* Navigation: M3 navigation indicator for the current destination, state
+   layer on hover, label-large type. */
+body.site .nav ul { gap: var(--space-1); }
+body.site .nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  font-size: var(--text-s);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+body.site .nav a:hover { background: color-mix(in srgb, var(--primary) var(--state-hover), transparent); color: var(--ink); }
+body.site .nav a[aria-current="page"],
+body.site .nav a[aria-current="true"] {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  border-bottom: 0;
+}
+
+/* Buttons: M3 outlined by default, filled for the one primary action, text for
+   the copy controls. 40px tall, fully rounded, label-large. */
+body.site .btn {
+  min-height: 40px;
+  padding: 0 24px;
+  border: var(--rule-width) solid var(--rule-strong);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-m);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+body.site .btn:hover {
+  background: color-mix(in srgb, var(--primary) var(--state-hover), transparent);
+  border-color: var(--primary);
+}
+body.site .btn:active { background: color-mix(in srgb, var(--primary) var(--state-press), transparent); }
+body.site .btn-filled {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+body.site .btn-filled:hover { background: color-mix(in srgb, var(--primary) 92%, var(--on-primary)); }
+body.site .btn-text,
+body.site .copy-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+}
+body.site .btn-text:hover,
+body.site .copy-btn:hover { background: color-mix(in srgb, var(--primary) var(--state-hover), transparent); }
+body.site .btn-small { min-height: 32px; padding: 0 16px; }
+
+/* Chips: the state badges and the sample sources. 32px tall, 8px corner. */
+body.site .badge {
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--rule-width) solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-family: var(--font-sans);
+  font-size: var(--text-s);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* Filled card for the checker console; filled text field for the drop zone. */
+.checker {
+  background: var(--surface-high);
+  border: 0;
+  border-radius: var(--radius-l);
+  padding: var(--space-2);
+}
+.checker-bar { padding: var(--space-4) var(--space-4) var(--space-3); border-bottom: 0; }
+body.site .checker-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-s);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+body.site .checker-bar .checker-privacy { font-family: var(--font-sans); color: var(--ink-muted); }
+.checker-main { padding: var(--space-2) var(--space-4) var(--space-4); }
+body.site .drop,
+body.site .checker .drop {
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  padding: var(--space-6) var(--space-4);
+}
+body.site .checker .drop:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) var(--state-hover), var(--surface)); }
+body.site .checker-result { padding: var(--space-2) var(--space-4) var(--space-4); }
+body.site .checker-steps li { padding-block: 10px; border-bottom: var(--rule-width) solid var(--rule); }
+body.site .checker-verdict,
+body.site .verdict-banner {
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-m);
+}
+
+/* List items and data tables, M3 spacing and type. */
+body.site th {
+  font-family: var(--font-sans);
+  font-size: var(--text-s);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+body.site td, body.site th { padding: 12px 16px; }
+body.site table { border-radius: var(--radius-m); }
+
+/* Band heads: the number becomes an M3 label above a title-medium heading,
+   and the hairline spine goes. */
+.band {
+  padding-left: 0;
+  border-left: 0;
+  margin-top: var(--space-8);
+}
+.band-num {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+}
+body.site .band-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+body.site .band-note { font-family: var(--font-sans); color: var(--ink-muted); }
+.hero-rule { display: none; }
+body.site .hero-mark { margin-bottom: var(--space-3); }
+
+/* Hero: M3 display type on the surface, the lede in body-large, and the
+   conditions as a filled card. */
+.hero { padding-top: var(--space-8); }
+.hero-claim {
+  max-width: 22ch;
+  font-size: clamp(2.25rem, 1rem + 4.6vw, 4rem);
+  font-weight: 400;
+  line-height: 1.09;
+  letter-spacing: -0.01em;
+}
+body.site .hero-lede { font-size: var(--text-l); color: var(--ink); }
+.hero-conditions {
+  padding: var(--space-4);
+  border-left: 0;
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+body.site .hero-conditions p { font-family: var(--font-sans); font-size: var(--text-m); line-height: 1.5; color: var(--ink-muted); }
+
+/* The run band's console, in M3 surface tones. */
+body.site .run-steps {
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-l);
+  padding: var(--space-4);
+}
+
+/* The console's label row: number and title together on the left, the privacy
+   note pushed to the right, the way an M3 card header reads. */
+body.site .checker-bar { justify-content: flex-start; }
+body.site .checker-bar .checker-privacy { margin-left: auto; }
+
+/* ---------------------------------------------------------------------------
+ * Material 3 layout: use the window.
+ *
+ * The site sat in a 72rem column with a fixed measure on every band, so a wide
+ * window showed a narrow ribbon of content and a lot of dead surface. M3 lays
+ * content out by window class instead: wider margins, a band head in its own
+ * column once there is room, tables that fill the grid, and an app bar that
+ * reads as one.
+ * ------------------------------------------------------------------------- */
+
+body.site .wrap {
+  max-width: 96rem;
+  padding-inline: clamp(20px, 3vw, 56px);
+}
+body.site .band-body { max-width: none; }
+body.site table { width: 100%; }
+body.site .table-wrap { max-width: none; }
+
+/* App bar: a taller bar with a title-large wordmark, tabs with the M3 primary
+   indicator for the current page, and the toggle as an outlined pill. */
+body.site .site-header { min-height: 72px; }
+body.site .site-header .wordmark {
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+body.site .nav ul { gap: var(--space-6); }
+body.site .nav a {
+  min-height: 48px;
+  padding-inline: 0;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  font-size: var(--text-m);
+  letter-spacing: 0.01em;
+  color: var(--ink-muted);
+}
+body.site .nav a:hover {
+  background: none;
+  color: var(--ink);
+  border-bottom-color: var(--rule);
+}
+body.site .nav a[aria-current="page"],
+body.site .nav a[aria-current="true"] {
+  background: none;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+body.site .theme-toggle { min-height: 40px; padding-inline: 16px; }
+
+/* Once there is room, the band head takes its own column and the body fills
+   the rest of the grid, so tables and cards use the window. */
+@media (min-width: 1100px) {
+  body.site .band {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    column-gap: var(--space-8);
+    align-items: start;
+  }
+  body.site .band-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    position: sticky;
+    top: 96px;
+  }
+  body.site .band-note { text-align: left; max-width: 34ch; }
+  body.site .band-body { grid-column: 2; }
+  body.site .hero-claim { max-width: 30ch; }
+  body.site .hero-foot {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    column-gap: var(--space-8);
+  }
+}
+
+/* Doc pages: the body uses the column instead of a 52rem cap, which is what
+   pushed the six-state and limits tables into a hidden scroll. Prose keeps its
+   measure through the p/li rules. The table of contents sticks below the app
+   bar rather than behind it. */
+body.site .doc-body { max-width: none; }
+@media (min-width: 1040px) {
+  body.site .doc.has-toc .toc {
+    top: 88px;
+    max-height: calc(100vh - 120px);
+  }
+}
+
+/* One number for the app bar, so nothing can hide behind it. The bar is held
+   to the M3 72px exactly (it was 85px, which left the doc contents 3px behind
+   it), sits above everything that scrolls, and every sticky element clears its
+   bottom edge by 16px. */
+body.site .site-header {
+  min-height: 72px;
+  z-index: 30;
+}
+body.site .site-header-row {
+  min-height: 72px;
+  padding-block: 0;
+  align-items: center;
+}
+body.site .toc,
+body.site .band-head { top: 88px; }
+@media (min-width: 1040px) {
+  body.site .doc.has-toc .toc {
+    top: 88px;
+    max-height: calc(100vh - 104px);
+  }
 }

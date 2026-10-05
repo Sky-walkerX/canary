@@ -363,13 +363,13 @@ strong { font-weight: 600; }
   font-size: var(--text-xs);
   font-weight: 500;
   line-height: 1.2;
-  color: var(--canary-text);
-  background: transparent;
-  border: var(--rule-width) solid var(--rule-strong);
-  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--surface-high);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-l);
   cursor: pointer;
 }
-.btn:hover { background: var(--surface-high); border-color: var(--ink); }
+.btn:hover { background: var(--surface-highest); border-color: var(--rule-strong); }
 .btn:active { background: var(--surface-highest); }
 .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
 .btn .icon { width: 18px; height: 18px; }

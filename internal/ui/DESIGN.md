@@ -145,6 +145,14 @@ two runs by eye.
 
 ## Colors
 
+- **Each surface follows its own mock.** The dashboard mock is cool: `#0E0F12` ground,
+  `#131418` panels, `#08090B` insets, neutral grey ink `#EDEDF0`. The client mock is warm
+  and one step lighter: `#121318` ground, `#1A1B21` panels, `#0D0E13` insets, and warm
+  ink. Measured from the mock's own render, its body text is `#D8C3AD`; the site uses
+  `#E6DFD2` for ink and `#B7A78F` for secondary text, so a heading keeps a step above the
+  body and both clear 4.5:1 on the lighter panels. The site re-declares these neutrals
+  inside `body.site` in `cmd/site/assets/site.css`, one block per dark route, and
+  `cmd/site/contrast_test.go` holds them to the same floor as the dashboard's.
 - **Dark first.** `#0E0F12` ground, `#131418` panels, `#08090B` insets. The light theme is
   the same family inverted: `#F6F6F8` ground, white panels, `#EFEFF2` insets. Dark is the
   default look; a reader's choice sets `data-theme` on `<html>`, and the system preference
@@ -199,8 +207,8 @@ glow.
 
 ## Shapes
 
-Corners are 2px (badges, rules, focus), 4px (buttons, commands, inputs), 8px (panels,
-tables, cards) or 12px (the checker console). Nothing else is rounded. `--radius-full` is
+Corners are 2px (badges, rules, focus), 8px (buttons, commands, panels, tables, cards),
+12px (a panel's own foot) or 16px (the checker console). Nothing else is rounded. `--radius-full` is
 reserved for the 2px status dots and beacons.
 
 ## Components
@@ -225,10 +233,13 @@ reserved for the 2px status dots and beacons.
   details".
 - **Verify report.** The eight steps as an ordered list, each with a tone glyph and a
   word (Passed, Failed, Not run).
-- **Checker console** (the client's one interactive part). A bordered 12px panel on the
-  inset surface, holding the drop target and, under it, the verdict banner and the eight
-  steps. Amber is the console's voice: the copy of Canary speaking about a file you hand
-  it.
+- **Checker console** (the client's one interactive part). A bordered 16px panel on the
+  inset surface, opening with a label row: the title as an amber mono eyebrow over a
+  hairline, the privacy note in muted mono beside it. Under it sit the drop target, the
+  verdict banner and the eight steps. Amber is a label colour here, not a fill.
+- **Buttons** are a filled surface with ink text and a hairline, never amber. Amber fills
+  only the network badge, the update bar, the one primary action on a form, and the
+  drawing's `canary check` box.
 - **Update bar.** A fixed, non-modal `role="status"` bar in canary amber. It stays until
   the reader reloads or dismisses it.
 - **Focus.** A 2px amber ring with a 2px offset on every focusable element.

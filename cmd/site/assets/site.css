@@ -10,6 +10,51 @@
  * Every value comes from a token in tokens.css.
  */
 
+/* The client mock is warm where the dashboard mock is cool. Its body text is
+   #D8C3AD on a #121318 ground with #1A1B21 panels; the dashboard's is grey on
+   #0E0F12 with #131418. Both mocks are the design, so the site re-declares the
+   neutrals inside its own scope, keeping every name the same. Amber, the six
+   state colours, the radii and the type scale are unchanged.
+
+   The dark block appears twice, once per route, as tokens.css does it.
+   cmd/site/contrast_test.go recomputes the 4.5:1 floor for these values and
+   checks the two copies match. */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) body.site {
+    --bg: #121318;
+    --surface-low: #0D0E13;
+    --surface: #1A1B21;
+    --surface-high: #1E1F25;
+    --surface-highest: #292A2F;
+    --surface-bright: #38393F;
+    --ink: #E6DFD2;
+    --ink-muted: #B7A78F;
+    --rule: #26272E;
+    --rule-strong: #4A4B52;
+  }
+}
+html[data-theme="dark"] body.site {
+  --bg: #121318;
+  --surface-low: #0D0E13;
+  --surface: #1A1B21;
+  --surface-high: #1E1F25;
+  --surface-highest: #292A2F;
+  --surface-bright: #38393F;
+  --ink: #E6DFD2;
+  --ink-muted: #B7A78F;
+  --rule: #26272E;
+  --rule-strong: #4A4B52;
+}
+/* Buttons hold the mock's outline treatment, not the dashboard's fill. */
+body.site .btn {
+  background: transparent;
+  border-color: var(--rule-strong);
+}
+body.site .btn:hover {
+  background: var(--surface-high);
+  border-color: var(--canary-text);
+}
+
 /* Header. Sticky, a hairline rule below, then the wordmark, the nav and
    the theme toggle. The site has no network badge. */
 .site-header {
@@ -23,6 +68,11 @@
   grid-template-columns: auto 1fr auto;
   grid-template-areas: "mark nav toggle";
 }
+/* Without these the three children auto-place, and the nav lands in the
+   toggle's narrow column and wraps to three rows. */
+body.site .site-header-row .wordmark { grid-area: mark; }
+body.site .site-header-row .nav { grid-area: nav; }
+body.site .site-header-row .theme-toggle { grid-area: toggle; }
 @media (max-width: 899px) {
   .site-header-row {
     grid-template-columns: 1fr auto;
@@ -31,10 +81,16 @@
       "nav nav";
   }
 }
-/* Four links fit one row at 360px when they step down a size. */
+/* At 360px the four links keep one row and the toggle keeps one line: the
+   links drop a size and lose most of their padding, and the toggle stops
+   wrapping its label. */
 @media (max-width: 479px) {
-  .site-header-row .nav ul { gap: var(--space-1) 14px; }
-  .site-header-row .nav a { font-size: var(--text-s); }
+  .site-header-row .nav ul { gap: var(--space-1) 10px; }
+  .site-header-row .nav a {
+    font-size: var(--text-xs);
+    padding-inline: 6px;
+  }
+  .site-header-row .theme-toggle { white-space: nowrap; }
 }
 /* The brand sits beside the wordmark, so nothing pushes it off its perch. */
 .site-header .wordmark { margin-right: 0; }
@@ -62,33 +118,64 @@
   gap: var(--space-5);
   padding-top: var(--space-6);
 }
+/* The numbered spine and the rule that runs out of it. The hero opens the
+   document, so its number sits on the same line as a hairline that carries
+   the eye across the page. */
+.hero-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+}
+.hero-rule {
+  flex: 1 1 auto;
+  height: var(--rule-width);
+  background: var(--rule);
+}
+.band-num {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
 .hero-claim {
-  max-width: 40ch;
-  font-size: clamp(2.125rem, 1.35rem + 3.3vw, 3.5rem);
+  max-width: 26ch;
+  margin: 0;
+  font-size: clamp(2.375rem, 1.1rem + 4.4vw, 4rem);
   font-weight: 600;
-  line-height: 1.06;
-  letter-spacing: -0.03em;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
-.hero-lede { font-size: var(--text-l); max-width: 56ch; }
-.hero-conditions { color: var(--ink-muted); max-width: 56ch; }
+/* The claim carries one amber phrase, the way the mock marks its headline. */
+.hero-claim .hl { color: var(--canary-text); }
+.hero-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+.hero-lede { font-size: var(--text-l); max-width: 48ch; margin: 0; }
+.hero-conditions {
+  max-width: 42ch;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--canary);
+}
+.hero-conditions p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--ink-muted);
+}
 
 @media (min-width: 900px) {
-  .hero {
+  .hero { gap: var(--space-6); }
+  .hero-foot {
     grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    grid-template-areas:
-      "claim claim"
-      "lede conditions";
     column-gap: var(--space-7);
-    row-gap: var(--space-6);
-  }
-  .hero-claim { grid-area: claim; }
-  .hero-lede { grid-area: lede; }
-  .hero-conditions {
-    grid-area: conditions;
-    align-self: start;
-    padding-left: var(--space-5);
-    border-left: var(--rule-width) solid var(--rule);
+    align-items: start;
   }
 }
 
@@ -97,14 +184,19 @@
    drop target, the samples and the report. */
 
 .checker {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   margin-top: var(--space-7);
   background: var(--surface-low);
   border: var(--rule-width) solid var(--rule);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-2xl);
   scroll-margin-top: var(--space-5);
 }
+/* The checker's head. The mock opens the console with a label row over a
+   hairline, not a filled band, so amber stays a label colour here; the large
+   amber fills are the network badge, the update bar, the primary action and
+   the drawing's canary check box. */
 .checker-bar {
   grid-column: 1 / -1;
   display: flex;
@@ -112,14 +204,24 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-1) var(--space-5);
-  padding: var(--space-3) var(--space-4);
-  background: var(--canary);
-  color: var(--on-canary);
-  border-bottom: var(--rule-width) solid var(--on-canary);
-  border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  background: none;
+  border-bottom: var(--rule-width) solid var(--rule);
 }
-.checker-title { font-size: var(--text-xl); }
-.checker-bar .checker-privacy { color: var(--on-canary); font-weight: 600; }
+.checker-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--canary-text);
+}
+.checker-bar .checker-privacy {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
 /* The checker script reveals these: the live sentences, the loading line
    and the build line. Until it runs they stay out of sight, whatever
    display another rule gives them. */
@@ -209,12 +311,22 @@
 .checker-pending .icon { width: 18px; height: 18px; }
 .checker-steps-intro { font-size: var(--text-s); color: var(--ink-muted); }
 .checker-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
   counter-reset: vstep;
   border-top: var(--rule-width) solid var(--rule);
   font-size: var(--text-s);
+}
+/* Pair the steps once there is room, as the mock does: eight rows in one
+   column is a list, eight in two is a report. */
+@media (min-width: 900px) {
+  .checker-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-7);
+  }
 }
 .checker-steps li {
   counter-increment: vstep;
@@ -234,6 +346,59 @@
   border-top: var(--rule-width) solid var(--rule-strong);
 }
 
+/* Registration marks: two 10px elbows just outside the console's corners, the
+   way a drawing frames a detail it wants the eye to find. */
+.checker::before,
+.checker::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.checker::before {
+  top: -5px;
+  left: -5px;
+  border-top: var(--rule-width) solid var(--rule-strong);
+  border-left: var(--rule-width) solid var(--rule-strong);
+}
+.checker::after {
+  right: -5px;
+  bottom: -5px;
+  border-right: var(--rule-width) solid var(--rule-strong);
+  border-bottom: var(--rule-width) solid var(--rule-strong);
+}
+
+/* The run band's three commands sit in one console with a lamp row, instead of
+   three boxes stacked. The commands lose their own frames inside it. */
+body.site .run-steps {
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4);
+  list-style: none;
+  background: var(--surface-low);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius-xl);
+}
+body.site .run-steps::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 2px 0 var(--space-4) 2px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+  box-shadow: 10px 0 0 0 var(--rule-strong), 20px 0 0 0 var(--rule-strong);
+}
+body.site .run-steps > li + li { margin-top: var(--space-4); }
+body.site .run-steps .command {
+  margin-top: 0;
+  max-width: none;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+body.site .run-steps .run-placeholder { margin-top: var(--space-2); }
+
 @media (min-width: 900px) {
   .checker-bar { padding: var(--space-3) var(--space-6); }
   .checker-main, .checker-result { padding: var(--space-6); }
@@ -246,6 +411,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   margin-top: var(--space-8);
+  /* The spine: one hairline down the left of every band, with the band's
+     number sitting inside it, so the page reads as a numbered document. */
+  padding-left: var(--space-5);
+  border-left: var(--rule-width) solid var(--rule);
 }
 .band-head {
   display: flex;

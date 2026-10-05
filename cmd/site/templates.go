@@ -24,6 +24,23 @@ var siteFuncs = template.FuncMap{
 	"state":     wording.State,
 	"inc":       func(i int) int { return i + 1 },
 	"keepWords": keepWords,
+	"mark":      mark,
+}
+
+// mark wraps the first occurrence of phrase in a span, so a headline can carry
+// its own emphasis. Both strings come from the wording table, and the phrase is
+// one that survives keepWords, which only touches hyphenated words. It takes the
+// already-escaped headline keepWords returns, so the two compose in a template.
+func mark(v any, phrase string) template.HTML {
+	s, ok := v.(template.HTML)
+	if !ok {
+		return template.HTML(template.HTMLEscapeString(fmt.Sprint(v)))
+	}
+	i := strings.Index(string(s), phrase)
+	if i < 0 {
+		return s
+	}
+	return s[:i] + template.HTML(`<span class="hl">`+phrase+`</span>`) + s[i+len(phrase):]
 }
 
 // keepWords escapes s and keeps each hyphenated word on one line, so a large

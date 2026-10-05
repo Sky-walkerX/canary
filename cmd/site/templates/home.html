@@ -1,8 +1,13 @@
 {{define "content"}}{{with .Main}}
 <section class="hero" aria-labelledby="claim">
-  <h1 id="claim" class="hero-claim">{{keepWords $.Text.Claim}}</h1>
-  <p class="hero-lede">{{$.Text.Lede}}</p>
-  <p class="hero-conditions">{{$.Text.Conditions}}</p>
+  <p class="hero-mark"><span class="band-num" aria-hidden="true">01</span><span class="hero-rule" aria-hidden="true"></span></p>
+  <h1 id="claim" class="hero-claim">{{mark (keepWords $.Text.Claim) "leaves out a recent entry"}}</h1>
+  <div class="hero-foot">
+    <p class="hero-lede">{{$.Text.Lede}}</p>
+    <div class="hero-conditions">
+      <p>{{$.Text.Conditions}}</p>
+    </div>
+  </div>
 </section>
 
 {{/* The evidence checker. checker.js, loaded only when the build has the
@@ -26,7 +31,7 @@
 <section id="checker" class="checker" aria-labelledby="checker-h" data-checker data-evidence="{{.Checker.RealURL}}" data-tampered="{{.Checker.TamperedURL}}"{{with .Checker.Module}} data-wasm-size="{{.Size}}" data-wasm-build="{{.Build}}"{{end}}>
   {{with .Checker.Module}}<script type="application/json" data-checker-text>{{.Text}}</script>
   {{end}}<div class="checker-bar">
-    <h2 id="checker-h" class="checker-title">{{$.Text.CheckerTitle}}</h2>
+    <span class="band-num" aria-hidden="true">02</span><h2 id="checker-h" class="checker-title">{{$.Text.CheckerTitle}}</h2>
     <p class="checker-privacy"><span data-checker-live hidden>{{$.Text.CheckerPrivacy}}</span> {{$.Text.FooterNoRequests}}</p>
   </div>
   <div class="checker-main">
@@ -61,7 +66,7 @@
 
 <section class="band" aria-labelledby="problem-h">
   <div class="band-head">
-    <h2 id="problem-h" class="band-label">{{$.Text.ProblemTitle}}</h2>
+    <span class="band-num" aria-hidden="true">03</span><h2 id="problem-h" class="band-label">{{$.Text.ProblemTitle}}</h2>
   </div>
   <div class="band-body">
     {{range $.Text.Problem}}<p>{{.}}</p>
@@ -71,7 +76,7 @@
 
 <section class="band" id="how" aria-labelledby="how-h">
   <div class="band-head">
-    <h2 id="how-h" class="band-label">{{$.Text.HowTitle}}</h2>
+    <span class="band-num" aria-hidden="true">04</span><h2 id="how-h" class="band-label">{{$.Text.HowTitle}}</h2>
     <p class="band-note">{{$.Text.HowIntro}}</p>
   </div>
   <div class="band-body">
@@ -89,7 +94,7 @@
 
 <section class="band" aria-labelledby="proves-h">
   <div class="band-head">
-    <h2 id="proves-h" class="band-label">{{$.Text.ProvesTitle}}</h2>
+    <span class="band-num" aria-hidden="true">05</span><h2 id="proves-h" class="band-label">{{$.Text.ProvesTitle}}</h2>
     <p class="band-note">{{$.Text.ProvesIntro}}</p>
   </div>
   <div class="band-body">
@@ -101,7 +106,7 @@
 
 <section class="band" aria-labelledby="limits-h">
   <div class="band-head">
-    <h2 id="limits-h" class="band-label">{{$.Text.LimitsTitle}}</h2>
+    <span class="band-num" aria-hidden="true">06</span><h2 id="limits-h" class="band-label">{{$.Text.LimitsTitle}}</h2>
     <p class="band-note">{{$.Text.LimitsIntro}}</p>
   </div>
   <div class="band-body">
@@ -119,7 +124,7 @@
 
 <section class="band" id="run" aria-labelledby="run-h">
   <div class="band-head">
-    <h2 id="run-h" class="band-label">{{$.Text.RunTitle}}</h2>
+    <span class="band-num" aria-hidden="true">07</span><h2 id="run-h" class="band-label">{{$.Text.RunTitle}}</h2>
     <p class="band-note">{{if .Checker.Recorded}}{{$.Text.RunIntro}}{{else}}{{$.Text.RunIntroNoEvidence}}{{end}}</p>
   </div>
   <div class="band-body">

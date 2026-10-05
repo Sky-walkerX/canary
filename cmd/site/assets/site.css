@@ -1273,3 +1273,76 @@ body.site .run-steps {
    note pushed to the right, the way an M3 card header reads. */
 body.site .checker-bar { justify-content: flex-start; }
 body.site .checker-bar .checker-privacy { margin-left: auto; }
+
+/* ---------------------------------------------------------------------------
+ * Material 3 layout: use the window.
+ *
+ * The site sat in a 72rem column with a fixed measure on every band, so a wide
+ * window showed a narrow ribbon of content and a lot of dead surface. M3 lays
+ * content out by window class instead: wider margins, a band head in its own
+ * column once there is room, tables that fill the grid, and an app bar that
+ * reads as one.
+ * ------------------------------------------------------------------------- */
+
+body.site .wrap {
+  max-width: 96rem;
+  padding-inline: clamp(20px, 3vw, 56px);
+}
+body.site .band-body { max-width: none; }
+body.site table { width: 100%; }
+body.site .table-wrap { max-width: none; }
+
+/* App bar: a taller bar with a title-large wordmark, tabs with the M3 primary
+   indicator for the current page, and the toggle as an outlined pill. */
+body.site .site-header { min-height: 72px; }
+body.site .site-header .wordmark {
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+body.site .nav ul { gap: var(--space-6); }
+body.site .nav a {
+  min-height: 48px;
+  padding-inline: 0;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  font-size: var(--text-m);
+  letter-spacing: 0.01em;
+  color: var(--ink-muted);
+}
+body.site .nav a:hover {
+  background: none;
+  color: var(--ink);
+  border-bottom-color: var(--rule);
+}
+body.site .nav a[aria-current="page"],
+body.site .nav a[aria-current="true"] {
+  background: none;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+body.site .theme-toggle { min-height: 40px; padding-inline: 16px; }
+
+/* Once there is room, the band head takes its own column and the body fills
+   the rest of the grid, so tables and cards use the window. */
+@media (min-width: 1100px) {
+  body.site .band {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    column-gap: var(--space-8);
+    align-items: start;
+  }
+  body.site .band-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    position: sticky;
+    top: 96px;
+  }
+  body.site .band-note { text-align: left; max-width: 34ch; }
+  body.site .band-body { grid-column: 2; }
+  body.site .hero-claim { max-width: 30ch; }
+  body.site .hero-foot {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    column-gap: var(--space-8);
+  }
+}
